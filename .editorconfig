@@ -1,0 +1,40 @@
+# ==============================================================================
+# .editorconfig - Multi-IDE / Multi-Editor Formatting Standard
+# Reference: https://editorconfig.org
+# ==============================================================================
+
+root = true
+
+# Default rules for all files
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+
+# Python files (PEP 8 & modern Black/Ruff standard)
+[*.py]
+indent_style = space
+indent_size = 4
+max_line_length = 88
+
+# YAML, JSON, TOML configuration files
+[*.{json,yaml,yml,toml}]
+indent_style = space
+indent_size = 2
+
+# Markdown documentation (preserve trailing whitespace for line breaks)
+[*.md]
+indent_style = space
+indent_size = 2
+trim_trailing_whitespace = false
+
+# Windows script files
+[*.{ps1,bat,cmd}]
+end_of_line = crlf
+
+# Makefiles
+[Makefile]
+indent_style = tab

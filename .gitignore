@@ -1,0 +1,164 @@
+# ==============================================================================
+# .gitignore - Parking Management Backend (Django + PostgreSQL)
+# Standards based on:
+# - GitHub Official Python Template: https://github.com/github/gitignore/blob/main/Python.gitignore
+# - GitHub Official Django Template: https://github.com/github/gitignore/blob/main/community/Python/Django.gitignore
+# - OWASP & Public Repository Security Best Practices
+# ==============================================================================
+
+# ------------------------------------------------------------------------------
+# 1. Byte-compiled / optimized / runtime files
+# ------------------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# ------------------------------------------------------------------------------
+# 2. Virtual Environments (Python 3.14+)
+# ------------------------------------------------------------------------------
+.venv/
+venv/
+ENV/
+env/
+env.bak/
+venv.bak/
+*/.venv/
+*/venv/
+*/env/
+
+# ------------------------------------------------------------------------------
+# 3. Environment Variables & Secrets (CRITICAL FOR PUBLIC REPO)
+# ------------------------------------------------------------------------------
+# Ignore all .env files containing real secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.crt
+*.pfx
+*.p12
+*.cer
+
+# ------------------------------------------------------------------------------
+# 4. Django Specific Settings & Local Overrides
+# ------------------------------------------------------------------------------
+# Local settings overrides (developer-specific)
+local_settings.py
+*/local_settings.py
+
+# SQLite database (if used during quick scratch exploration)
+*.sqlite3
+*.sqlite3-journal
+db.sqlite3
+db.sqlite3-journal
+
+# Uploaded media files and collected static files
+media/
+staticfiles/
+media_root/
+static_root/
+
+# Database dumps, raw SQL exports, backups (NOT migrations)
+# Narrowed to dumps and compressed backups so legitimate .sql source files are not ignored
+*.dump
+*.sql.gz
+*.backup
+*.bak
+*.rdb
+dumps/
+backups/
+
+# ------------------------------------------------------------------------------
+# 5. Testing, Code Quality & Coverage
+# ------------------------------------------------------------------------------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+nosetests.xml
+coverage.xml
+*.cover
+*.py,cover
+.tox/
+.nox/
+.hypothesis/
+
+# ------------------------------------------------------------------------------
+# 6. Build, Packaging & Distribution
+# ------------------------------------------------------------------------------
+build/
+dist/
+develop-eggs/
+downloads/
+eggs/
+.eggs/
+# Narrowed from bare lib/ to build artifacts to allow custom project lib/ packages
+build/lib/
+build/lib64/
+parts/
+sdist/
+var/
+wheels/
+share/python-wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+MANIFEST
+
+# ------------------------------------------------------------------------------
+# 7. Logs & Temporary Files
+# ------------------------------------------------------------------------------
+*.log
+logs/
+*.pid
+pip-log.txt
+pip-delete-this-directory.txt
+
+# ------------------------------------------------------------------------------
+# 8. Editor & Operating System Artifacts
+# ------------------------------------------------------------------------------
+# Visual Studio Code
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+.vscode/*.log
+
+# JetBrains / PyCharm
+.idea/
+
+# Vim / Emacs
+*.swp
+*.swo
+*~
+.#*
+
+# Astah UML Editor lock and backup files
+*.asta.lock
+*.asta.bak
+
+# OS specific
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# ------------------------------------------------------------------------------
+# 9. AI Assistants & Agent Internal Metadata (CRITICAL)
+# ------------------------------------------------------------------------------
+# Local Claude Code user settings & notes
+.claude/settings.local.json
+CLAUDE.local.md
+
+# Teamwork and agent internal working directories (contain scratch, logs, credentials)
+.agents/
+.agents/**

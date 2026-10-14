@@ -1,0 +1,69 @@
+name: DB schema check
+
+# Loads db/01-schema.sql and db/02-seed.sql into a throwaway PostgreSQL 18.6
+# and verifies the catalog counts documented in db/00-README.md.
+
+# No path filter on purpose: the "schema" job is a required status check, so
+# it must report on every pull request or merging would block forever.
+on:
+  pull_request:
+    branches: [dev, main]
+  push:
+    branches: [dev, main]
+
+permissions:
+  contents: read
+
+jobs:
+  schema:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    services:
+      postgres:
+        image: postgres:18.6-alpine
+        env:
+          POSTGRES_HOST_AUTH_METHOD: trust
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGDATABASE: parking_ci
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Reject destructive statements
+        run: |
+          if grep -n -E '^\s*(DROP|TRUNCATE)\b' db/*.sql; then
+            echo "Destructive statement found in db/*.sql"; exit 1
+          fi
+
+      - name: Load schema and seed
+        run: |
+          psql -d postgres -v ON_ERROR_STOP=1 -c "CREATE DATABASE ${PGDATABASE}"
+          psql -v ON_ERROR_STOP=1 -q -f db/01-schema.sql
+          psql -v ON_ERROR_STOP=1 -q -f db/02-seed.sql
+
+      - name: Verify catalog counts
+        run: |
+          actual=$(psql -At -F ' ' -c "
+            SELECT
+              (SELECT count(*) FROM information_schema.tables WHERE table_schema='public' AND table_type='BASE TABLE'),
+              (SELECT count(*) FROM information_schema.views WHERE table_schema='public'),
+              (SELECT count(*) FROM pg_constraint WHERE contype='f'),
+              (SELECT count(*) FROM pg_constraint WHERE contype='f' AND confdeltype <> 'r'),
+              (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal)")
+          echo "tables views foreign_keys non_restrict_fks triggers = ${actual}"
+          test "${actual}" = "19 4 44 0 14"
+
+      - name: Second load must fail without data loss
+        run: |
+          if psql -v ON_ERROR_STOP=1 -q -f db/01-schema.sql; then
+            echo "Second load unexpectedly succeeded"; exit 1
+          fi
+          test "$(psql -At -c 'SELECT count(*) FROM position')" = "3"
