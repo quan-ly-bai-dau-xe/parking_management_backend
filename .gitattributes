@@ -1,0 +1,73 @@
+# ==============================================================================
+# .gitattributes - Line Endings & Binary File Attributes
+# Reference: https://git-scm.com/docs/gitattributes
+# ==============================================================================
+
+# Auto-detect text files and normalize line endings to LF on commit
+* text=auto eol=lf
+
+# ------------------------------------------------------------------------------
+# Source code & text configurations (strictly LF)
+# ------------------------------------------------------------------------------
+*.py text eol=lf
+*.sh text eol=lf
+*.bash text eol=lf
+*.md text eol=lf
+*.txt text eol=lf
+*.json text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+*.toml text eol=lf
+*.ini text eol=lf
+*.cfg text eol=lf
+*.editorconfig text eol=lf
+*.gitattributes text eol=lf
+*.gitignore text eol=lf
+Dockerfile text eol=lf
+docker-compose*.yml text eol=lf
+*.sql text eol=lf
+*.html text eol=lf
+*.css text eol=lf
+*.js text eol=lf
+*.ts text eol=lf
+
+# Windows-specific scripts (strictly CRLF)
+*.ps1 text eol=crlf
+*.bat text eol=crlf
+*.cmd text eol=crlf
+
+# ------------------------------------------------------------------------------
+# Binary assets & documents (never normalize or convert line endings)
+# ------------------------------------------------------------------------------
+# Images
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+
+# Office & PDF Documents
+*.pdf binary
+*.docx binary
+*.xlsx binary
+*.pptx binary
+*.doc binary
+*.xls binary
+
+# Archives & Executables
+*.zip binary
+*.tar.gz binary
+*.tgz binary
+*.7z binary
+*.gz binary
+*.exe binary
+*.dll binary
+*.so binary
+*.dylib binary
+*.pyd binary
+*.pyc binary
+
+# Databases
+*.db binary
+*.sqlite3 binary
