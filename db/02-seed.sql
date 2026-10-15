@@ -36,7 +36,7 @@ VALUES
     ('CAR_4', 'Xe 4 chỗ', 'Standard passenger automobile with 4-5 seats (from SRS wireframe example image22)'),
     ('CAR_7', 'Xe 7 chỗ', 'Multi-purpose vehicle / SUV with 7 seats (from SRS wireframe example image22)'),
     ('CAR_12', 'Xe 12 chỗ', 'Commercial minibus / van with 12-16 seats (from SRS wireframe example image22)'),
-    ('MOTO', 'Xe máy / SH-150i', 'Two-wheeled motorized vehicle / motorcycle (from SRS wireframe example image9, image10, OQ-49)'),
+    ('MOTO', 'Xe máy', 'Two-wheeled motorized vehicle / motorcycle, e.g. SH-150i (from SRS wireframe example image9, image10, OQ-49)'),
     ('OTHER', 'Loại xe khác', '[PROPOSAL] (OQ-49) Other specialized motor vehicle categories, pending PO confirmation')
 ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
 
@@ -45,12 +45,12 @@ ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
 -- ----------------------------------------------------------------------------
 -- Wireframe image15 shows only one row: "Năm ... 100.000đ".
 -- Wireframe image16 shows dropdown with options: "Tháng", "Năm".
--- "Vé Ngày" is an operational proposal for walk-in parking, marked PROPOSAL.
+-- "Vé Ngày" is an operational proposal for registered vehicles, marked PROPOSAL.
 INSERT INTO ticket_type (code, name, duration_days, default_price, description)
 VALUES 
     ('YEARLY', 'Vé Năm', 365, 100000.00, 'Annual parking ticket at 100,000 VND (from SRS wireframe example image15, image16)'),
     ('MONTHLY', 'Vé Tháng', 30, 100000.00, '[PROPOSAL] (OQ-57) Monthly parking ticket option shown in wireframe image16 dropdown, default price 100,000 VND pending PO confirmation'),
-    ('DAILY', 'Vé Ngày', 1, 10000.00, '[PROPOSAL] (OQ-57) Daily transient ticket for walk-in vehicles, pending PO confirmation (not shown in wireframes)')
+    ('DAILY', 'Vé Ngày', 1, 10000.00, '[PROPOSAL] (OQ-57) Daily transient ticket for registered vehicles, pending PO confirmation (not shown in wireframes)')
 ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------

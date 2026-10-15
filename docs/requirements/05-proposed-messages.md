@@ -13,7 +13,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
    - Test conditions in the SRS Failure column without verbatim text are cataloged as **Scenario Descriptions** (`CASE-<Screen>-TH<Number>`).
 2. **Standardization of Proposals ([PROPOSAL])**:
    - When a backend API must return an error or success message where the SRS provides no text, assign a proposal code: `PROP-<Screen>-P<Number>`.
-   - Each `PROP-` entry links directly to an open question in `docs/requirements/01-open-questions.md` (`OQ-13` through `OQ-38`).
+   - Each `PROP-` entry links directly to an open question in `docs/requirements/01-open-questions.md` (`OQ-13` through `OQ-38`, `OQ-63`, `OQ-67`).
    - Strictly prohibit claiming these proposals as "verbatim SRS messages" in rules, skills, or agent prompts.
 
 ---
@@ -43,7 +43,15 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ---
 
-### 2.3. Ticket Management Module (SRS 4.6)
+### 2.3. Vehicle In/Out & Parking Map Module (SRS 4.5)
+
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| :---: | :--- | :--- | :--- | :--- | :---: | :---: |
+| **PROP-4.5.2-P01** | 4.5.2 Parking Map (Bản đồ bãi xe) / 4.5.1 Vehicle In/Out | Attempting to occupy or select a slot currently under maintenance | SRS does not define error dialogue string for maintenance slots | `Vị trí này đang bảo trì.` | 400 Bad Request | **OQ-63**, **OQ-67** |
+
+---
+
+### 2.4. Ticket Management Module (SRS 4.6)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
@@ -57,7 +65,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ---
 
-### 2.4. Statistics Module (SRS 4.7)
+### 2.5. Statistics Module (SRS 4.7)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
@@ -69,7 +77,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ---
 
-### 2.5. Parking Lot & Slot Management Module (SRS 4.8)
+### 2.6. Parking Lot & Slot Management Module (SRS 4.8)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
@@ -89,7 +97,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ---
 
-### 2.6. Standard Generic API Error Envelope
+### 2.7. Standard Generic API Error Envelope
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
 | :---: | :--- | :--- | :--- | :--- | :--- | :---: |
