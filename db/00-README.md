@@ -53,7 +53,7 @@ The table below maps the Vietnamese entity names and informal references appeari
 
 ## 3. Database Entity Catalog & Structural Metrics
 
-The physical database schema comprises strictly **19 Tables**, **44 Foreign Keys** (100% `ON DELETE RESTRICT`, 0 `CASCADE`), **209 Columns** (100% documented with `COMMENT ON COLUMN`), **4 Analytical Views** (22 view columns), **14 Triggers**, and **5 Trigger Functions**:
+The physical database schema comprises strictly **19 Tables**, **44 Foreign Keys** (100% `ON DELETE RESTRICT`, 0 `CASCADE`), **211 Table Columns** (100% documented with `COMMENT ON COLUMN`), **4 Analytical Views** (22 view columns, bringing total columns to **233**), **14 Triggers**, **5 Trigger Functions**, **4 Statistical Functions**, and **18 DataTypes** (including `SMALLINT`):
 
 | Table / View Name | Type | Columns | Foreign Keys | Functional Summary (1 Line per Entity) |
 | :--- | :---: | :---: | :---: | :--- |
@@ -69,14 +69,14 @@ The physical database schema comprises strictly **19 Tables**, **44 Foreign Keys
 | `vehicle_type` | Table | 9 | 1 | Vehicle categorization catalog: Xe 4 chỗ, Xe 7 chỗ, Xe 12 chỗ, and Xe máy (SRS 4.8.2, OQ-49). |
 | `ticket_type` | Table | 11 | 1 | Ticket duration and tariff pricing catalog in VND (SRS 4.6.1, OQ-06, Rule 05). |
 | `vehicle` | Table | 14 | 4 | Registered vehicles with license plate uniqueness, ticket preference metadata, and composite owner key (SRS 4.4.2, OQ-52, OQ-53). |
-| `parking_slot` | Table | 13 | 1 | Physical parking spaces with floor-scoped code uniqueness and positive dimensions (SRS 4.5.2, 4.8, OQ-54, OQ-59). |
+| `parking_slot` | Table | 15 | 1 | Physical parking spaces with 2D grid coordinates, floor-scoped code uniqueness, and positive dimensions (SRS 4.5.2, 4.8, OQ-54, OQ-59, OQ-69). |
 | `slot_allowed_vehicle_type` | Table | 3 | 2 | M:N association specifying allowed vehicle categories per parking slot (SRS 4.8.2). |
 | `ticket` | Table | 16 | 5 | Issued parking tickets with GiST anti-overlap slot exclusion and composite vehicle-customer FK (SRS 4.6, OQ-61, OQ-64). |
 | `ticket_renewal` | Table | 14 | 6 | Audit trail of ticket renewals tracking old/new tariff types and historical price mutations (SRS 4.6.3, OQ-58). |
 | `vehicle_entry_exit_log` | Table | 14 | 5 | Barrier gate movements captured via OCR camera snapshots and barrier operator tracking (SRS 4.5.1, SCO-01). |
 | `news` | Table | 15 | 2 | Facility news articles published on landing portal home page (SCO-03, Tasks_Sprint_1). |
 | `notification` | Table | 10 | 2 | System announcements and notifications displayed on portal home page (SRS 4.2). |
-| **Total Tables** | **19 Tables** | **209 Cols** | **44 FKs** | **100% ON DELETE RESTRICT, 0 CASCADE, 0 DROP statements** |
+| **Total Tables** | **19 Tables** | **211 Cols** | **44 FKs** | **100% ON DELETE RESTRICT, 0 CASCADE, 0 DROP statements** |
 | `v_revenue_statistics` | View | 6 | — | Monthly, quarterly, and annual revenue metrics preserving 100% historical sales (SRS 4.7.1). |
 | `v_vehicle_traffic_daily` | View | 4 | — | Daily vehicle traffic flow metrics (entries, exits, currently parked) (SRS 4.7.2). |
 | `v_slot_occupancy_by_floor` | View | 6 | — | Floor-by-floor slot committed capacity and utilization metrics computed dynamically from live sessions and active tickets, excluding maintenance from denominator (SRS 4.7.2, OQ-63). |
@@ -87,8 +87,17 @@ The database enforces real-time synchronization, temporal validity, OCC versioni
 1. `fn_update_row_version_and_timestamp()` (10 Triggers): Attached `BEFORE UPDATE` on `account`, `position`, `employee`, `customer`, `vehicle_type`, `vehicle`, `parking_slot`, `ticket_type`, `ticket`, `news` (ADR-0003, OQ-64).
 2. `fn_sync_ticket_status()` (1 Trigger: `trg_ticket_status_sync`): Attached `BEFORE INSERT OR UPDATE` on `ticket` synchronizing `EXPIRED` status upon temporal boundary (OQ-63).
 3. `fn_sync_slot_status_on_traffic()` (1 Trigger: `trg_slot_status_on_traffic`): Attached `AFTER INSERT OR UPDATE` on `vehicle_entry_exit_log` updating physical slot to `OCCUPIED` upon check-in, handling slot reassignment and session reopening, and resetting to `AVAILABLE` / `RESERVED` upon check-out (OQ-63, OQ-67).
-4. `fn_sync_slot_status_on_ticket()` (1 Trigger: `trg_slot_status_on_ticket`): Attached `AFTER INSERT OR UPDATE` on `ticket` reserving slots upon ticket purchase and freeing them upon expiration/cancellation/renewal reassignment (OQ-63).
-5. `fn_guard_slot_reservation_on_entry()` (1 Trigger: `trg_guard_slot_reservation_on_entry`): Attached `BEFORE INSERT OR UPDATE OF slot_id, exit_time, vehicle_id, license_plate` on `vehicle_entry_exit_log` guarding reserved ticket slots against unauthorized walk-in or mismatched vehicles with exact SRS error `'Vị trí này đã có xe đk vé và đang sử dụng'`, and blocking entry/reassignment to maintenance slots (SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02, OQ-67).
+4. `fn_sync_slot_status_on_ticket()` (1 Trigger: `trg_slot_status_on_ticket`): Attached `AFTER INSERT OR UPDATE` on `ticket` reserving slots upon ticket purchase, freeing them upon expiration/cancellation/renewal reassignment, and deterministically synchronizing vehicle ticket preference metadata (`ticket_type_id`, `ticket_expires_at`) to the latest active valid ticket (OQ-52, OQ-63).
+5. `fn_guard_slot_reservation_on_entry()` (1 Trigger: `trg_guard_slot_reservation_on_entry`): Attached `BEFORE INSERT OR UPDATE OF slot_id, exit_time, vehicle_id, license_plate` on `vehicle_entry_exit_log` serializing slot access, validating that recognized `license_plate` strictly matches the registered active vehicle, guarding reserved ticket slots against unauthorized other vehicles with verbatim SRS error `'Vị trí này đã có xe đk vé và đang sử dụng'`, and blocking check-in/reassignment into maintenance slots with proposed message `'Vị trí này đang bảo trì.'` (SRS 4.5.1, 4.5.2 ACT-4.5.2-A02, MSG-4.5.1-M02, MSG-4.5.2-M02, PROP-4.5.2-P01, OQ-63, OQ-67, Owner Decision 10).
+
+### 3.2. Statistical Stored Functions for Date-Range Reporting (SRS 4.7.1 & 4.7.2)
+To fulfill conditional date-range analytics specified in SRS 4.7.1 and 4.7.2 without modifying static operational views, the database provides **4 Statistical Functions** accepting `(p_from_date DATE, p_to_date DATE)`:
+1. `fn_stat_vehicles_by_day(p_from_date DATE, p_to_date DATE)`: Aggregates daily vehicle traffic flow (`traffic_date`, `total_entries`, `total_exits`, `distinct_vehicles`) within the specified date boundary (SRS 4.7.2 REQ-4.7.2-F03).
+2. `fn_stat_vehicles_by_floor(p_from_date DATE, p_to_date DATE)`: Aggregates vehicle parking sessions and ticket allocations grouped by active facility floor (`floor_number`, `entry_count`, `distinct_vehicle_count`, `ticket_count`), utilizing pre-aggregated CTEs to eliminate Cartesian distortion (SRS 4.7.2 REQ-4.7.2-F04).
+3. `fn_stat_vehicles_by_customer(p_from_date DATE, p_to_date DATE)`: Evaluates customer vehicle onboarding and ticket purchasing activity (`customer_id`, `customer_code`, `customer_name`, `registered_vehicle_count`, `period_ticket_count`) over the target window (SRS 4.7.2 REQ-4.7.2-F05).
+4. `fn_stat_revenue_by_period(p_from_date DATE, p_to_date DATE)`: Computes financial revenue across initial ticket issuance and renewal transactions (`report_year`, `report_quarter`, `report_month`, `total_tickets_sold`, `total_renewals`, `total_revenue`), preserving 100% of historical transactions (SRS 4.7.1).
+
+All 4 statistical functions validate date parameters (`p_from_date IS NOT NULL AND p_to_date IS NOT NULL AND p_from_date <= p_to_date`), raising proposed error message `PROP-4.7.2-P02`: `'Khoảng thời gian thống kê không hợp lệ (Từ ngày phải nhỏ hơn hoặc bằng Đến ngày).'` upon invalid boundary input (`OQ-37`).
 
 
 ---
@@ -129,9 +138,9 @@ To prevent physical slot status and ticket status from drifting over time, the d
   1. A `BEFORE UPDATE` trigger function `fn_update_row_version_and_timestamp()` is attached to all versioned entities, automatically incrementing `row_version = OLD.row_version + 1` and updating `updated_at = CURRENT_TIMESTAMP`.
   2. A check constraint `CONSTRAINT ck_ticket_delete_only_expired CHECK (deleted_at IS NULL OR effective_to <= deleted_at)` enforces at the database level that active tickets can never be soft-deleted before expiration.
 
-### 4.7. Customer Vehicle Onboarding with Ticket Preferences (OQ-52)
+### 4.7. Customer Vehicle Onboarding with Ticket Preferences & Preference Constraints (OQ-52)
 Wireframe screens 4.4.3 and 4.4.4 allow adding vehicles with ticket preferences (`Loại vé`, `Hạn vé`) without immediately choosing a physical floor, slot, or billing price.
-- **Resolution**: Columns `ticket_type_id BIGINT NULL REFERENCES ticket_type(id)` and `ticket_expires_at TIMESTAMPTZ NULL` are added directly to `vehicle`. Full ticket issuance and slot reservation take place when formal tickets are created in Module 4.6.
+- **Resolution**: Columns `ticket_type_id BIGINT NULL REFERENCES ticket_type(id)` and `ticket_expires_at TIMESTAMPTZ NULL` are added directly to `vehicle`. A pair check constraint `CONSTRAINT ck_vehicle_ticket_pref_pair CHECK ((ticket_type_id IS NULL AND ticket_expires_at IS NULL) OR (ticket_type_id IS NOT NULL AND ticket_expires_at IS NOT NULL))` guarantees that both preference fields are provided together or neither is provided. Full ticket issuance and physical slot allocation take place when formal tickets are created in Module 4.6.
 
 ### 4.8. Vehicle Manufacturer Brand Nullability (OQ-53)
 The Add-Vehicle modal for customer onboarding (images 10 & 11) does not contain a field for `Hãng xe` (brand); brand appears only in gate check-in (4.5.1) and slot detail (4.8.4).
@@ -164,16 +173,40 @@ SRS 4.3.2 creates an employee profile while setting a default password, but logi
   2. `uq_log_open_session_vehicle`: `UNIQUE (vehicle_id) WHERE exit_time IS NULL AND vehicle_id IS NOT NULL` — ensures at most one open parking session per registered vehicle.
   3. `uq_log_open_session_plate`: `UNIQUE (license_plate) WHERE exit_time IS NULL` — ensures a license plate cannot check in multiple times without checking out.
 
-### 4.14. Walk-in Transient Vehicle Policy (OQ-65)
-- **Walk-in Transient Vehicle Policy (OQ-65)**: SRS 4.5.1 states that saving without finding a registered vehicle triggers error message "Lỗi dữ liệu không tìm thấy đê lưu" (`MSG-4.5.1-M02`). However, commercial facility operations require accommodating transient (walk-in) visitors who do not purchase subscription tickets. The schema permits `vehicle_entry_exit_log.vehicle_id BIGINT NULL` as an explicit architectural **[PROPOSAL] (OQ-65)**. In production, API endpoints can enforce strict registration validation (`MSG-4.5.1-M02`) while preserving database readiness for transient ticketing.
+### 4.14. Strict Registered Vehicle Barrier Gate Policy (Owner Decision 10, OQ-65)
+In previous drafts, a transient walk-in vehicle policy (`vehicle_id NULL`) was considered as an architectural proposal. However, under **Owner Decision 10** and strict fidelity to SRS Section 4.5.1, barrier gate check-in requires operators to search and identify a registered vehicle before saving. Saving without finding a registered vehicle triggers the verbatim SRS error: `"Lỗi dữ liệu không tìm thấy đê lưu"` (`MSG-4.5.1-M02`).
+- **Resolution**:
+  1. The column `vehicle_entry_exit_log.vehicle_id` is defined strictly as `BIGINT NOT NULL REFERENCES vehicle(id) ON DELETE RESTRICT`. All walk-in transient vehicle allowances are eliminated.
+  2. In trigger `fn_guard_slot_reservation_on_entry()`, for any active check-in session (`exit_time IS NULL`), the camera-captured `license_plate` is validated against the active registered vehicle (`vehicle.license_plate`). Any mismatch raises exception `"Lỗi dữ liệu không tìm thấy đê lưu"` (`MSG-4.5.1-M02`).
 
-### 4.15. Walk-In Transient Vehicle vs Reserved Ticket Slot Guard (OQ-67)
-When a parking slot is reserved by an active subscription ticket for a registered vehicle, unauthorized walk-in visitors (`vehicle_id NULL`) or other vehicles must be prevented from occupying that slot.
+### 4.15. Slot Reservation Guard and Maintenance Slot Protection (OQ-63, OQ-67, PROP-4.5.2-P01)
+When a parking slot is reserved by an active subscription ticket for a registered vehicle, other vehicles must be prevented from occupying or being assigned to that slot at barrier check-in or via slot reassignment. Furthermore, slots placed under maintenance must be locked against check-in.
 - **Resolution**: A database-level trigger `trg_guard_slot_reservation_on_entry` and function `fn_guard_slot_reservation_on_entry()` are attached `BEFORE INSERT OR UPDATE OF slot_id, exit_time, vehicle_id, license_plate ON vehicle_entry_exit_log`:
   1. Serializes concurrent assignments by acquiring a row lock on the target slot (`FOR NO KEY UPDATE`).
-  2. Rejects any entry, slot reassignment, or session reopening into slots currently under maintenance (`parking_slot.status = 'MAINTENANCE'`).
-  3. If the slot has an active valid subscription ticket (`CURRENT_TIMESTAMP BETWEEN effective_from AND effective_to`), the trigger verifies that the entering/moving vehicle matches the ticket's registered vehicle (`NEW.vehicle_id = ticket.vehicle_id` or matching normalized `license_plate`).
-  4. If an unauthorized walk-in vehicle or different vehicle attempts to occupy the reserved slot upon entry or slot update, the trigger raises an exception with the verbatim SRS error message: `'Vị trí này đã có xe đk vé và đang sử dụng'` (ERRCODE `check_violation`, HINT: `'Slot is not available or is reserved by an active ticket for another vehicle.'`, SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02, OQ-67). Normal exit updates (`exit_time` becoming non-NULL) are unaffected.
+  2. Rejects any entry, slot reassignment, or session reopening into slots currently under maintenance (`parking_slot.status = 'MAINTENANCE'`), raising proposed error message: `'Vị trí này đang bảo trì.'` (`PROP-4.5.2-P01`).
+  3. If the slot has an active valid subscription ticket (`CURRENT_TIMESTAMP BETWEEN effective_from AND effective_to`), the trigger verifies that the entering vehicle matches the ticket's registered vehicle (`NEW.vehicle_id = ticket.vehicle_id`).
+  4. If another vehicle attempts to occupy the reserved slot upon entry or slot update, the trigger raises an exception with the verbatim SRS error message: `'Vị trí này đã có xe đk vé và đang sử dụng'` (ERRCODE `check_violation`, HINT: `'Slot is reserved by an active ticket for another vehicle.'`, SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02, OQ-67). Normal checkout updates (`exit_time` becoming non-NULL) are unaffected.
+
+### 4.16. Synchronizing Vehicle Ticket Preferences with Ticket Lifecycle (OQ-52)
+When customer vehicles are onboarded in screen 4.4.3/4.4.4, `vehicle.ticket_type_id` and `vehicle.ticket_expires_at` store initial customer subscription desires. Once tickets are issued in Module 4.6, table `ticket` becomes the authoritative Single Source of Truth:
+- **Resolution**: Trigger `fn_sync_slot_status_on_ticket()` (`AFTER INSERT OR UPDATE ON ticket`) automatically updates `vehicle.ticket_type_id` and `vehicle.ticket_expires_at` to match the latest active valid ticket (`ORDER BY effective_to DESC, id DESC LIMIT 1`). When all tickets for a vehicle expire or are soft-deleted, the trigger resets both columns to `NULL`, maintaining absolute synchronization across the ticket lifecycle.
+
+### 4.17. Floor Map Geometric Slot Grid Coordinates (OQ-69)
+SRS 4.5.2 specifies that each floor has a distinct spatial parking layout and wireframe `image14.png` illustrates a 2D geometric grid with dedicated entrance (`Cửa vào`) and exit (`Cửa ra`) portals.
+- **Resolution**: Columns `map_row SMALLINT NULL` and `map_col SMALLINT NULL` are added to `parking_slot`. Check constraint `CONSTRAINT ck_slot_map_coords_pair CHECK ((map_row IS NULL AND map_col IS NULL) OR (map_row IS NOT NULL AND map_col IS NOT NULL AND map_row > 0 AND map_col > 0))` enforces 1-based positive grid coordinates. Partial unique index `CREATE UNIQUE INDEX uq_parking_slot_floor_map_pos_active ON parking_slot (floor_number, map_row, map_col) WHERE deleted_at IS NULL AND map_row IS NOT NULL AND map_col IS NOT NULL;` guarantees that no two active slots on the same floor occupy the same 2D grid cell, supporting responsive 2D floor map rendering.
+
+### 4.18. Extended Slot Status Values and Maintenance Proposal Disclosure (OQ-63, PROP-4.5.2-P01)
+Wireframe `image14.png` visually renders only two slot states (green for available, red for occupied).
+- **Resolution**: The relational schema explicitly discloses that `parking_slot.status` values `RESERVED` and `MAINTENANCE` are architectural **[PROPOSAL]** extensions enabling pre-allocation for subscription tickets and maintenance out-of-service locking. Attempting to occupy or assign a maintenance slot returns proposed message `'Vị trí này đang bảo trì.'` (`PROP-4.5.2-P01`).
+
+### 4.19. Literal SRS Gender and Business Code Format Validation (OQ-65, Owner Decisions 10 & 11)
+- **Literal SRS Gender (Owner Decision 11)**: SRS 4.3.2 wireframe dropdown defines gender as `Nam` and `Nữ` only. Check constraints `ck_employee_gender` and `ck_customer_gender` strictly enforce `CHECK (gender IN ('Nam', 'Nữ'))`.
+- **Business Code Format**: The SRS table specifies `Alpha numeric (5)` while its wireframes illustrate hyphenated codes (`NV-1234`, `KH-1234`, `Xe-001`, `VE-01`). Check constraints `ck_employee_code_format`, `ck_customer_code_format`, `ck_vehicle_code_format`, and `ck_ticket_code_format` enforce `CHECK (code ~ '^[A-Za-z0-9-]+$')` across all four entities, accommodating both 5-character alphanumeric strings and hyphenated codes while rejecting arbitrary punctuation strings like `"!!??"`.
+- **Customer ID Card Format**: Documented via constraint `ck_customer_idcard_digits` (`identity_card_number ~ '^[0-9]+$'`), allowing digit strings up to 20 characters matching SRS `Number` type and wireframe 9- and 10-digit examples.
+
+### 4.20. Dedicated Statistical Stored Functions for Date-Range Reporting (OQ-37, PROP-4.7.2-P02)
+Analytical views provide real-time snapshots but cannot accept dynamic date-range arguments.
+- **Resolution**: 4 stored PL/pgSQL functions (`fn_stat_vehicles_by_day`, `fn_stat_vehicles_by_floor`, `fn_stat_vehicles_by_customer`, `fn_stat_revenue_by_period`) accept `(p_from_date DATE, p_to_date DATE)`. Each function performs parameter validation, throwing `PROP-4.7.2-P02` (`'Khoảng thời gian thống kê không hợp lệ (Từ ngày phải nhỏ hơn hoặc bằng Đến ngày).'`) if `p_from_date > p_to_date` or either is NULL. All functions utilize independent CTEs to eliminate Cartesian row inflation and respect soft deletion.
 
 ---
 
@@ -189,8 +222,10 @@ In accordance with ADR-0003:
 ## 6. Open Questions Catalog Index
 
 All technical proposals, open business questions, and assumptions are tracked with unique identifiers in [`docs/requirements/01-open-questions.md`](../docs/requirements/01-open-questions.md):
+- **OQ-49**: Scope of permitted vehicle types and dual semantic meaning of "Loại xe" (model line vs seat capacity group) (SRS 4.4, 4.5.1, 4.8.2, 4.8.4).
 - **OQ-50**: Vietnam administrative legal framework (Law No. 72/2025/QH15, Resolution No. 202/2025/QH15, 2-tier local government, 34 provincial units).
-- **OQ-52**: Vehicle ticket metadata persistence during customer onboarding (SRS 4.4.3).
+- **OQ-51**: News management and notification board specifications (SRS 4.2, Tasks_Sprint_1).
+- **OQ-52**: Vehicle ticket preference persistence and bidirectional synchronization with ticket lifecycle (SRS 4.4.3, 4.6).
 - **OQ-53**: Vehicle brand nullability in customer add-vehicle modal (SRS 4.4.3).
 - **OQ-54**: Floor and slot capacity bounds derived from SRS data types Number(2) and Number(3) (SRS 4.8).
 - **OQ-55**: Customer actor taxonomy and portal account linkage (SRS 4.1, 4.4).
@@ -201,11 +236,14 @@ All technical proposals, open business questions, and assumptions are tracked wi
 - **OQ-60**: Vehicle gate camera dual-photo capture architecture (SRS 4.5.1).
 - **OQ-61**: Referential integrity between customer and vehicle on ticket (SRS 4.6).
 - **OQ-62**: Multi-level administrative hierarchy validation via composite FKs (SRS 4.3.2, 4.4.3).
-- **OQ-63**: Real-time derived status synchronization via database triggers and dynamic view (SRS 4.5.2, 4.6, 4.7.2).
+- **OQ-63**: Real-time derived status synchronization and disclosure of extended slot statuses (RESERVED, MAINTENANCE) (SRS 4.5.2, 4.6, 4.7.2).
 - **OQ-64**: Optimistic concurrency control triggers and ticket deletion guards (SRS 4.6.4, ADR-0003).
-- **OQ-65**: Beyond-SRS constraint justifications and walk-in vehicle policy (SRS 4.5.1).
+- **OQ-65**: Beyond-SRS constraint justifications, literal gender (Nam/Nữ), and strict registered vehicle policy (SRS 4.3.2, 4.5.1, Owner Decisions 10, 11).
 - **OQ-66**: Open parking session partial unique indexes and double-entry prevention (SRS 4.5.1, 4.5.2).
-- **OQ-67**: Walk-in transient vehicle vs reserved ticket slot guard trigger on entry & update (SRS 4.5.2).
+- **OQ-67**: Slot reservation guard and maintenance slot protection trigger on entry & update (SRS 4.5.2).
+- **OQ-68**: Employee working time and shift scheduling scope clarification (SRS 2.2 vs Section 4).
+- **OQ-69**: Floor map slot 2D geometric grid coordinates (`map_row`, `map_col`) (SRS 4.5.2, image14).
+- **OQ-70**: Duplicate license plate sample data in wireframes (`92D1-1234`) and active plate uniqueness (SRS 4.4.1, 4.4.4, image9, image10).
 
 ---
 
@@ -226,15 +264,15 @@ The database architecture is visually modeled and maintained through native Asta
 ### 7.2. Model Metrics & Structural Parity (PostgreSQL 18.6 Schema Match)
 Independent verification via Astah Open API confirms 100% parity between `db/03-erd.asta` and PostgreSQL 18.6 `information_schema` (`db/01-schema.sql`) with **0 discrepancies**:
 - **23 Business Classes**:
-  - **19 Physical Tables**: Modeled as UML Classes adorned with the `«table»` stereotype, encompassing all 209 normalized database columns with accurate constraint stereotypes (`«PK»`, `«FK»`, `«UQ»`, `«PUQ»`, `«UQ1»`, `«PUQ1»`, `«PUQ2»`).
+  - **19 Physical Tables**: Modeled as UML Classes adorned with the `«table»` stereotype, encompassing all 211 normalized database columns with accurate constraint stereotypes (`«PK»`, `«FK»`, `«UQ»`, `«PUQ»`, `«UQ1»`, `«PUQ1»`, `«PUQ2»`, `«PUQ3»`).
   - **4 Analytical Views**: Encapsulated within a dedicated `Views` UML Package (`v_revenue_statistics`, `v_vehicle_traffic_daily`, `v_slot_occupancy_by_floor`, `v_customer_vehicle_summary`) with the `«view»` stereotype (22 view attributes total), strictly isolated from persistent entities.
-- **17 SQL Primitive Datatype Classes Encapsulated**:
-  - 17 SQL primitive types (`BIGINT`, `INTEGER`, `VARCHAR(10)`, `VARCHAR(20)`, `VARCHAR(45)`, `VARCHAR(50)`, `VARCHAR(64)`, `VARCHAR(100)`, `VARCHAR(255)`, `TEXT`, `BOOLEAN`, `DATE`, `TIMESTAMPTZ`, `NUMERIC(5, 2)`, `NUMERIC(12, 2)`, `SERIAL`, `BIGSERIAL`) are encapsulated within a dedicated `DataTypes` package.
-  - Total classes in ASTA: 40 classes (23 business entities + 17 datatype classes).
-  - This architecture preserves native PostgreSQL column definitions across all 209 attributes without polluting the top-level business domain model.
+- **18 SQL Primitive Datatype Classes Encapsulated**:
+  - 18 SQL primitive types (`BIGINT`, `INTEGER`, `SMALLINT`, `VARCHAR(10)`, `VARCHAR(20)`, `VARCHAR(45)`, `VARCHAR(50)`, `VARCHAR(64)`, `VARCHAR(100)`, `VARCHAR(255)`, `TEXT`, `BOOLEAN`, `DATE`, `TIMESTAMPTZ`, `NUMERIC(5, 2)`, `NUMERIC(12, 2)`, `SERIAL`, `BIGSERIAL`) are encapsulated within a dedicated `DataTypes` package.
+  - Total classes in ASTA: 41 classes (23 business entities + 18 datatype classes).
+  - This architecture preserves native PostgreSQL column definitions across all 211 attributes (and 22 view attributes, totaling 233 attributes) without polluting the top-level business domain model.
 - **44 Foreign Key Associations (100% Populated & Modeled)**:
   - 100% of physical relational constraints are modeled as directed associations from child table to parent table with exact multiplicities:
-    - Required Parent Links: `0..*` (or `0..1`) to `1` (e.g., `vehicle` to `customer`, `ticket` to `parking_slot`).
+    - Required Parent Links: `0..*` (or `0..1`) to `1` (e.g., `vehicle` to `customer`, `ticket` to `parking_slot`, and `vehicle_entry_exit_log` to `vehicle` via `fk_log_vehicle` per Owner Decision 10).
     - Nullable Parent Links: `0..*` to `0..1` (e.g., `vehicle_entry_exit_log` to `slot_id`).
     - **11 Soft-Deletion Audit Links**: All 11 `deleted_by -> account` foreign keys are fully modeled and visually rendered on `ERD_Overview` using quiet grey lines (`#B0BEC5`).
 
@@ -245,7 +283,7 @@ Composite and partial unique constraints are explicitly marked using standardize
 - `«UQ»`: Standard global single-column unique constraint (e.g., `persistent_login_token.series`, `password_reset_token.token_hash`, `administrative_province.code`).
 - `«PUQ»`: Active-record partial unique index (filtered by `WHERE deleted_at IS NULL` or active session), applied to `account.username`, `employee.code`, `customer.code`, `ticket.code`, `vehicle_type.code`, `vehicle.license_plate`, etc.
 - Composite Multi-Column Stereotypes:
-  - `parking_slot`: `floor_number`: `«PUQ1, PUQ2»`, `slot_number`: `«PUQ1»`, `code`: `«PUQ2»` (enforcing floor-scoped slot uniqueness and code uniqueness for active slots).
+  - `parking_slot`: `floor_number`: `«PUQ1, PUQ2, PUQ3»`, `slot_number`: `«PUQ1»`, `code`: `«PUQ2»`, `map_row`: `«PUQ3»`, `map_col`: `«PUQ3»` (enforcing floor-scoped slot uniqueness, code uniqueness, and spatial 2D grid position uniqueness for active slots).
   - `vehicle`: `id`: `«PK, UQ1»`, `customer_id`: `«FK, UQ1»` (enforcing composite parentage integrity for tickets).
   - `administrative_district`: `id`: `«PK, UQ1»`, `province_id`: `«FK, UQ1»`.
   - `administrative_ward`: `id`: `«PK, UQ1»`, `district_id`: `«FK, UQ1»`.
@@ -261,7 +299,7 @@ Composite and partial unique constraints are explicitly marked using standardize
   - **Minimal Link Crossings (`20` Crossings Across 44 FKs)**: By placing `account` and `employee` at the center of the 6-column grid and nesting corridor Y-levels monotonically by distance, orthogonal line-to-line crossings are reduced from 96 down to **20** (well below the $\le 30$ readability ceiling). Both the complete 44-relationship topological overview (`04-erd.png`) AND the 5 zero-crossing, 100%-attribute-expanded module diagrams (`05`..`09`) are retained together.
   - **Ultra-High Resolution**: Exported at **4166 × 1432 px**, fully legible at 100% zoom.
 - **5 Detailed Module Diagrams (`05`..`09`) - 4-Way Orthogonal Layout**:
-  - Primary subsystem tables display **100% of attributes and column types** (all 209 attributes visible across the 5 diagrams).
+  - Primary subsystem tables display **100% of attributes and column types** (all 211 attributes visible across the 5 diagrams).
   - Inter-module relationships are cleanly linked via **Collapsed Neighbor Stubs** (`height = 45px`, `width = 240px`, soft gray fill `#ECEFF1`).
   - Stubs are placed strictly in the 4 cardinal directions (North, South, East, West) around primary tables so that each boundary side receives at most one relationship link.
   - Multiplicity-Only Presentation: Association member end names are suppressed (`end.setName("")`), displaying only clean numeric multiplicities (`1`, `0..*`, `0..1`) and eliminating 100% of role label collisions.
@@ -279,12 +317,12 @@ All ERD deliverables are verified with SHA-256 checksums:
 
 | Artifact File | Description | SHA-256 Checksum | Dimensions / File Size |
 |---|---|---|---|
-| `03-erd.asta` | Master Astah UML Model | `EEBBE668B87CE5052F606464FA07F181F2E641AE008390AC5D4D3987D56ED37D` | 51,461 bytes |
-| `04-erd.png` | Master ERD Overview (44 Links) | `B9B77B4AEE0B972C79BA0B3025CBCC074B7064B21DBA42735C6E9431E3DAB96E` | 4166 × 1432 px (204,220 bytes) |
+| `03-erd.asta` | Master Astah UML Model | `EF287A68483337D65D2AE4BF92D0F3A9285C0ADF278AC661DAD047CFC4B95168` | 52,021 bytes |
+| `04-erd.png` | Master ERD Overview (44 Links) | `C1422ABD5235A409F927A79508F71CC9618C5580CC3A655F395E8BE8021E9A9D` | 4166 × 1432 px (204,256 bytes) |
 | `05-erd-account-staff.png` | Account & Staff Module ERD | `69F679BF658FE60B0442E5365D4A94D4E58BFBF8BF1534750130672A7CA939B6` | 1446 × 1564 px (138,693 bytes) |
 | `06-erd-customer-vehicle.png` | Customer & Vehicle Module ERD | `91730DF71637BB303544E2D453F466EB84532D13EDC54A1CCAE9AF7224A83E3F` | 2006 × 1097 px (117,380 bytes) |
-| `07-erd-parking-ticket.png` | Parking & Ticket Module ERD | `DB4CE32255CA84D7021633625B578C5509E04D404B6B7EAEA12A0F58F86F28BD` | 2513 × 1698 px (189,698 bytes) |
-| `08-erd-operations-content.png` | Operations & Content Module ERD | `117BAEB2BC0337119571F7833E9FC27210246076FD9D0AC0C8206CB7ABB80093` | 2460 × 1272 px (130,294 bytes) |
+| `07-erd-parking-ticket.png` | Parking & Ticket Module ERD | `8E7869AAA6BB51D04E7C8385CED4DBB258F5C146CF2211FACE34566E4CAF7005` | 2513 × 1698 px (194,950 bytes) |
+| `08-erd-operations-content.png` | Operations & Content Module ERD | `13FE1BC1BC8553086BCA580A0AA0C423A6E74607533DF819220ABFF88BBF7C68` | 2460 × 1272 px (130,028 bytes) |
 | `09-erd-reference-views.png` | Reference & Views Module ERD | `7DD070142C7D07DB90B752F8885353BD608FCACCD55169CFACE7E2E7BE4EDEEA` | 1500 × 1046 px (92,638 bytes) |
 
 ### 7.6. Method Disclosure & Integrity Attestation

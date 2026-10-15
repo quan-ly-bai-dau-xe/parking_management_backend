@@ -249,7 +249,8 @@ CREATE TABLE employee (
     deleted_at TIMESTAMPTZ NULL,
     deleted_by BIGINT NULL,
 
-    CONSTRAINT ck_employee_gender CHECK (gender IN ('Nam', 'Nữ', 'Khác')),
+    CONSTRAINT ck_employee_code_format CHECK (code ~ '^[A-Za-z0-9-]+$'),
+    CONSTRAINT ck_employee_gender CHECK (gender IN ('Nam', 'Nữ')),
     CONSTRAINT ck_employee_phone_digits CHECK (phone ~ '^[0-9]+$'),
     CONSTRAINT fk_employee_account FOREIGN KEY (account_id) REFERENCES account (id) ON DELETE RESTRICT,
     CONSTRAINT fk_employee_position FOREIGN KEY (position_id) REFERENCES position (id) ON DELETE RESTRICT,
@@ -265,7 +266,7 @@ COMMENT ON COLUMN employee.account_id IS 'Foreign key referencing user account c
 COMMENT ON COLUMN employee.position_id IS 'Foreign key referencing employee job position (REQ-4.3.1-F04, REQ-4.3.2-F04, REQ-4.3.3-F04)';
 COMMENT ON COLUMN employee.full_name IS 'Full name of employee (max 45 characters per SRS) (REQ-4.3.1-F02, REQ-4.3.2-F01, REQ-4.3.3-F01)';
 COMMENT ON COLUMN employee.date_of_birth IS 'Date of birth of employee (REQ-4.3.1-F03, REQ-4.3.2-F02, REQ-4.3.3-F02)';
-COMMENT ON COLUMN employee.gender IS 'Employee gender (Nam, Nữ, or Khác [PROPOSAL per OQ-65]) (REQ-4.3.1-F05, REQ-4.3.2-F07, REQ-4.3.3-F08)';
+COMMENT ON COLUMN employee.gender IS 'Employee gender (Nam, Nữ per SRS 4.3.2) (REQ-4.3.1-F05, REQ-4.3.2-F07, REQ-4.3.3-F08)';
 COMMENT ON COLUMN employee.phone IS 'Employee contact phone number (max 15 digits) (REQ-4.3.2-F08, Rule 05, OQ-65)';
 COMMENT ON COLUMN employee.email IS 'Employee contact email address (REQ-4.3.1-F07, REQ-4.3.2-F05, REQ-4.3.3-F05)';
 COMMENT ON COLUMN employee.address IS 'Detailed address string (max 45 characters per SRS) (REQ-4.3.1-F06, REQ-4.3.2-F03, REQ-4.3.3-F03, Rule 05)';
@@ -309,7 +310,8 @@ CREATE TABLE customer (
     deleted_at TIMESTAMPTZ NULL,
     deleted_by BIGINT NULL,
 
-    CONSTRAINT ck_customer_gender CHECK (gender IN ('Nam', 'Nữ', 'Khác')),
+    CONSTRAINT ck_customer_code_format CHECK (code ~ '^[A-Za-z0-9-]+$'),
+    CONSTRAINT ck_customer_gender CHECK (gender IN ('Nam', 'Nữ')),
     CONSTRAINT ck_customer_phone_digits CHECK (phone ~ '^[0-9]+$' AND length(phone) <= 11),
     CONSTRAINT ck_customer_idcard_digits CHECK (identity_card_number ~ '^[0-9]+$'),
     CONSTRAINT fk_customer_account FOREIGN KEY (account_id) REFERENCES account (id) ON DELETE RESTRICT,
@@ -324,8 +326,8 @@ COMMENT ON COLUMN customer.code IS 'Natural customer code (KH-1234 or 5-char alp
 COMMENT ON COLUMN customer.account_id IS 'Foreign key referencing portal account [PROPOSAL OQ-55] (SRS 3.1, ADR-0004)';
 COMMENT ON COLUMN customer.full_name IS 'Full name of customer (max 45 characters per SRS) (REQ-4.4.1-F02, REQ-4.4.3-F01, REQ-4.4.4-F02)';
 COMMENT ON COLUMN customer.date_of_birth IS 'Date of birth of customer (REQ-4.4.1-F03, REQ-4.4.3-F02, REQ-4.4.4-F02)';
-COMMENT ON COLUMN customer.gender IS 'Customer gender (Nam, Nữ, or Khác [PROPOSAL per OQ-65]) (REQ-4.4.1-F07, REQ-4.4.3-F03, REQ-4.4.4-F02)';
-COMMENT ON COLUMN customer.identity_card_number IS 'National ID / Citizen card number (9-12 digits) (REQ-4.4.1-F04, REQ-4.4.3-F07, REQ-4.4.4-F02)';
+COMMENT ON COLUMN customer.gender IS 'Customer gender (Nam, Nữ per SRS 4.4.1/4.4.3) (REQ-4.4.1-F07, REQ-4.4.3-F03, REQ-4.4.4-F02)';
+COMMENT ON COLUMN customer.identity_card_number IS 'National ID / Citizen card number, digits-only string up to 20 characters (REQ-4.4.1-F04, REQ-4.4.3-F07, REQ-4.4.4-F02, ck_customer_idcard_digits)';
 COMMENT ON COLUMN customer.phone IS 'Customer telephone number (max 11 digits per SRS) (REQ-4.4.1-F05, REQ-4.4.3-F06, REQ-4.4.4-F02, Rule 05)';
 COMMENT ON COLUMN customer.email IS 'Customer contact email address (REQ-4.4.1-F06, REQ-4.4.3-F05, REQ-4.4.4-F02)';
 COMMENT ON COLUMN customer.address IS 'Detailed address string (max 45 characters per SRS) (REQ-4.4.1, REQ-4.4.3-F04, REQ-4.4.4-F02, Rule 05)';
@@ -438,6 +440,8 @@ CREATE TABLE vehicle (
     CONSTRAINT fk_vehicle_customer FOREIGN KEY (customer_id) REFERENCES customer (id) ON DELETE RESTRICT,
     CONSTRAINT fk_vehicle_type FOREIGN KEY (vehicle_type_id) REFERENCES vehicle_type (id) ON DELETE RESTRICT,
     CONSTRAINT fk_vehicle_ticket_type FOREIGN KEY (ticket_type_id) REFERENCES ticket_type (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_vehicle_code_format CHECK (code ~ '^[A-Za-z0-9-]+$'),
+    CONSTRAINT ck_vehicle_ticket_pref_pair CHECK ((ticket_type_id IS NULL AND ticket_expires_at IS NULL) OR (ticket_type_id IS NOT NULL AND ticket_expires_at IS NOT NULL)),
     CONSTRAINT fk_vehicle_deleted_by FOREIGN KEY (deleted_by) REFERENCES account (id) ON DELETE RESTRICT,
     CONSTRAINT uq_vehicle_id_customer UNIQUE (id, customer_id)
 );
@@ -476,6 +480,8 @@ CREATE TABLE parking_slot (
     floor_number INTEGER NOT NULL,
     slot_number INTEGER NOT NULL,
     code VARCHAR(20) NOT NULL,
+    map_row SMALLINT NULL,
+    map_col SMALLINT NULL,
     width NUMERIC(5, 2) NOT NULL,
     length NUMERIC(5, 2) NOT NULL,
     height NUMERIC(5, 2) NOT NULL,
@@ -491,6 +497,7 @@ CREATE TABLE parking_slot (
     CONSTRAINT ck_slot_width_positive CHECK (width > 0),
     CONSTRAINT ck_slot_length_positive CHECK (length > 0),
     CONSTRAINT ck_slot_height_positive CHECK (height > 0),
+    CONSTRAINT ck_slot_map_coords_pair CHECK ((map_row IS NULL AND map_col IS NULL) OR (map_row IS NOT NULL AND map_col IS NOT NULL AND map_row > 0 AND map_col > 0)),
     CONSTRAINT ck_slot_status_enum CHECK (status IN ('AVAILABLE', 'OCCUPIED', 'RESERVED', 'MAINTENANCE')),
     CONSTRAINT fk_slot_deleted_by FOREIGN KEY (deleted_by) REFERENCES account (id) ON DELETE RESTRICT
 );
@@ -500,6 +507,8 @@ COMMENT ON COLUMN parking_slot.id IS 'Surrogate auto-increment primary key (REQ-
 COMMENT ON COLUMN parking_slot.floor_number IS 'Facility floor number derived from SRS data type Number(2): 1..99 (OQ-54, REQ-4.5.2-F02, REQ-4.8.1-F01)';
 COMMENT ON COLUMN parking_slot.slot_number IS 'Sequential slot number per floor derived from SRS data type Number(3): 1..999 (OQ-54, REQ-4.5.2, REQ-4.8.2-F02)';
 COMMENT ON COLUMN parking_slot.code IS 'Natural slot display code (e.g. A-1, A-2), unique per floor (REQ-4.8.1-F02, REQ-4.8.3-F01, OQ-59)';
+COMMENT ON COLUMN parking_slot.map_row IS 'Floor map 2D grid row coordinate, 1-based positive integer (SRS 4.5.2, image14, [PROPOSAL OQ-69])';
+COMMENT ON COLUMN parking_slot.map_col IS 'Floor map 2D grid column coordinate, 1-based positive integer (SRS 4.5.2, image14, [PROPOSAL OQ-69])';
 COMMENT ON COLUMN parking_slot.width IS 'Slot width in meters (REQ-4.5.2-F03, REQ-4.8.2-F03, REQ-4.8.3-F02)';
 COMMENT ON COLUMN parking_slot.length IS 'Slot length in meters (REQ-4.5.2-F03, REQ-4.8.2-F04, REQ-4.8.3-F02)';
 COMMENT ON COLUMN parking_slot.height IS 'Slot height clearance in meters (REQ-4.5.2-F03, REQ-4.8.2-F06, REQ-4.8.3-F02)';
@@ -512,6 +521,7 @@ COMMENT ON COLUMN parking_slot.deleted_by IS 'Foreign key referencing account pe
 
 CREATE UNIQUE INDEX uq_parking_slot_floor_slot_active ON parking_slot (floor_number, slot_number) WHERE deleted_at IS NULL;
 CREATE UNIQUE INDEX uq_parking_slot_floor_code_active ON parking_slot (floor_number, code) WHERE deleted_at IS NULL;
+CREATE UNIQUE INDEX uq_parking_slot_floor_map_pos_active ON parking_slot (floor_number, map_row, map_col) WHERE deleted_at IS NULL AND map_row IS NOT NULL AND map_col IS NOT NULL;
 CREATE INDEX idx_parking_slot_floor_status ON parking_slot (floor_number, status) WHERE deleted_at IS NULL;
 
 
@@ -559,6 +569,7 @@ CREATE TABLE ticket (
     deleted_at TIMESTAMPTZ NULL,
     deleted_by BIGINT NULL,
 
+    CONSTRAINT ck_ticket_code_format CHECK (code ~ '^[A-Za-z0-9-]+$'),
     CONSTRAINT ck_ticket_time_order CHECK (effective_to > effective_from),
     CONSTRAINT ck_ticket_price_nonnegative CHECK (price >= 0),
     CONSTRAINT ck_ticket_status_enum CHECK (status IN ('ACTIVE', 'EXPIRED', 'RENEWED', 'CANCELLED')),
@@ -660,7 +671,7 @@ CREATE INDEX idx_ticket_renewal_new_type ON ticket_renewal (new_ticket_type_id);
 -- References: SRS 4.5.1 (REQ-4.5.1-F01..F14), SCO-01 (Tasks_Sprint_1 Task 18), OQ-60, OQ-65
 CREATE TABLE vehicle_entry_exit_log (
     id BIGINT GENERATED BY DEFAULT AS IDENTITY PRIMARY KEY,
-    vehicle_id BIGINT NULL,
+    vehicle_id BIGINT NOT NULL,
     license_plate VARCHAR(20) NOT NULL,
     ticket_id BIGINT NULL,
     slot_id BIGINT NULL,
@@ -684,7 +695,7 @@ CREATE TABLE vehicle_entry_exit_log (
 
 COMMENT ON TABLE vehicle_entry_exit_log IS 'Log of vehicle entry and exit movements captured via barrier OCR cameras (SRS 4.5.1, SCO-01, OQ-60, OQ-65)';
 COMMENT ON COLUMN vehicle_entry_exit_log.id IS 'Surrogate auto-increment primary key (REQ-4.5.1, ADR-0004, Rule 05)';
-COMMENT ON COLUMN vehicle_entry_exit_log.vehicle_id IS 'Foreign key referencing registered vehicle, nullable for walk-in vehicles [PROPOSAL OQ-65] (REQ-4.5.1-F05, SCO-01)';
+COMMENT ON COLUMN vehicle_entry_exit_log.vehicle_id IS 'Foreign key referencing registered vehicle (NOT NULL per Owner Decision 10, SRS 4.5.1 REQ-4.5.1-F05, SCO-01)';
 COMMENT ON COLUMN vehicle_entry_exit_log.license_plate IS 'Recognized vehicle license plate number (REQ-4.5.1-F05, SCO-01)';
 COMMENT ON COLUMN vehicle_entry_exit_log.ticket_id IS 'Foreign key referencing parking ticket (REQ-4.5.1-F13, REQ-4.5.1-F14)';
 COMMENT ON COLUMN vehicle_entry_exit_log.slot_id IS 'Foreign key referencing occupied parking slot (REQ-4.5.1-F11, REQ-4.5.1-F12)';
@@ -705,7 +716,7 @@ CREATE INDEX idx_log_currently_parked ON vehicle_entry_exit_log (slot_id) WHERE 
 
 -- Partial unique indexes ensuring single open parking session per physical slot, registered vehicle, and license plate (OQ-65, OQ-66)
 CREATE UNIQUE INDEX uq_log_open_session_slot ON vehicle_entry_exit_log (slot_id) WHERE exit_time IS NULL AND slot_id IS NOT NULL;
-CREATE UNIQUE INDEX uq_log_open_session_vehicle ON vehicle_entry_exit_log (vehicle_id) WHERE exit_time IS NULL AND vehicle_id IS NOT NULL;
+CREATE UNIQUE INDEX uq_log_open_session_vehicle ON vehicle_entry_exit_log (vehicle_id) WHERE exit_time IS NULL;
 CREATE UNIQUE INDEX uq_log_open_session_plate ON vehicle_entry_exit_log (license_plate) WHERE exit_time IS NULL;
 
 
@@ -902,10 +913,17 @@ COMMENT ON FUNCTION fn_sync_slot_status_on_traffic() IS 'Synchronizes parking sl
 CREATE TRIGGER trg_slot_status_on_traffic AFTER INSERT OR UPDATE ON vehicle_entry_exit_log FOR EACH ROW EXECUTE FUNCTION fn_sync_slot_status_on_traffic();
 
 
--- 10.4. Derived State Trigger: Synchronize Parking Slot Status from Ticket Lifecycle (OQ-63)
+-- 10.4. Derived State Trigger: Synchronize Parking Slot Status & Vehicle Ticket Preference from Ticket Lifecycle (OQ-52, OQ-63)
 CREATE OR REPLACE FUNCTION fn_sync_slot_status_on_ticket()
 RETURNS TRIGGER AS $$
+DECLARE
+    v_affected_vehicle_id BIGINT;
+    v_sync_type_id BIGINT;
+    v_sync_expires_at TIMESTAMPTZ;
 BEGIN
+    -- -------------------------------------------------------------------------
+    -- Part A: Synchronize Parking Slot Status
+    -- -------------------------------------------------------------------------
     IF TG_OP = 'INSERT' THEN
         -- When a new active ticket is issued, mark slot as RESERVED if it is currently AVAILABLE
         IF NEW.slot_id IS NOT NULL AND NEW.deleted_at IS NULL AND NEW.status = 'ACTIVE' 
@@ -949,51 +967,118 @@ BEGIN
             END IF;
         END IF;
     END IF;
+
+    -- -------------------------------------------------------------------------
+    -- Part B: Synchronize Vehicle Ticket Preference (Task T3, OQ-52)
+    -- -------------------------------------------------------------------------
+    FOR v_affected_vehicle_id IN 
+        SELECT DISTINCT vid FROM (
+            SELECT NEW.vehicle_id AS vid
+            UNION
+            SELECT CASE WHEN TG_OP = 'UPDATE' AND OLD.vehicle_id IS DISTINCT FROM NEW.vehicle_id THEN OLD.vehicle_id ELSE NULL END
+        ) s WHERE vid IS NOT NULL
+    LOOP
+        -- 1. Try to find the latest valid active ticket
+        SELECT ticket_type_id, effective_to
+        INTO v_sync_type_id, v_sync_expires_at
+        FROM ticket
+        WHERE vehicle_id = v_affected_vehicle_id
+          AND deleted_at IS NULL
+          AND status = 'ACTIVE'
+          AND CURRENT_TIMESTAMP < effective_to
+        ORDER BY effective_to DESC, id DESC
+        LIMIT 1;
+
+        -- 2. If no active valid ticket, fallback to latest non-deleted ticket (e.g. expired)
+        IF NOT FOUND THEN
+            SELECT ticket_type_id, effective_to
+            INTO v_sync_type_id, v_sync_expires_at
+            FROM ticket
+            WHERE vehicle_id = v_affected_vehicle_id
+              AND deleted_at IS NULL
+            ORDER BY effective_to DESC, id DESC
+            LIMIT 1;
+        END IF;
+
+        -- 3. Update vehicle preference metadata
+        IF FOUND THEN
+            UPDATE vehicle
+            SET ticket_type_id = v_sync_type_id,
+                ticket_expires_at = v_sync_expires_at
+            WHERE id = v_affected_vehicle_id
+              AND (ticket_type_id IS DISTINCT FROM v_sync_type_id 
+                   OR ticket_expires_at IS DISTINCT FROM v_sync_expires_at);
+        ELSE
+            -- No non-deleted ticket exists for this vehicle: reset to NULL
+            UPDATE vehicle
+            SET ticket_type_id = NULL,
+                ticket_expires_at = NULL
+            WHERE id = v_affected_vehicle_id
+              AND (ticket_type_id IS NOT NULL OR ticket_expires_at IS NOT NULL);
+        END IF;
+    END LOOP;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION fn_sync_slot_status_on_ticket() IS 'Synchronizes parking slot status (RESERVED/AVAILABLE) based on ticket issuance, renewal, expiration, and soft-deletion (OQ-63)';
+COMMENT ON FUNCTION fn_sync_slot_status_on_ticket() IS 'Synchronizes parking slot status (RESERVED/AVAILABLE) and vehicle ticket preference metadata upon ticket issuance, renewal, expiration, and soft-deletion (OQ-52, OQ-63)';
 
 CREATE TRIGGER trg_slot_status_on_ticket AFTER INSERT OR UPDATE ON ticket FOR EACH ROW EXECUTE FUNCTION fn_sync_slot_status_on_ticket();
 
 
--- 10.5. Barrier Gate Guard Trigger: Walk-In Transient Vehicle vs Reserved Ticket Slot Guard (SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02, OQ-67)
+-- 10.5. Barrier Gate Guard Trigger: Strict Registered Vehicle License Plate & Slot Reservation Guard (Owner Decision 10, SRS 4.5.1 MSG-4.5.1-M02, SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02, PROP-4.5.2-P01, OQ-67)
 CREATE OR REPLACE FUNCTION fn_guard_slot_reservation_on_entry()
 RETURNS TRIGGER AS $$
 DECLARE
+    v_registered_plate VARCHAR(20);
     v_ticket_vehicle_id BIGINT;
-    v_ticket_plate VARCHAR(20);
     v_slot_status VARCHAR(20);
 BEGIN
-    -- Only validate when the resulting record is an open session with an assigned slot
+    -- 1. Enforce plate match against registered vehicle on open sessions (Task T1, Owner Decision 10)
+    IF NEW.exit_time IS NULL THEN
+        IF TG_OP = 'INSERT' 
+           OR NEW.vehicle_id IS DISTINCT FROM OLD.vehicle_id 
+           OR NEW.license_plate IS DISTINCT FROM OLD.license_plate THEN
+
+            SELECT v.license_plate INTO v_registered_plate
+            FROM vehicle v
+            WHERE v.id = NEW.vehicle_id AND v.deleted_at IS NULL;
+
+            IF NOT FOUND OR UPPER(TRIM(NEW.license_plate)) <> UPPER(TRIM(v_registered_plate)) THEN
+                RAISE EXCEPTION 'Lỗi dữ liệu không tìm thấy đê lưu'
+                    USING ERRCODE = 'check_violation',
+                          HINT = 'License plate must match registered active vehicle (SRS 4.5.1 MSG-4.5.1-M02).';
+            END IF;
+        END IF;
+    END IF;
+
+    -- 2. Guard slot status when an open session occupies a slot
     IF NEW.slot_id IS NOT NULL AND NEW.exit_time IS NULL THEN
-        -- Evaluate when entering/moving slot, changing vehicle identity, or reopening closed session
         IF TG_OP = 'INSERT' 
            OR NEW.slot_id IS DISTINCT FROM OLD.slot_id 
            OR OLD.exit_time IS NOT NULL 
            OR NEW.vehicle_id IS DISTINCT FROM OLD.vehicle_id 
            OR NEW.license_plate IS DISTINCT FROM OLD.license_plate THEN
 
-            -- 1. Lock the target parking slot row to serialize concurrent assignments
+            -- Lock the target parking slot row to serialize concurrent assignments
             SELECT status INTO v_slot_status 
             FROM parking_slot 
             WHERE id = NEW.slot_id AND deleted_at IS NULL
             FOR NO KEY UPDATE;
 
-            -- 2. Disallow assigning to slots under maintenance (when inserting, moving slot, or reopening)
+            -- Disallow assigning to slots under maintenance (PROP-4.5.2-P01)
             IF (TG_OP = 'INSERT' OR NEW.slot_id IS DISTINCT FROM OLD.slot_id OR OLD.exit_time IS NOT NULL) 
                AND v_slot_status = 'MAINTENANCE' THEN
                 RAISE EXCEPTION 'Vị trí này đang bảo trì' 
                     USING ERRCODE = 'check_violation',
-                          HINT = 'Cannot occupy slot currently under maintenance.';
+                          HINT = 'Cannot occupy slot currently under maintenance (PROP-4.5.2-P01).';
             END IF;
 
-            -- 3. Check if slot is actively reserved by a valid subscription ticket
-            SELECT t.vehicle_id, v.license_plate 
-            INTO v_ticket_vehicle_id, v_ticket_plate
+            -- Check if slot is actively reserved by a valid subscription ticket
+            SELECT t.vehicle_id
+            INTO v_ticket_vehicle_id
             FROM ticket t
-            JOIN vehicle v ON v.id = t.vehicle_id
             WHERE t.slot_id = NEW.slot_id
               AND t.deleted_at IS NULL
               AND t.status = 'ACTIVE'
@@ -1001,15 +1086,12 @@ BEGIN
               AND CURRENT_TIMESTAMP < t.effective_to
             LIMIT 1;
 
-            -- If reserved by an active ticket, verify vehicle identity
+            -- If reserved by an active ticket, vehicle MUST be the reservation holder
             IF FOUND THEN
-                -- Allow reservation holder (matching vehicle_id or license_plate);
-                -- Reject walk-ins (vehicle_id IS NULL) and other vehicles/plates
-                IF (NEW.vehicle_id IS NULL OR NEW.vehicle_id <> v_ticket_vehicle_id)
-                   AND (NEW.license_plate IS NULL OR UPPER(TRIM(NEW.license_plate)) <> UPPER(TRIM(v_ticket_plate))) THEN
+                IF NEW.vehicle_id <> v_ticket_vehicle_id THEN
                     RAISE EXCEPTION 'Vị trí này đã có xe đk vé và đang sử dụng'
                         USING ERRCODE = 'check_violation',
-                              HINT = 'Slot is not available or is reserved by an active ticket for another vehicle.';
+                              HINT = 'Slot is reserved by an active ticket for another vehicle (SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02).';
                 END IF;
             END IF;
         END IF;
@@ -1019,7 +1101,7 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
-COMMENT ON FUNCTION fn_guard_slot_reservation_on_entry() IS 'Guards parking slots against unauthorized walk-in or mismatched vehicle entry/update when reserved by an active ticket or in maintenance (SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02, OQ-67)';
+COMMENT ON FUNCTION fn_guard_slot_reservation_on_entry() IS 'Guards registered vehicle license plate integrity and prevents entry into maintenance or ticket-reserved slots of other vehicles (Owner Decision 10, SRS 4.5.1 MSG-4.5.1-M02, SRS 4.5.2 ACT-4.5.2-A02, MSG-4.5.2-M02, PROP-4.5.2-P01, OQ-67)';
 
 CREATE TRIGGER trg_guard_slot_reservation_on_entry
 BEFORE INSERT OR UPDATE OF slot_id, exit_time, vehicle_id, license_plate ON vehicle_entry_exit_log
@@ -1069,7 +1151,7 @@ FROM all_revenue_records
 GROUP BY report_year, report_quarter, report_month
 ORDER BY report_year DESC, report_month DESC;
 
-COMMENT ON VIEW v_revenue_statistics IS 'Aggregated financial revenue metrics grouped by Month, Quarter, and Year, preserving 100% historical sales (SRS 4.7.1 REQ-4.7.1-F05)';
+COMMENT ON VIEW v_revenue_statistics IS 'All-time aggregated financial revenue metrics grouped by Month, Quarter, and Year, preserving 100% historical sales (SRS 4.7.1 REQ-4.7.1-F05; date-filtered range statistics are provided by fn_stat_revenue_by_period)';
 
 
 -- 11.2. View v_vehicle_traffic_daily (Daily Vehicle Traffic Flow)
@@ -1084,7 +1166,7 @@ FROM vehicle_entry_exit_log
 GROUP BY entry_time::DATE
 ORDER BY traffic_date DESC;
 
-COMMENT ON VIEW v_vehicle_traffic_daily IS 'Daily vehicle entry and exit traffic volume statistics (SRS 4.7.2 REQ-4.7.2-F03)';
+COMMENT ON VIEW v_vehicle_traffic_daily IS 'All-time daily vehicle entry and exit traffic volume statistics (SRS 4.7.2 REQ-4.7.2-F03; date-filtered traffic statistics are provided by fn_stat_vehicles_by_day)';
 
 
 -- 11.3. View v_slot_occupancy_by_floor (Parking Lot Slot Occupancy Rate by Floor)
@@ -1166,7 +1248,7 @@ FROM floor_aggregated fa
 LEFT JOIN active_ticket_stats ats ON ats.floor_number = fa.floor_number
 ORDER BY fa.floor_number ASC;
 
-COMMENT ON VIEW v_slot_occupancy_by_floor IS 'Slot occupancy metrics and utilization percentage by floor computed dynamically from live sessions and active ticket windows, excluding maintenance from denominator (SRS 4.7.2 REQ-4.7.2-F04, OQ-63)';
+COMMENT ON VIEW v_slot_occupancy_by_floor IS 'Live operational slot occupancy metrics and utilization percentage by floor computed dynamically from current sessions and active ticket windows, excluding maintenance from denominator (SRS 4.7.2 REQ-4.7.2-F04, OQ-63; date-range vehicle traffic by floor is provided by fn_stat_vehicles_by_floor)';
 
 
 -- 11.4. View v_customer_vehicle_summary (Customer Registered Vehicles and Active Tickets)
@@ -1204,6 +1286,214 @@ LEFT JOIN customer_ticket_counts ctc ON ctc.customer_id = c.id
 WHERE c.deleted_at IS NULL
 ORDER BY registered_vehicle_count DESC, c.code ASC;
 
-COMMENT ON VIEW v_customer_vehicle_summary IS 'Registered vehicles and active tickets per customer eliminating Cartesian duplication (SRS 4.7.2 REQ-4.7.2-F05)';
+COMMENT ON VIEW v_customer_vehicle_summary IS 'All-time registered vehicles and currently active tickets per customer eliminating Cartesian duplication (SRS 4.7.2 REQ-4.7.2-F05; date-range vehicle registration statistics are provided by fn_stat_vehicles_by_customer)';
+
+
+
+-- ----------------------------------------------------------------------------
+-- 12. DATE-RANGE STATISTICAL SQL FUNCTIONS (SRS 4.7.1 & 4.7.2)
+-- ----------------------------------------------------------------------------
+
+-- 12.1. Daily Vehicle Traffic Volume by Date Range (REQ-4.7.2-F03, image20)
+CREATE OR REPLACE FUNCTION fn_stat_vehicles_by_day(p_from_date DATE, p_to_date DATE)
+RETURNS TABLE (
+    traffic_date DATE,
+    total_entries BIGINT,
+    total_exits BIGINT,
+    distinct_vehicles BIGINT
+) AS $$
+BEGIN
+    IF p_from_date IS NULL OR p_to_date IS NULL OR p_from_date > p_to_date THEN
+        RAISE EXCEPTION 'Khoảng thời gian thống kê không hợp lệ (Từ ngày phải nhỏ hơn hoặc bằng Đến ngày).'
+            USING ERRCODE = 'check_violation',
+                  HINT = 'Start date must be less than or equal to end date (PROP-4.7.2-P02).';
+    END IF;
+
+    RETURN QUERY
+    SELECT
+        entry_time::DATE AS traffic_date,
+        COUNT(*)::BIGINT AS total_entries,
+        COUNT(exit_time)::BIGINT AS total_exits,
+        COUNT(DISTINCT vehicle_id)::BIGINT AS distinct_vehicles
+    FROM vehicle_entry_exit_log
+    WHERE entry_time::DATE >= p_from_date
+      AND entry_time::DATE <= p_to_date
+    GROUP BY entry_time::DATE
+    ORDER BY traffic_date ASC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+COMMENT ON FUNCTION fn_stat_vehicles_by_day(DATE, DATE) IS 'Calculates daily vehicle entry and exit traffic counts within a specified date range (SRS 4.7.2 REQ-4.7.2-F03, image20, PROP-4.7.2-P02)';
+
+
+-- 12.2. Vehicle Entry and Ticket Counts by Floor within Date Range (REQ-4.7.2-F04, image20)
+CREATE OR REPLACE FUNCTION fn_stat_vehicles_by_floor(p_from_date DATE, p_to_date DATE)
+RETURNS TABLE (
+    floor_number INTEGER,
+    entry_count BIGINT,
+    distinct_vehicle_count BIGINT,
+    ticket_count BIGINT
+) AS $$
+BEGIN
+    IF p_from_date IS NULL OR p_to_date IS NULL OR p_from_date > p_to_date THEN
+        RAISE EXCEPTION 'Khoảng thời gian thống kê không hợp lệ (Từ ngày phải nhỏ hơn hoặc bằng Đến ngày).'
+            USING ERRCODE = 'check_violation',
+                  HINT = 'Start date must be less than or equal to end date (PROP-4.7.2-P02).';
+    END IF;
+
+    RETURN QUERY
+    WITH active_floors AS (
+        SELECT DISTINCT s.floor_number
+        FROM parking_slot s
+        WHERE s.deleted_at IS NULL
+    ),
+    floor_entries AS (
+        SELECT
+            s.floor_number,
+            COUNT(l.id)::BIGINT AS entry_count,
+            COUNT(DISTINCT l.vehicle_id)::BIGINT AS distinct_vehicle_count
+        FROM vehicle_entry_exit_log l
+        JOIN parking_slot s ON s.id = l.slot_id
+        WHERE l.entry_time::DATE >= p_from_date
+          AND l.entry_time::DATE <= p_to_date
+        GROUP BY s.floor_number
+    ),
+    floor_tickets AS (
+        SELECT
+            s.floor_number,
+            COUNT(t.id)::BIGINT AS ticket_count
+        FROM ticket t
+        JOIN parking_slot s ON s.id = t.slot_id
+        WHERE t.deleted_at IS NULL
+          AND t.created_at::DATE >= p_from_date
+          AND t.created_at::DATE <= p_to_date
+        GROUP BY s.floor_number
+    )
+    SELECT
+        af.floor_number,
+        COALESCE(fe.entry_count, 0)::BIGINT AS entry_count,
+        COALESCE(fe.distinct_vehicle_count, 0)::BIGINT AS distinct_vehicle_count,
+        COALESCE(ft.ticket_count, 0)::BIGINT AS ticket_count
+    FROM active_floors af
+    LEFT JOIN floor_entries fe ON fe.floor_number = af.floor_number
+    LEFT JOIN floor_tickets ft ON ft.floor_number = af.floor_number
+    ORDER BY af.floor_number ASC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+COMMENT ON FUNCTION fn_stat_vehicles_by_floor(DATE, DATE) IS 'Calculates vehicle entry and issued ticket counts per active floor within a specified date range (SRS 4.7.2 REQ-4.7.2-F04, image20, PROP-4.7.2-P02)';
+
+
+-- 12.3. Customer Registered Vehicles and Tickets by Date Range (REQ-4.7.2-F05, image20)
+CREATE OR REPLACE FUNCTION fn_stat_vehicles_by_customer(p_from_date DATE, p_to_date DATE)
+RETURNS TABLE (
+    customer_id BIGINT,
+    customer_code VARCHAR(10),
+    customer_name VARCHAR(45),
+    registered_vehicle_count BIGINT,
+    period_ticket_count BIGINT
+) AS $$
+BEGIN
+    IF p_from_date IS NULL OR p_to_date IS NULL OR p_from_date > p_to_date THEN
+        RAISE EXCEPTION 'Khoảng thời gian thống kê không hợp lệ (Từ ngày phải nhỏ hơn hoặc bằng Đến ngày).'
+            USING ERRCODE = 'check_violation',
+                  HINT = 'Start date must be less than or equal to end date (PROP-4.7.2-P02).';
+    END IF;
+
+    RETURN QUERY
+    WITH cust_vehicles AS (
+        SELECT
+            v.customer_id,
+            COUNT(v.id)::BIGINT AS registered_vehicle_count
+        FROM vehicle v
+        WHERE v.deleted_at IS NULL
+          AND v.created_at::DATE >= p_from_date
+          AND v.created_at::DATE <= p_to_date
+        GROUP BY v.customer_id
+    ),
+    cust_tickets AS (
+        SELECT
+            t.customer_id,
+            COUNT(t.id)::BIGINT AS period_ticket_count
+        FROM ticket t
+        WHERE t.deleted_at IS NULL
+          AND t.created_at::DATE >= p_from_date
+          AND t.created_at::DATE <= p_to_date
+        GROUP BY t.customer_id
+    )
+    SELECT
+        c.id AS customer_id,
+        c.code AS customer_code,
+        c.full_name AS customer_name,
+        COALESCE(cv.registered_vehicle_count, 0)::BIGINT AS registered_vehicle_count,
+        COALESCE(ct.period_ticket_count, 0)::BIGINT AS period_ticket_count
+    FROM customer c
+    LEFT JOIN cust_vehicles cv ON cv.customer_id = c.id
+    LEFT JOIN cust_tickets ct ON ct.customer_id = c.id
+    WHERE c.deleted_at IS NULL
+    ORDER BY registered_vehicle_count DESC, period_ticket_count DESC, c.code ASC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+COMMENT ON FUNCTION fn_stat_vehicles_by_customer(DATE, DATE) IS 'Calculates registered vehicle and ticket counts per active customer created within a specified date range (SRS 4.7.2 REQ-4.7.2-F05, image20, PROP-4.7.2-P02)';
+
+
+-- 12.4. Financial Revenue Aggregation by Date Range (REQ-4.7.1-F05, image19)
+CREATE OR REPLACE FUNCTION fn_stat_revenue_by_period(p_from_date DATE, p_to_date DATE)
+RETURNS TABLE (
+    report_year INTEGER,
+    report_quarter INTEGER,
+    report_month INTEGER,
+    total_tickets_sold BIGINT,
+    total_renewals BIGINT,
+    total_revenue NUMERIC(12, 2)
+) AS $$
+BEGIN
+    IF p_from_date IS NULL OR p_to_date IS NULL OR p_from_date > p_to_date THEN
+        RAISE EXCEPTION 'Khoảng thời gian thống kê không hợp lệ (Từ ngày phải nhỏ hơn hoặc bằng Đến ngày).'
+            USING ERRCODE = 'check_violation',
+                  HINT = 'Start date must be less than or equal to end date (PROP-4.7.2-P02).';
+    END IF;
+
+    RETURN QUERY
+    WITH all_revenue_records AS (
+        SELECT
+            EXTRACT(YEAR FROM t.created_at)::INTEGER AS report_year,
+            EXTRACT(QUARTER FROM t.created_at)::INTEGER AS report_quarter,
+            EXTRACT(MONTH FROM t.created_at)::INTEGER AS report_month,
+            t.price AS revenue_amount,
+            1 AS ticket_sales_count,
+            0 AS renewal_count
+        FROM ticket t
+        WHERE t.created_at::DATE >= p_from_date
+          AND t.created_at::DATE <= p_to_date
+
+        UNION ALL
+
+        SELECT
+            EXTRACT(YEAR FROM tr.renewal_date)::INTEGER AS report_year,
+            EXTRACT(QUARTER FROM tr.renewal_date)::INTEGER AS report_quarter,
+            EXTRACT(MONTH FROM tr.renewal_date)::INTEGER AS report_month,
+            tr.additional_price AS revenue_amount,
+            0 AS ticket_sales_count,
+            1 AS renewal_count
+        FROM ticket_renewal tr
+        WHERE tr.renewal_date::DATE >= p_from_date
+          AND tr.renewal_date::DATE <= p_to_date
+    )
+    SELECT
+        r.report_year,
+        r.report_quarter,
+        r.report_month,
+        SUM(r.ticket_sales_count)::BIGINT AS total_tickets_sold,
+        SUM(r.renewal_count)::BIGINT AS total_renewals,
+        SUM(r.revenue_amount)::NUMERIC(12, 2) AS total_revenue
+    FROM all_revenue_records r
+    GROUP BY r.report_year, r.report_quarter, r.report_month
+    ORDER BY r.report_year DESC, r.report_month DESC;
+END;
+$$ LANGUAGE plpgsql STABLE;
+
+COMMENT ON FUNCTION fn_stat_revenue_by_period(DATE, DATE) IS 'Aggregates financial revenue from ticket sales and renewals grouped by Month, Quarter, and Year filtered by a date range (SRS 4.7.1 REQ-4.7.1-F05, image19, PROP-4.7.2-P02)';
 
 COMMIT;
