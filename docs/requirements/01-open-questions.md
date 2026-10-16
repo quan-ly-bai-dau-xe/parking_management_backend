@@ -1,5 +1,7 @@
 # Open Questions, Contradictions, and Policy Catalog
 
+<!-- cspell:words VIETQR nonnulls NVVH NVTN -->
+
 This document registers and analyzes all contradictions between the specification text (`Quan ly bai dau xe oto_SRS_v4.1.docx`), wireframe images, and the project plan (`Tasks_Sprint_1`), alongside open business rules and technical workflow questions. For each issue, this catalog establishes a technically grounded **Proposed Default Assumption** and specifies explicit **Decision Ownership (Owner: Product Owner or Team Lead)**.
 
 ---
@@ -28,33 +30,26 @@ This document registers and analyzes all contradictions between the specificatio
 
 ### OQ-02: Account Credentials
 
-- **Priority / Status**: Blocker
+- **Priority / Status**: RESOLVED (`TL-01`)
 - **Sources**:
-  - SRS 4.1, Login Table, Row 5.
-  - SRS 4.3.2, Add Employee Table, Rows 5 & 10.
-  - SRS 4.3.3, Edit Employee Table, Rows 10 & 11.
+  - Frontend `login-container.png` (`Email hoặc Số điện thoại`, `Chưa có tài khoản? Đăng ký ngay`).
+  - SRS 4.1, Login Table, Row 5; SRS 4.3.2, Rows 5 & 10; SRS 4.3.3, Rows 10 & 11.
 - **Issue / Description**:
-  - Add Employee screen (4.3.2) defines `ID` (Alpha numeric 5) and `Họ tên`, but no `Tên đăng nhập` field.
-  - Login screen (4.1) requires `Tên đăng nhập` (checked against `ACCOUNT.TenDangNhap`).
-  - Unclear whether username is derived from ID, email, or a separate input. Default employee password is also unspecified (SRS only states "Thiết lập mặc định mật khẩu nhân viên").
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Default username is the Employee Code (`ID_NV`, e.g. `NV001`) or email prefix. Initial password is an auto-generated high-entropy string dispatched via email, or a temporary password requiring immediate change on first login conforming to complexity rules.
+  - Add Employee screen (4.3.2) defines `ID` and `Họ tên`, but no `Tên đăng nhập` field, whereas Frontend `login-container.png` authenticates by `"Email hoặc Số điện thoại"`.
+  - Default employee password is also unspecified in the SRS (`Thiết lập mặc định mật khẩu nhân viên`).
+- **Proposed Default / Resolution**: **RESOLVED (`TL-01`)**: `account` uses `email VARCHAR(100) NULL` and `phone VARCHAR(15) NULL` with `ck_account_login_identifier_present CHECK (email IS NOT NULL OR phone IS NOT NULL)` and active partial unique indexes (`uq_account_email_active`, `uq_account_phone_active`); `username` is dropped. Initial employee password is an auto-generated high-entropy string or temporary password requiring change on first login.
 - **Authority / Owner**: **PO** (Business) & **Team Lead** (Technical)
 
 ### OQ-03: Actors & Permissions
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-01`)
 - **Sources**:
-  - SRS Section 3 Actor List, Table, Rows 1-2.
-  - SRS 4.5.2, Parking Map Table, Row 8.
-  - Plan `Tasks_Sprint_1`, Row 12 (F12).
-  - SRS Section 3 System Pages Flow (`image1.png`).
+  - Frontend `login-container.png` (`Chưa có tài khoản? Đăng ký ngay`).
+  - SRS Section 3 Actor List, Table, Rows 1-2; SRS 4.5.2, Row 8; Plan `Tasks_Sprint_1`, Row 12 (F12).
 - **Issue / Description**:
-  - SRS Section 3 defines only 2 Actors: `Quản lý` (Manager) and `Nhân viên` (Employee).
-  - Section 4.5.2 mentions `Khách hàng` (Customer) clicking slots: "2. Đăng ký đỗ xe (quyền quản lý, khách hàng)".
-  - Plan `Tasks_Sprint_1` F12 expands permissions to Employee as well: "1. Xem thông tin xe (quyền quản lý, nhân viên). 2. Đăng ký đỗ xe (quyền quản lý, nhân viên, khách hàng)".
-  - Unclear if Customers have web application login accounts.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Maintain 3 distinct roles in database: `MANAGER`, `EMPLOYEE`, `CUSTOMER`. For current scope (Sprint 1), web system serves internal parking staff (`MANAGER` and `EMPLOYEE`). Customer slot registration is supported via API (ready for customer portal/mobile app) or registered by staff on behalf of customers.
-- **Authority / Owner**: **PO**
+  - SRS Section 3 defines only 2 Actors (`Quản lý`, `Nhân viên`), whereas SRS 4.5.2, `Tasks_Sprint_1`, and Frontend `login-container.png` (`"Đăng ký ngay"`) include `Khách hàng` (`CUSTOMER`).
+- **Proposed Default / Resolution**: **RESOLVED (`TL-01`)**: Maintain 3 distinct roles in `account`: `MANAGER`, `EMPLOYEE`, `CUSTOMER`. Self-registration via `"Đăng ký ngay"` creates a `CUSTOMER` account and linked `customer` profile.
+- **Authority / Owner**: **PO** & **Team Lead**
 
 ### OQ-04: Address Text vs Dropdown
 
@@ -66,23 +61,19 @@ This document registers and analyzes all contradictions between the specificatio
 - **Issue / Description**:
   - SRS text specifies `Địa chỉ` as a free-form text field (`String(45)`).
   - Wireframes illustrate a 3-level dropdown selector for Province, District, and Ward.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Backend stores single `address` string conforming to SRS limit (max 45 characters). Backend accepts full concatenated address string. If frontend implements hierarchical dropdowns, it concatenates before dispatching or backend provides optional auxiliary fields (`province`, `district`, `ward`).
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT (`TL-15`)**: Backend stores `address` string plus the 3-level administrative lookup hierarchy (`administrative_province`, `administrative_district`, `administrative_ward`) where the Frontend is silent.
 - **Authority / Owner**: **PO**
 
 ### OQ-05: Parking Slot Identifier
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-02`)
 - **Sources**:
-  - Wireframe 4.5.2 (`image14.png`).
-  - SRS 4.8.1, Slot List Table, Row 6.
-  - Wireframe 4.8.1 (`image21.png`).
-  - Wireframe 4.8.3 (`image23.png`).
+  - Frontend `Sơ đồ bãi đậu xe — Smart Mobility.png` (`Tầng B1..B3, F1`, `Khu A..D`, slot codes `A-01`, `B-15`, `P-02`, `EV-02`) & `Quản lý vé — Smart Mobility.png` (`B1 - A01`).
+  - Wireframes `image14.png`, `image21.png`, `image23.png`.
 - **Issue / Description**:
-  - Parking map wireframe (`image14.png`) shows 10 floors with slots numbered integer `1` to `108`.
-  - Slot list 4.8.1 and edit slot 4.8.3 wireframes display slot codes as `A-1, A-2, B-1...` (Section letter - Sequence number).
-  - System lacks unified naming rule for slot codes.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Design `ParkingSlot` entity with 3 explicit attributes: `floor` (Integer 1..10), `slot_number` (Integer 1..108), and `slot_code` (Unique display identifier, e.g. `T01-A01`). Compatible with both numeric map slots and alphanumeric section layouts.
-- **Authority / Owner**: **PO**
+  - SRS map wireframe (`image14.png`) shows integer slots `1..108`, whereas Frontend and SRS 4.8 display alphanumeric slot codes (`A-01`, `B-15`, `P-02`, `EV-02`) grouped by lot, floor, and zone.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-02`)**: Model the 4-level hierarchy `parking_lot -> parking_floor -> parking_zone -> parking_slot` with `parking_slot.code VARCHAR(20) NOT NULL` (`ck_slot_code_format CHECK (code ~ '^[A-Za-z0-9-]+$')`, unique per zone via `uq_parking_slot_zone_code_active`) and grid coordinates `map_row` / `map_col` (`uq_parking_slot_zone_map_pos_active`).
+- **Authority / Owner**: **Team Lead**
 
 ### OQ-06: Ticket Type & Price Types
 
@@ -505,29 +496,25 @@ This document registers and analyzes all contradictions between the specificatio
 
 ### OQ-54: Parking Facility Floor and Slot Capacity Bounds
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-02`)
 - **Sources**:
-  - SRS 4.5.2 Parking Map Table (`Bản đồ tầng Button - Number (2)`, `Số chỗ trống Label - Number (3)`).
-  - Wireframe 4.5.2 (`image14.png`: 10 floors, 108 slots per floor).
+  - Frontend `Sơ đồ bãi đậu xe — Smart Mobility.png` (`parking_lot -> parking_floor -> parking_zone -> parking_slot`).
+  - SRS 4.5.2 Parking Map Table (`Bản đồ tầng Button - Number (2)`, `Số chỗ trống Label - Number (3)`), Wireframe `image14.png`.
 - **Issue / Description**:
-  - A single sample wireframe illustrates 10 floors and 108 slots per floor.
-  - Hardcoding `CHECK (floor_number BETWEEN 1 AND 10)` and `CHECK (slot_number BETWEEN 1 AND 108)` restricts enterprise scalability.
-  - SRS specification native data types are `Number(2)` for floors and `Number(3)` for slot numbers.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Remove rigid 1..10 and 1..108 caps. Enforce boundary constraints based strictly on SRS data types: `CHECK (floor_number > 0 AND floor_number < 100)` (Number(2)) and `CHECK (slot_number > 0 AND slot_number < 1000)` (Number(3)). System accommodates multi-level facilities up to 99 floors and 999 slots per floor.
+  - A single sample wireframe illustrates 10 floors and 108 slots per floor, whereas Frontend supports dynamic floor/zone creation (`"+ Thêm tầng"`, `"+ Thêm khu"`).
+- **Proposed Default / Resolution**: **RESOLVED (`TL-02`)**: Replaced integer `floor_number`/`slot_number` columns with normalized `parking_lot`, `parking_floor` (`code VARCHAR(20)`, e.g. `B1..B3, F1`), `parking_zone` (`code VARCHAR(20)`, e.g. `A..C`), and `parking_slot` (`code VARCHAR(20)` referencing `zone_id` via `fk_slot_zone`).
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-55: Customer Actor Taxonomy and Portal Account Linkage
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-01`)
 - **Sources**:
-  - SRS Section 3 Actor List (defines only Manager and Employee).
-  - SRS 4.5.2 Row 8 ("Đăng ký đỗ xe (quyền quản lý, khách hàng)").
-  - Plan `Tasks_Sprint_1` Task 10 ("quyền quản lý, nhân viên, khách hàng").
+  - Frontend `login-container.png` (`Chưa có tài khoản? Đăng ký ngay`).
+  - SRS Section 3 Actor List, SRS 4.5.2 Row 8, Plan `Tasks_Sprint_1` Task 10.
 - **Issue / Description**:
-  - SRS actor table lists only 2 actors, but parking map 4.5.2 explicitly mentions `Khách hàng` (Customer) role for slot registration.
-  - The system provides no Customer Login wireframe or credential issuance form.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Declare `role = 'CUSTOMER'` in `account` and `customer.account_id` as an architectural **[PROPOSAL]** (OQ-55). For Sprint 1, internal staff perform slot registration on behalf of customers. The schema remains forward-compatible with external customer web/mobile self-service registration.
-- **Authority / Owner**: **Product Owner**
+  - SRS actor table lists only 2 actors, whereas SRS 4.5.2 and Frontend `login-container.png` (`"Đăng ký ngay"`) include `CUSTOMER`.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-01`)**: `account.role` includes `'CUSTOMER'` and `customer.account_id` links to `account (id)` (`uq_customer_account_active`). Self-registration via `"Đăng ký ngay"` creates a `CUSTOMER` account + `customer` row.
+- **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-56: Decoupled Architecture for Employee Profiles and System Credentials
 
@@ -540,58 +527,52 @@ This document registers and analyzes all contradictions between the specificatio
   - SRS couples employee profile creation and default password generation within a single screen (4.3.2), but login verifies against `ACCOUNT`.
   - Design Question: Should `employee.account_id` be `NOT NULL` (strict coupling) or `NULL` (decoupled architecture)?
   - Rationale for Decoupling: Under the Separation of Concerns (SoC) principle, human resource records (`employee`) represent physical personnel, while `account` represents security access principals. Parking facilities employ staff (e.g. outdoor attendants, sweepers, maintenance crew) who do not need software access; enforcing `NOT NULL` would generate dormant attack surface accounts. Furthermore, if an employee is suspended or their credentials revoked (`account.is_active = FALSE` or `account_id = NULL`), their HR profile and audit history must remain intact. Finally, nullability eliminates circular foreign key dependency during database bootstrap.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Maintain separate `account` and `employee` tables linked via `employee.account_id BIGINT NULL REFERENCES account(id) ON DELETE RESTRICT`, paired with a partial unique index `uq_employee_account_active` on `(account_id) WHERE deleted_at IS NULL AND account_id IS NOT NULL` guaranteeing 1-to-1 association. In the Django application service layer, creating an employee via screen 4.3.2 atomically provisions both the account (with default password) and the employee profile within an atomic database transaction.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT (`TL-15`)**: Maintain separate `account` and `employee` tables linked via `employee.account_id BIGINT NULL REFERENCES account(id) ON DELETE RESTRICT`, paired with a partial unique index `uq_employee_account_active` on `(account_id) WHERE deleted_at IS NULL AND account_id IS NOT NULL` guaranteeing 1-to-1 association.
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-57: Lookup Seed Data Provenance and Taxonomy Verification
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-02`, `TL-09`, `TL-10`, `TL-11`, `TL-15`)
 - **Sources**:
-  - Wireframe `image4.png`, `image5.png` (Positions: `Bảo vệ`, `Giữ xe`).
-  - Wireframe `image15.png` (Ticket type: `Năm ... 100.000đ`).
-  - Wireframe `image16.png` (Dropdown: `Tháng`, `Năm`).
-  - Wireframe `image6.png` (`Quảng Nam`, `Điện Bàn`, `Điện Ngọc`).
+  - Frontend `Quản lý nhân viên - Smart mobility.png` (4 positions), `Quản lý xe — Smart Mobility.png` (3 vehicle types), `Quản lý vé — Smart Mobility.png` (ticket types & prices), `Sơ đồ bãi đậu xe — Smart Mobility.png` (`Bãi xe Smart Mobility`).
+  - SRS Wireframe `image6.png` (`Quảng Nam`, `Điện Bàn`, `Điện Ngọc`).
 - **Issue / Description**:
-  - Previous seed data contained unverified items labeled "from SRS": position `Quản lý`, ticket type `Vé Ngày`, prices 1000000/10000, and locations `Hà Nội`, `Hải Châu`, `Cầu Giấy`.
-  - Rigorous audit confirms only `Bảo vệ`, `Giữ xe`, `Vé Năm` (100,000 VND), `Quảng Nam`, `Điện Bàn`, `Điện Ngọc`, and address string `Đà Nẵng` genuinely exist in wireframes.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: In `db/02-seed.sql`, strictly retain genuine SRS wireframe items. Label position `Quản lý` as **[PROPOSAL] (OQ-57)** derived from SRS 3.1. Label ticket type `Vé Tháng` (100,000 VND) and `Vé Ngày` (10,000 VND) as **[PROPOSAL] (OQ-57)**. Exclude unevidenced administrative entities.
-- **Authority / Owner**: **Product Owner**
+  - Earlier Schema v1 seeds followed SRS wireframes (`Bảo vệ`, `Giữ xe`, `10.000đ` / `100.000đ`), whereas Frontend defines a primary lookup taxonomy.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-02`, `TL-09`, `TL-10`, `TL-11`, `TL-15`)**: In `db/02-seed.sql`, seed Frontend-first reference rows: 4 positions (`QL` `"Quản lý"`, `NVVH` `"Nhân viên vận hành"`, `NVTN` `"Nhân viên thu ngân"`, `KTV` `"Kỹ thuật viên"`), 3 vehicle types (`CAR` `"Ô tô"`, `MOTO` `"Xe máy"`, `EV` `"Xe điện"`), 4 ticket types (`DAILY` `"Vé ngày"` `50000.00`, `MONTHLY` `"Vé tháng"` `500000.00`, `QUARTERLY` `"Vé quý"` `1200000.00`, `YEARLY` `"Vé năm"` `4800000.00` `[PROPOSAL]` `OQ-79`), 1 facility (`SMART_MOBILITY` `"Bãi xe Smart Mobility"`), and SRS administrative hierarchy rows (`Đà Nẵng`, `Quảng Nam`, `Hải Châu`, `Điện Bàn`, `Hải Châu I`, `Điện Ngọc`).
+- **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-58: Ticket Renewal Tariff and Price Mutation Audit History
 
 - **Priority / Status**: Important
 - **Sources**:
-  - SRS 4.6.3 Edit/Renew Ticket Table, Rows 12-16 (`image17.png`).
+  - SRS 4.6.3 Edit/Renew Ticket Table, Rows 12-16 (`image17.png`) & Frontend `Quản lý vé — Smart Mobility.png` (`Gia hạn vé`, `Chi tiết vé`).
   - Table `ticket_renewal`.
 - **Issue / Description**:
-  - Renewal screen (4.6.3) allows customer to alter ticket type, floor, slot, and billed price when extending duration.
-  - `ticket_renewal` previously stored only slot modification and additional surcharge, losing historical record of ticket type and tariff price changes.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Extend `ticket_renewal` with `old_ticket_type_id BIGINT NULL REFERENCES ticket_type(id)`, `new_ticket_type_id BIGINT NULL REFERENCES ticket_type(id)`, `old_price NUMERIC(12, 2) NULL`, and `new_price NUMERIC(12, 2) NULL`. Fully captures tariff adjustments and financial evolution across all renewal cycles.
+  - Renewal screen allows altering ticket type, floor/slot, billed renewal price, and notes (`Ghi chú`) when extending duration.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-10`, `TL-15`)**: Retain `old_ticket_type_id`, `new_ticket_type_id`, `old_price`, `new_price`, `additional_price`, and add `notes TEXT NULL` on `ticket_renewal`.
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
-### OQ-59: Parking Slot Code Uniqueness Scoped per Floor
+### OQ-59: Parking Slot Code Uniqueness Scoped per Zone
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-02`)
 - **Sources**:
-  - Wireframe 4.8.1 Slot List (`image21.png`: Floor 1 shows slot `A-1`).
-  - Wireframe 4.8.3 Edit Slot (`image23.png`: Floor 8, Slot 6 shows slot `A-1`).
+  - Frontend `Sơ đồ bãi đậu xe — Smart Mobility.png` & `Quản lý vé — Smart Mobility.png` (`Tầng B1 - A10`, `Tầng B2 - B12`).
+  - Wireframe 4.8.1 (`image21.png`) & 4.8.3 (`image23.png`).
 - **Issue / Description**:
-  - SRS displays slot code `A-1` on Floor 1 and simultaneously displays `A-1` on Floor 8.
-  - Global `UNIQUE(code)` prevents assigning identical section codes across different floors.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Replace global unique constraint with floor-scoped composite unique index: `CREATE UNIQUE INDEX uq_parking_slot_floor_code_active ON parking_slot (floor_number, code) WHERE deleted_at IS NULL;`. Allows each floor to possess its own `A-1`, `A-2` nomenclature while preventing duplicate codes on the same floor.
+  - Identical slot codes (e.g., `A-01`) can exist across different zones/floors within a facility.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-02`)**: Enforce zone-scoped active uniqueness via `CREATE UNIQUE INDEX uq_parking_slot_zone_code_active ON parking_slot (zone_id, code) WHERE deleted_at IS NULL;`.
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-60: Vehicle Barrier Gate Camera In/Out Photography Storage
 
-- **Priority / Status**: Nice-to-know
+- **Priority / Status**: RESOLVED (`TL-06`)
 - **Sources**:
+  - Frontend `Trang chủ — Smart Mobility.png` (`Xem ảnh (99%)`, `Ảnh khớp`, `Cần duyệt`), `Lịch sử ra/vào — Smart Mobility.png` (`Hình ảnh đối soát`).
   - Wireframe 4.5.1 Vehicle In/Out (`image13.png`).
-  - SRS 4.5.1 Table description (Row 4 & Row 5).
 - **Issue / Description**:
-  - Wireframe `image13.png` depicts TWO visual image frames under "Xe vào" (Entry) and TWO visual image frames under "Xe ra" (Exit), showing both overall vehicle snapshot and close-up plate photo.
-  - SRS text only mentions "Ảnh chụp biển số xe".
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: For Sprint 1, schema provisions `entry_image_url TEXT` and `exit_image_url TEXT` storing image asset URI. If PO mandates dual-capture (vehicle overview + cropped plate), schema can extend to `entry_plate_image_url` and `entry_overview_image_url` without architectural rework.
-- **Authority / Owner**: **Product Owner**
+  - Sessions record entry/exit camera snapshots alongside AI plate recognition confidence and review state.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-06`, `TL-15`)**: Provision `entry_image_url TEXT NULL`, `exit_image_url TEXT NULL`, `entry_gate_id`, `exit_gate_id`, `ai_confidence NUMERIC(5,2) NULL`, `recognition_source`, and `review_status` on `vehicle_entry_exit_log`.
+- **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-61: Referential Integrity Guard Between Vehicle and Customer on Ticket
 
@@ -602,7 +583,7 @@ This document registers and analyzes all contradictions between the specificatio
 - **Issue / Description**:
   - In screen 4.6.2, selecting customer code populates customer name and restricts vehicle selection to vehicles owned by that customer.
   - Lacking composite constraint, database previously permitted creating a ticket referencing Customer A with Vehicle owned by Customer B.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Enforce database integrity constraint: Add `CONSTRAINT uq_vehicle_id_customer UNIQUE (id, customer_id)` on `vehicle`, and establish composite foreign key `CONSTRAINT fk_ticket_vehicle_customer FOREIGN KEY (vehicle_id, customer_id) REFERENCES vehicle (id, customer_id) ON DELETE RESTRICT` on `ticket`. Guarantees vehicle ownership consistency at the database level.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT (`TL-15`)**: Enforce `CONSTRAINT uq_vehicle_id_customer UNIQUE (id, customer_id)` on `vehicle` and composite foreign key `CONSTRAINT fk_ticket_vehicle_customer FOREIGN KEY (vehicle_id, customer_id) REFERENCES vehicle (id, customer_id) ON DELETE RESTRICT` on `ticket`.
 - **Authority / Owner**: **Team Lead**
 
 ### OQ-62: Multi-Level Administrative Hierarchy Validation on Employee & Customer
@@ -616,21 +597,19 @@ This document registers and analyzes all contradictions between the specificatio
   - Employee and Customer forms feature 3 cascading dropdowns (`Quảng Nam` -> `Điện Bàn` -> `Điện Ngọc`).
   - Independent foreign keys (`province_id`, `district_id`, `ward_id`) without composite cross-checks would allow invalid parent-child combinations.
   - Although Vietnam transitioned to 2 local government levels from `01-07-2025` under Law 72/2025/QH15 and merged Quảng Nam into Đà Nẵng under Resolution 202/2025/QH15, the 3-table hierarchy is retained as a defensive `[PROPOSAL]` (`OQ-50`).
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Enforce `CONSTRAINT uq_admin_district_id_province UNIQUE (id, province_id)` on `administrative_district`, `CONSTRAINT uq_admin_ward_id_district UNIQUE (id, district_id)` on `administrative_ward`, and composite foreign keys on `employee` and `customer` (`(district_id, province_id)` and `(ward_id, district_id)`), preventing cross-hierarchy corruption while preserving SRS 3-dropdown compatibility as an architectural **[PROPOSAL] (OQ-50, OQ-62)**.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT (`TL-15`)**: Enforce `CONSTRAINT uq_admin_district_id_province UNIQUE (id, province_id)` on `administrative_district`, `CONSTRAINT uq_admin_ward_id_district UNIQUE (id, district_id)` on `administrative_ward`, and composite foreign keys on `employee` and `customer` (`(district_id, province_id)` and `(ward_id, district_id)`).
 - **Authority / Owner**: **Team Lead**
 
 ### OQ-63: Real-Time Derived Status Synchronization & Disclosure of Extended Slot Statuses
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-03`, `TL-04`, `TL-14`)
 - **Sources**:
-  - SRS 4.5.2 Parking Map (`parking_slot.status`: AVAILABLE, OCCUPIED, RESERVED, MAINTENANCE).
-  - SRS 4.6.1 Ticket Lifecycle (`ticket.status`: ACTIVE, EXPIRED, RENEWED, CANCELLED).
-  - Wireframe `image14.png`.
+  - Frontend `Sơ đồ bãi đậu xe — Smart Mobility.png` (`Trống`, `Có xe`, `Đặt trước`, `Bảo trì`) & `Trang chủ — Smart Mobility.png` (`Lấp đầy theo khu/tầng`).
+  - SRS 4.5.2 Parking Map & SRS 4.6.1 Ticket Lifecycle.
   - View `v_slot_occupancy_by_floor`.
 - **Issue / Description**:
-  - Wireframe `image14.png` visually renders only two slot states (green for available, red for occupied). Stored database statuses `RESERVED` and `MAINTENANCE` are architectural proposals beyond the literal wireframe.
-  - PostgreSQL triggers fire only on DML. When a ticket's `effective_to` timestamp passes purely by wall-clock time without DML, stored `parking_slot.status` remains `'RESERVED'` and `ticket.status` remains `'ACTIVE'` until the next DML or reconciliation sweep.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: (1) **Explicit Status Disclosure**: Formally disclose that `parking_slot.status` values `RESERVED` and `MAINTENANCE` are architectural **[PROPOSAL]** extensions enabling subscription pre-allocation and maintenance out-of-service locking; entering or selecting a maintenance slot raises proposed message `'Vị trí này đang bảo trì.'` (`PROP-4.5.2-P01`, ending with a period per `OQ-46` and Rule 09). (2) **Live-Data View**: Compute `v_slot_occupancy_by_floor` dynamically from live relational predicates (`EXISTS` open session in `vehicle_entry_exit_log WHERE exit_time IS NULL` OR active valid ticket window `CURRENT_TIMESTAMP >= effective_from AND CURRENT_TIMESTAMP < effective_to`, excluding `MAINTENANCE` slots from the operational denominator). (3) **DML Triggers & Sweeps**: Retain DML triggers (`trg_ticket_status_sync`, `trg_slot_status_on_traffic`, `trg_slot_status_on_ticket`) for immediate synchronization and pair with scheduled background sweeps for stored status reconciliation.
+  - Frontend explicitly renders all 4 slot statuses (`Trống` -> `AVAILABLE`, `Có xe` -> `OCCUPIED`, `Đặt trước` -> `RESERVED`, `Bảo trì` -> `MAINTENANCE`) and manual status override buttons.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-03`, `TL-04`, `TL-14`)**: (1) Keep `parking_slot.status IN ('AVAILABLE', 'OCCUPIED', 'RESERVED', 'MAINTENANCE')`; entering or reserving a maintenance slot raises `'Vị trí này đang bảo trì.'` (`PROP-4.5.2-P01`). (2) `fn_guard_parking_slot_status()` blocks manual status changes that contradict open sessions or active tickets/reservations (`PROP-4.5.2-P02`..`P04`, `OQ-81`). (3) `fn_recompute_slot_status()` and `v_slot_occupancy_by_floor` synchronize and report live occupancy across open sessions, active tickets, and active `slot_reservation` rows.
 - **Authority / Owner**: **Team Lead**
 
 ### OQ-64: Optimistic Concurrency Control Triggers and Ticket Soft-Delete Guard
@@ -643,48 +622,41 @@ This document registers and analyzes all contradictions between the specificatio
 - **Issue / Description**:
   - `row_version` and `updated_at` previously remained static on SQL UPDATE, rendering OCC ineffective at DB level.
   - Ticket deletion lacked database guard preventing premature deletion of active tickets.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: (1) Attach trigger `trg_*_row_version BEFORE UPDATE` across all versioned tables, automatically executing `NEW.row_version = OLD.row_version + 1; NEW.updated_at = CURRENT_TIMESTAMP;`. (2) Enforce database CHECK guard on `ticket`: `CONSTRAINT ck_ticket_delete_only_expired CHECK (deleted_at IS NULL OR effective_to <= deleted_at)`. Prevents deleting active tickets at the database constraint layer.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT (`TL-15`)**: (1) Attach `BEFORE UPDATE` trigger `fn_update_row_version_and_timestamp()` across all `17` mutable versioned tables. (2) Enforce `CONSTRAINT ck_ticket_delete_only_expired CHECK (deleted_at IS NULL OR effective_to <= deleted_at)` on `ticket`.
 - **Authority / Owner**: **Team Lead**
 
-### OQ-65: Beyond-SRS Constraint Justifications, Literal SRS Gender & Strict Registered Vehicle Policy
+### OQ-65: Beyond-SRS Constraint Justifications, Literal SRS Gender & Visitor Vehicle Policy
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-05`, `TL-11`, `TL-15`)
 - **Sources**:
-  - Phone numbers format `^[0-9]+$` & unique phone/email.
-  - Gender domain (`Nam`, `Nữ`).
-  - Business code format `^[A-Za-z0-9-]+$`.
-  - SRS 4.5.1 Barrier Entry & Owner Decisions 10, 11.
+  - Frontend `Lịch sử ra\vào — Smart Mobility.png` (`Khách hàng: Đã đăng ký / Khách vãng lai`), `Quản lý nhân viên - Smart mobility.png` (`NV001`, `NV0005`).
+  - SRS 4.3.2 (`Nam`, `Nữ`) & SRS 4.5.1 (`MSG-4.5.1-M02`).
 - **Issue / Description**:
-  - SRS specifies phone as `Number(15)` / `Number(11)` without regex; wireframe dropdown specifies gender `Nam`, `Nữ` only; SRS specifies codes as `Alpha numeric (5)` while wireframes depict hyphenated codes (`NV-1234`, `KH-1234`, `Xe-001`, `VE-01`).
-  - Previous draft permitted walk-in transient vehicles (`vehicle_id NULL`), contradicting SRS 4.5.1 which mandates that saving without finding a registered vehicle triggers error `"Lỗi dữ liệu không tìm thấy đê lưu"` (`MSG-4.5.1-M02`).
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT & OWNER DECISIONS**: (1) **Strict Registered Vehicle Policy (Owner Decision 10)**: Eliminate walk-in transient policy completely. Enforce `vehicle_id BIGINT NOT NULL` on `vehicle_entry_exit_log`; barrier gate saves require an active registered vehicle matching recognized license plate; (2) **Literal SRS Gender (Owner Decision 11)**: Dropdown in 4.3.2 contains only `Nam` and `Nữ`. Revert proposal of `'Khác'`; enforce `CHECK (gender IN ('Nam', 'Nữ'))` on `employee` and `customer`; (3) **Business Code Format**: Maintain `VARCHAR(10)` / `VARCHAR(20)` and enforce format constraint `CHECK (code ~ '^[A-Za-z0-9-]+$')` across `employee`, `customer`, `vehicle`, `ticket`, allowing both alphanumeric 5 and hyphenated wireframe codes while rejecting invalid characters; (4) **ID Card Comment**: Document `customer.identity_card_number` as digits-only up to 20 chars (`CHECK (identity_card_number ~ '^[0-9]+$')`).
+  - Frontend explicitly supports unregistered walk-in vehicles (`Khách vãng lai`) in `Lịch sử ra/vào` and both 3-digit and 4-digit employee codes (`NV001`, `NV0005`).
+- **Proposed Default / Resolution**: **RESOLVED (`TL-05`, `TL-11`, `TL-15`)**: (1) **Visitor Vehicles Permitted (`TL-05`)**: `vehicle_entry_exit_log.vehicle_id` is `BIGINT NULL`; when `vehicle_id IS NOT NULL`, `fn_guard_slot_reservation_on_entry()` verifies normalized plate match and raises `'Lỗi dữ liệu không tìm thấy đê lưu'` (`MSG-4.5.1-M02`) on mismatch; (2) **Literal SRS Gender (`TL-15`)**: Keep `CHECK (gender IN ('Nam', 'Nữ'))` on `employee` and `customer`; (3) **Code Formats (`TL-11`, `TL-15`)**: `employee.code` enforces `CHECK (code ~ '^NV[0-9]{3,4}$')`; other business codes enforce `^[A-Za-z0-9-]+$`.
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-66: Open Parking Session Partial Unique Indexes & Double-Entry Prevention
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-05`, `TL-15`)
 - **Sources**:
-  - SRS 4.5.1 Vehicle In/Out Table.
-  - `db/01-schema.sql:737-739`.
-  - Table `vehicle_entry_exit_log`.
+  - Frontend `Lịch sử ra\vào — Smart Mobility.png` & SRS 4.5.1.
+  - [`db/01-schema.sql`](../../db/01-schema.sql) lines 1343–1353 (`uq_log_open_session_slot`, `uq_log_open_session_vehicle`, `uq_log_open_session_plate`).
 - **Issue / Description**:
-  - SRS does not define multi-session prevention rules when vehicle enters without exiting or when two vehicles are assigned to the same physical slot.
-  - Without database guards, a single registered vehicle could enter multiple slots simultaneously, or a single physical slot could have concurrent open check-in sessions.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Enforce 3 partial unique indexes on `vehicle_entry_exit_log WHERE exit_time IS NULL`: (1) `uq_log_open_session_slot` on `(slot_id) WHERE exit_time IS NULL AND slot_id IS NOT NULL`; (2) `uq_log_open_session_vehicle` on `(vehicle_id) WHERE exit_time IS NULL`; (3) `uq_log_open_session_plate` on `(license_plate_norm) WHERE exit_time IS NULL` (updated in Round 18 per `OQ-75`). Prevents double-entry and slot collision anomalies at the database layer.
+  - Without database guards, a single vehicle or license plate could open multiple concurrent parking sessions, or two vehicles could occupy the same physical slot simultaneously.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-05`, `TL-15`)**: Enforce 3 partial unique indexes on `vehicle_entry_exit_log`: (1) `uq_log_open_session_slot ON vehicle_entry_exit_log (slot_id) WHERE exit_time IS NULL AND slot_id IS NOT NULL`; (2) `uq_log_open_session_vehicle ON vehicle_entry_exit_log (vehicle_id) WHERE exit_time IS NULL AND vehicle_id IS NOT NULL`; (3) `uq_log_open_session_plate ON vehicle_entry_exit_log (license_plate_norm) WHERE exit_time IS NULL`.
 - **Authority / Owner**: **Team Lead**
 
 ### OQ-67: Slot Reservation Guard and Maintenance Slot Protection on Entry & Update
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-03`, `TL-04`, `TL-05`)
 - **Sources**:
-  - SRS 4.5.2 Parking Map, Row 14 (ACT-4.5.2-A02, MSG-4.5.2-M02: "Vị trí này đã có xe đk vé và đang sử dụng").
-  - `db/01-schema.sql`: `fn_guard_slot_reservation_on_entry()` & `trg_guard_slot_reservation_on_entry`.
-  - Table `vehicle_entry_exit_log`.
+  - Frontend `Sơ đồ bãi đậu xe — Smart Mobility.png` & `Lịch sử ra\vào — Smart Mobility.png`.
+  - SRS 4.5.2 Row 14 (`MSG-4.5.2-M02: Vị trí này đã có xe đk vé và đang sử dụng`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql): `fn_guard_slot_reservation_on_entry()` & `trg_guard_slot_reservation_on_entry`.
 - **Issue / Description**:
-  - When a slot is reserved by an active subscription ticket for Vehicle A, another registered Vehicle B must be prevented from occupying that slot at barrier check-in or via slot reassignment.
-  - Attempting to enter or select a slot currently undergoing maintenance must also be rejected.
-  - With `vehicle_id NOT NULL` enforced per Owner Decision 10, the guard no longer needs walk-in branches.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Implement database guard trigger `trg_guard_slot_reservation_on_entry` (`BEFORE INSERT OR UPDATE OF slot_id, exit_time, vehicle_id, license_plate ON vehicle_entry_exit_log`): (1) Serializes slot access via row locking (`FOR NO KEY UPDATE`); (2) Rejects entry, reassignment, or session reopening into maintenance slots (`parking_slot.status = 'MAINTENANCE'`), raising proposed error `'Vị trí này đang bảo trì.'` (`PROP-4.5.2-P01`, aligned with ending period in `db/01-schema.sql` and `db/00-README.md` per `OQ-46` and Rule 09); (3) Rejects occupying slots reserved by an active subscription ticket for a different registered vehicle (`NEW.vehicle_id <> ticket.vehicle_id`), raising verbatim SRS error message `'Vị trí này đã có xe đk vé và đang sử dụng'` with `check_violation` ERRCODE. Normal exit updates (`exit_time` becoming non-NULL) are unaffected.
+  - Barrier check-in and slot reassignment must prevent occupying maintenance slots, slots reserved by another vehicle's active ticket, or slots reserved via `slot_reservation` for another vehicle.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-03`, `TL-04`, `TL-05`)**: `trg_guard_slot_reservation_on_entry` (`BEFORE INSERT OR UPDATE OF slot_id, exit_time, vehicle_id, license_plate ON vehicle_entry_exit_log`) locks the target slot (`FOR NO KEY UPDATE`), rejects `MAINTENANCE` slots with `'Vị trí này đang bảo trì.'` (`PROP-4.5.2-P01`), rejects active `ticket` conflicts with verbatim `'Vị trí này đã có xe đk vé và đang sử dụng'` (`MSG-4.5.2-M02`), and rejects active `slot_reservation` conflicts with `'Vị trí này đã được đặt trước cho phương tiện khác.'` (`PROP-4.5.2-P05`, `OQ-81`).
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-68: Employee Working Time & Shift Scheduling Scope OQ
@@ -695,140 +667,179 @@ This document registers and analyzes all contradictions between the specificatio
   - SRS Section 4 (Modules 4.1 to 4.8).
 - **Issue / Description**:
   - SRS Section 2.2 explicitly lists "Quản lý thời gian làm việc của nhân viên, hệ thống admin" as a core system feature in high-level scope.
-  - However, across the entire Section 4 (Modules 4.1 through 4.8), there are zero screens, zero data fields, zero action tables, and zero wireframes specifying employee shifts, working hours, attendance tracking, or timesheets.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Employee working time / shift scheduling is deemed out of scope for Sprint 1 because neither functional screens nor data specifications exist in Section 4. Core employee profile management and authentication remain fully functional. If the Product Owner confirms shift management is required in a future sprint, propose a minimal `employee_shift` table (`employee_id`, `shift_start`, `shift_end`, `status`) without blocking Sprint 1 deliverables.
+  - However, across both the 11 Frontend screens and SRS Section 4 (Modules 4.1 through 4.8), there are zero screens or fields specifying employee shifts or timesheets.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Employee working time / shift scheduling remains out of scope for Sprint 1 because neither the Frontend nor SRS Section 4 defines screens or fields for shifts.
 - **Authority / Owner**: **Product Owner**
 
 ### OQ-69: Floor Map Slot 2D Geometric Grid Coordinates (`map_row`, `map_col`)
 
-- **Priority / Status**: Important
+- **Priority / Status**: RESOLVED (`TL-02`, `TL-15`)
 - **Sources**:
-  - SRS 4.5.2 Parking Map (`Cách hiển thị: Mỗi tầng sẽ có sơ đồ vị trí khác nhau`).
-  - Wireframe 4.5.2 (`image14.png`).
+  - Frontend `Sơ đồ bãi đậu xe — Smart Mobility.png` & Wireframe 4.5.2 (`image14.png`).
   - Table `parking_slot`.
 - **Issue / Description**:
-  - SRS 4.5.2 states that each floor has a distinct spatial parking layout, and wireframe `image14.png` illustrates a 2D geometric grid with dedicated entrance (`Cửa vào`) and exit (`Cửa ra`) portals.
-  - However, the SRS textual specification defines only a 1D scalar `slot_number` (1..108) without 2D grid coordinates for UI placement.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT [PROPOSAL]**: Add optional 2D layout grid coordinate columns `map_row SMALLINT NULL` and `map_col SMALLINT NULL` to `parking_slot`. Enforce coordinate integrity via check constraint `CONSTRAINT ck_slot_map_coords_pair CHECK ((map_row IS NULL AND map_col IS NULL) OR (map_row IS NOT NULL AND map_col IS NOT NULL AND map_row > 0 AND map_col > 0))` and partial unique index `CREATE UNIQUE INDEX uq_parking_slot_floor_map_pos_active ON parking_slot (floor_number, map_row, map_col) WHERE deleted_at IS NULL AND map_row IS NOT NULL AND map_col IS NOT NULL;` preventing spatial collisions on the same floor while supporting dynamic 2D visual rendering per `image14.png`.
+  - Floor/zone map layouts render slots on a 2D spatial grid.
+- **Proposed Default / Resolution**: **RESOLVED (`TL-02`, `TL-15`)**: Retain optional `map_row SMALLINT NULL` and `map_col SMALLINT NULL` on `parking_slot` with `ck_slot_map_coords_pair` and zone-scoped partial unique index `uq_parking_slot_zone_map_pos_active ON parking_slot (zone_id, map_row, map_col) WHERE deleted_at IS NULL AND map_row IS NOT NULL AND map_col IS NOT NULL`.
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-70: Duplicate License Plate Sample Data in SRS Wireframes (`92D1-1234`)
 
 - **Priority / Status**: Nice-to-know
 - **Sources**:
-  - Wireframe 4.4.1 Customer List (`image9.png`).
-  - Wireframe 4.4.4 Edit Customer (`image10.png`).
+  - Wireframe 4.4.1 Customer List (`image9.png`) & Wireframe 4.4.4 Edit Customer (`image10.png`).
   - Table `vehicle`.
 - **Issue / Description**:
   - SRS wireframes `image9.png` and `image10.png` show sample vehicles `Xe-001` and `Xe-002` both carrying the identical license plate `92D1-1234`.
-  - In reality and under relational database integrity, active vehicle license plates must be strictly unique within the facility.
-- **Proposed Default / Resolution**: **PROPOSED DEFAULT**: Treat the duplicate license plate in wireframes `image9.png` and `image10.png` as an illustrative graphic copy-paste artifact in the SRS. The database strictly enforces active normalized license plate uniqueness via `CREATE UNIQUE INDEX uq_vehicle_license_plate_active ON vehicle (license_plate_norm) WHERE deleted_at IS NULL;` (`OQ-75`), rejecting duplicate active plates while allowing plate reuse only after soft delete.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT (`TL-15`)**: Enforce active normalized license plate uniqueness via `CREATE UNIQUE INDEX uq_vehicle_license_plate_active ON vehicle (license_plate_norm) WHERE deleted_at IS NULL;` (`OQ-75`).
 - **Authority / Owner**: **Product Owner** & **Team Lead**
 
 ### OQ-71: Login Identifier (`Email/SĐT` vs `Tên đăng nhập`) & Self-Registration Link (`Đăng ký ngay`)
 
-- **Priority / Status**: Blocker — `status = deferred to PO / Owner approved default D1`
+- **Priority / Status**: Blocker — `status = resolved & implemented (TL-01)`
 - **Sources**:
   - Frontend `login-container.png` (`Email hoặc Số điện thoại`, `Chưa có tài khoản? Đăng ký ngay`).
-  - SRS 4.1 (`image2.png` Row 5: `Tên đăng nhập`, `MSG-4.1-M03`) & SRS 4.3.2 (`image5.png`).
-  - `db/01-schema.sql:26, 37` (`account.username`, `ck_account_username_format`).
-  - `06-frontend-srs-db-alignment.md` (`F01`, `F02`, `D1`).
+  - SRS 4.1 (`image2.png` Row 5: `Tên đăng nhập`, `MSG-4.1-M03`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) lines 47–84 (`account.email`, `account.phone`, `ck_account_login_identifier_present`, `uq_account_email_active`, `uq_account_phone_active`).
+  - [`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-01`).
 - **Issue / Description**:
-  - `login-container.png` labels the login input `"Email hoặc Số điện thoại"` and displays `"Chưa có tài khoản? Đăng ký ngay"`.
-  - SRS 4.1 requires `"Tên đăng nhập"` (`MSG-4.1-M03: Tên đăng nhập không chứa ký tự đặc biệt`), `ck_account_username_format CHECK (username ~ '^[a-zA-Z0-9_.-]+$')` rejects `@` in email addresses, `account` has no `email`/`phone` columns, and accounts are provisioned exclusively by Admin.
-- **Proposed Default / Resolution**: **OWNER APPROVED DEFAULT `[PROPOSAL]` (`D1`)**: Authenticate strictly by `username` (`Tên đăng nhập`) per SRS 4.1 and remove the `"Đăng ký ngay"` link on `login-container.png` (frontend change; no database change required).
-- **Authority / Owner**: **PO**
+  - `login-container.png` authenticates via `"Email hoặc Số điện thoại"` and provides `"Chưa có tài khoản? Đăng ký ngay"`, whereas SRS 4.1 specified `username`.
+- **Proposed Default / Resolution**: **RESOLVED & IMPLEMENTED (`TL-01`, Round 23)**: Replaced `account.username` with `email VARCHAR(100) NULL` and `phone VARCHAR(15) NULL` (`ck_account_login_identifier_present CHECK (num_nonnulls(email, phone) >= 1)`), added active partial unique indexes on `email` and `phone`, and kept `role IN ('MANAGER', 'EMPLOYEE', 'CUSTOMER')` so self-registration creates a `CUSTOMER` account + `customer` row.
+- **Authority / Owner**: **Owner & Team Lead**
 
 ### OQ-72: Per-Session Fees (`Cước phí`), Payment Methods (`Tiền mặt`/`QR`/`VietQR`) & `Giao dịch` Module
 
-- **Priority / Status**: Important — `status = deferred to PO / Owner approved default D2`
+- **Priority / Status**: Important — `status = resolved & implemented (TL-05, TL-07)`
 - **Sources**:
-  - Frontend `Lịch sử ra\vào — Smart Mobility.png` (`Cước phí`, `Mã phiên đỗ`, `Tổng thời gian đỗ`, `Bộ lọc nhanh` without buttons).
-  - Frontend `Trang chủ — Smart Mobility.png` (`Tiền mặt: 18% \| QR: 82%`), `Main Page.png` (`VietQR`), `Quản lý xe — Smart Mobility.png` (`module Vé/Giao dịch`).
-  - SRS 4.5.1 & 4.7.1 (`image19.png`).
-  - `db/01-schema.sql:688-712, 1140` (`vehicle_entry_exit_log`, `v_revenue_statistics`).
-  - `06-frontend-srs-db-alignment.md` (`F05`, `F20`, `F25`, `F29`, `D2`).
+  - Frontend `Lịch sử ra/vào — Smart Mobility.png` (`Cước phí`, `Mã phiên đỗ`, `Tổng thời gian đỗ`), `Trang chủ — Smart Mobility.png` (`Tiền mặt: 18% | QR: 82%`), `Main Page.png` (`VietQR`), `Quản lý xe — Smart Mobility.png` (`module Vé/Giao dịch`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) lines 1287–1467 (`vehicle_entry_exit_log`, `payment`, `v_revenue_today_by_method`, `v_revenue_statistics`).
+  - [`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-05`, `TL-07`).
 - **Issue / Description**:
-  - Frontend introduces per-session `Cước phí`, `Tiền mặt`/`QR`/`VietQR` payment splits, and references a `Giao dịch` module.
-  - SRS 4.7.1 defines revenue strictly from subscription ticket sales (`ticket.price`) and renewals (`ticket_renewal.additional_price`), and `db/01-schema.sql` has no `fee_amount`, `payment_method`, or `transaction` table.
-- **Proposed Default / Resolution**: **OWNER APPROVED DEFAULT `[PROPOSAL]` (`D2`)**: Keep payments, per-session fees (`Cước phí`), and transactions out of v1 (deferred to PO); derive parking duration (`exit_time - entry_time`) and formatted session ID (`id`) from `vehicle_entry_exit_log`.
-- **Authority / Owner**: **PO**
+  - Frontend displays per-session `Cước phí`, `Mã phiên đỗ`, `Tiền mặt`/`QR`/`VietQR` payment splits, and references `module Vé/Giao dịch`.
+- **Proposed Default / Resolution**: **RESOLVED & IMPLEMENTED (`TL-05`, `TL-07`, Round 23)**: Added `session_code VARCHAR(30) NOT NULL UNIQUE` and `fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0` on `vehicle_entry_exit_log`; added `payment` table (`method IN ('CASH', 'VIETQR')`, `status IN ('UNPAID', 'PAID', 'CANCELLED', 'REFUNDED')`, `ck_payment_single_target CHECK (num_nonnulls(session_id, ticket_id, renewal_id) = 1)`); added `v_revenue_today_by_method`; and updated `v_revenue_statistics` and `fn_stat_revenue_by_period`.
+- **Authority / Owner**: **Owner & Team Lead**
 
-### OQ-73: Floor Naming (`B1..B3, F1` vs `INTEGER 1..99`) & Multi-Lot / Zone Tables (`Bãi xe`, `Khu A..D`)
+### OQ-73: Floor Naming (`B1..B3, F1` vs `INTEGER 1..99`) & Multi-Lot / Zone Tables (`Bãi xe`, `Khu A..C`)
 
-- **Priority / Status**: Important — `status = deferred to PO / Owner approved default D3`
+- **Priority / Status**: Important — `status = resolved & implemented (TL-02)`
 - **Sources**:
-  - Frontend `Main Page.png`, `Trang chủ — Smart Mobility.png`, `Sơ đồ bãi đậu xe — Smart Mobility.png`, `Quản lý vé — Smart Mobility.png` (`Tầng B1..B3, F1`, `Bãi xe Smart Mobility`, `Khu A..D`, `+ Thêm tầng`, `+ Thêm khu`, `Quản lý cấu trúc bãi`).
-  - SRS 4.5.2 (`image14.png`: `Số tầng: Number(2)`) & 4.8.2 (`image22.png`).
-  - `db/01-schema.sql:494-496, 511` (`parking_slot.floor_number`, `ck_slot_floor_range`).
-  - `06-frontend-srs-db-alignment.md` (`F09`, `F10`, `D3`).
+  - Frontend `Main Page.png`, `Trang chủ — Smart Mobility.png`, `Sơ đồ bãi đậu xe — Smart Mobility.png`, `Quản lý vé — Smart Mobility.png` (`Tầng B1..B3, F1`, `Bãi xe Smart Mobility`, `Khu A..C`, `+ Thêm tầng`, `+ Thêm khu`, `Quản lý cấu trúc bãi`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) lines 742–964 (`parking_lot`, `parking_floor`, `parking_zone`, `parking_slot`).
+  - [`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-02`).
 - **Issue / Description**:
-  - Frontend names floors `"Tầng B1"`, `"Tầng B2"`, `"Tầng B3"`, `"Tầng F1"` and introduces multi-lot (`24 khu bãi`) and zone (`Khu A..D`) management panels.
-  - SRS 4.5.2 and `db/01-schema.sql` model `floor_number INTEGER NOT NULL CHECK (floor_number > 0 AND floor_number < 100)` (`OQ-54`) and `slot_number` (`code`) with no `parking_lot` or `parking_zone` tables.
-- **Proposed Default / Resolution**: **OWNER APPROVED DEFAULT `[PROPOSAL]` (`D3`)**: Keep floors as positive integers (`floor_number INTEGER`) and do not add `parking_lot` or `parking_zone` tables in v1 (deferred to PO).
-- **Authority / Owner**: **PO**
+  - Frontend organizes parking into `parking_lot` (`"Bãi xe Smart Mobility"`), `parking_floor` (`"Tầng B1..B3, F1"`), `parking_zone` (`"Khu A..C"`), and `parking_slot` (`"A-01"`, `"B-01"`).
+- **Proposed Default / Resolution**: **RESOLVED & IMPLEMENTED (`TL-02`, Round 23)**: Added `parking_lot`, `parking_floor`, and `parking_zone`; updated `parking_slot` to reference `zone_id` via `fk_slot_zone FOREIGN KEY (zone_id) REFERENCES parking_zone (id) ON DELETE RESTRICT` with `code VARCHAR(20) NOT NULL` (`uq_parking_slot_zone_code_active`) while keeping `map_row`, `map_col`, `width`, `length`, and `height`.
+- **Authority / Owner**: **Owner & Team Lead**
 
-### OQ-74: Deferred Non-SRS Frontend Features (EV, Priority Slots, Blacklist/Debt, Gates, AI Confidence, Extra `Ghi chú`, Activity Feed)
+### OQ-74: Frontend Operational Features (EV, Priority Slots, Blacklist/Debt, Gates, AI Confidence, Extra `Ghi chú`, Activity Feed)
 
-- **Priority / Status**: Important — `status = deferred to PO / Owner approved default D4`
+- **Priority / Status**: Important — `status = resolved & implemented (TL-03, TL-04, TL-06, TL-08, TL-12, TL-13)`
 - **Sources**:
-  - Frontend `Main Page.png`, `Trang chủ — Smart Mobility.png`, `Khách hàng — Smart Mobility.png`, `Quản lý xe — Smart Mobility.png`, `Sơ đồ bãi đậu xe — Smart Mobility.png`, `Quản lý vé — Smart Mobility.png`.
-  - `db/01-schema.sql:292-739`.
-  - `06-frontend-srs-db-alignment.md` (`F06`, `F07`, `F08`, `F11`, `F12`, `F18`, `F25`, `F26`, `D4`).
+  - Frontend `Main Page.png`, `Trang chủ — Smart Mobility.png`, `Khách hàng — Smart Mobility.png`, `Quản lý xe — Smart Mobility.png`, `Sơ đồ bãi đậu xe — Smart Mobility.png`, `Quản lý vé — Smart Mobility.png`, `Lịch sử ra/vào — Smart Mobility.png`.
+  - [`db/01-schema.sql`](../../db/01-schema.sql) and [`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-03`, `TL-04`, `TL-06`, `TL-08`, `TL-12`, `TL-13`).
 - **Issue / Description**:
-  - Frontend mockups show EV charging (`Sạc xe điện`), priority lanes (`XE ƯU TIÊN`), blacklist/debt alerts (`Blacklist/Tạm khoá`, `Nợ phí`), gate names (`Cổng vào 1/2`, `Cổng ra 1/2/3`, `4 Cổng quét tự động`), AI recognition confidence (`98.4%`, `Ảnh khớp`/`Cần duyệt`), `Ghi chú` on `ticket`/`ticket_renewal`/`vehicle`/`parking_slot`, and `Hoạt động gần đây` activity feed, while omitting SRS slot dimensions (`width`, `length`, `height`).
-- **Proposed Default / Resolution**: **OWNER APPROVED DEFAULT `[PROPOSAL]` (`D4`)**: Defer EV charging, priority slots, blacklist/debt, gates, AI confidence, extra `notes` columns, and audit activity feeds to the PO (no v1 DB changes); retain `width`, `length`, `height` on `parking_slot` per SRS 4.5.2/4.8.2.
-- **Authority / Owner**: **PO**
+  - Frontend defines EV charging (`Sạc xe điện`), priority lanes (`XE ƯU TIÊN`), slot reservations (`Đặt trước`), blacklist/debt alerts (`Blacklist/Tạm khoá`, `Nợ phí`), gate names (`Cổng vào 1/2`, `Cổng ra 1/2/3`), AI recognition confidence (`98.4%`, `Ảnh khớp`/`Cần duyệt`), `Ghi chú` on `ticket`/`ticket_renewal`/`vehicle`/`parking_slot`, `Hoạt động gần đây` activity feed, and `Cảnh báo bất thường và khẩn cấp`.
+- **Proposed Default / Resolution**: **RESOLVED & IMPLEMENTED (`TL-03`, `TL-04`, `TL-06`, `TL-08`, `TL-12`, `TL-13`, Round 23)**: Added `slot_kind` (`STANDARD`, `PRIORITY`, `EV_CHARGING`), `status` (`CHARGING`), and `notes` on `parking_slot`; added `slot_reservation`, `parking_gate`, `plate_blacklist`, `activity_log`, and `system_alert`; added `status` and `status_reason` on `customer`; added `image_url` and `notes` on `vehicle`; added `notes` on `ticket` and `ticket_renewal`; and added AI recognition columns on `vehicle_entry_exit_log`.
+- **Authority / Owner**: **Owner & Team Lead**
 
 ### OQ-75: License-Plate Punctuation (`51K-992.14` vs `51K-992-14`) & Canonical DB Normalization
 
-- **Priority / Status**: Blocker — `status = implemented (Owner approved D5)`
+- **Priority / Status**: Blocker — `status = resolved & implemented (TL-05, TL-08, TL-09, TL-15)`
 - **Sources**:
   - Frontend `Quản lý xe — Smart Mobility.png` & `Trang chủ — Smart Mobility.png` (`51K-992.14`, `30A-123.45`) vs `Quản lý vé — Smart Mobility.png` (`51K-992-14`, `30A-123-45`).
-  - `db/01-schema.sql:424-485, 688-739, 1050-1074` (`fn_normalize_license_plate`, `vehicle.license_plate_norm`, `vehicle_entry_exit_log.license_plate_norm`, `uq_vehicle_license_plate_active`, `uq_log_open_session_plate`, `fn_guard_slot_reservation_on_entry`).
-  - `06-frontend-srs-db-alignment.md` (`F17`, `D5`, Section 4.1 & Section 6).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) (`fn_normalize_license_plate`, `vehicle.license_plate_norm`, `vehicle_entry_exit_log.license_plate_norm`, `plate_blacklist.license_plate_norm`).
+  - [`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-05`, `TL-08`, `TL-09`, `TL-15`).
 - **Issue / Description**:
   - Frontend displays the same vehicle `XE0001` (`KH0001`) as `51K-992.14` (dot) on `Quản lý xe` and as `51K-992-14` (hyphen) on `Quản lý vé` (`VT0001`).
-  - Without normalization, `'51K-992.14'` and `'51K-992-14'` could both be inserted into `vehicle` and `vehicle_entry_exit_log`, while `fn_guard_slot_reservation_on_entry()` rejected log plates differing only by punctuation/spaces/case.
-- **Proposed Default / Resolution**: **IMPLEMENTED (`D5`, Round 18)**: Added `IMMUTABLE STRICT PARALLEL SAFE` SQL function `fn_normalize_license_plate(p_input TEXT)` returning `UPPER(REGEXP_REPLACE(p_input, '[^A-Za-z0-9]', '', 'g'))`; added `license_plate_norm VARCHAR(20) GENERATED ALWAYS AS (fn_normalize_license_plate(license_plate)) STORED` with `CHECK (license_plate_norm <> '')` and `COMMENT ON COLUMN` on `vehicle` and `vehicle_entry_exit_log` (preserving `license_plate` as entered); moved `uq_vehicle_license_plate_active`, `uq_log_open_session_plate`, and `idx_log_license_plate` to `license_plate_norm`; and updated `fn_guard_slot_reservation_on_entry()` to compare `fn_normalize_license_plate(NEW.license_plate)` with `fn_normalize_license_plate(v_registered_plate)` (keeping 14 triggers, 5 trigger functions, `SQLSTATE 23514`, and verbatim SRS message `'Lỗi dữ liệu không tìm thấy đê lưu'`).
+- **Proposed Default / Resolution**: **RESOLVED & IMPLEMENTED (`TL-05`, `TL-08`, `TL-09`, `TL-15`)**: Retained `IMMUTABLE STRICT PARALLEL SAFE` SQL function `fn_normalize_license_plate(p_input TEXT)` and stored generated column `license_plate_norm` on `vehicle` and `vehicle_entry_exit_log`, and extended `license_plate_norm` (`uq_plate_blacklist_norm_active`) to `plate_blacklist`.
 - **Authority / Owner**: **Owner & Team Lead**
 
 ### OQ-76: Ticket/Vehicle/Position Taxonomy, Tariff Seeds, Derived Statuses & Same-Day Ticket Timestamps
 
-- **Priority / Status**: Important — `status = deferred to PO / Owner approved default D6`
+- **Priority / Status**: Important — `status = resolved & implemented (TL-09, TL-10, TL-11)`
 - **Sources**:
-  - Frontend `Quản lý vé — Smart Mobility.png` (`Vé ngày 50k`, `Vé tháng 500k`, `Vé quý 1.2M`; 5 statuses including `Sắp hết hạn`, `Đang gia hạn`; `VT0002` `10/5/2026`–`10/5/2026`; missing `Họ tên`, `SĐT`, `Thao tác`), `Quản lý xe — Smart Mobility.png` (`Ô tô`/`Xe máy`/`Xe điện`; `Đang đỗ`/`Đang hoạt động`/`Đã rời bãi`), `Quản lý nhân viên - Smart mobility.png` (4 positions, `Không hoạt động`).
-  - `db/01-schema.sql:29, 589, 591`, `db/02-seed.sql:21-54`.
-  - `06-frontend-srs-db-alignment.md` (`F13`–`F16`, `F19`, `F21`, `F22`, `F30`, `D6`).
+  - Frontend `Quản lý vé — Smart Mobility.png`, `Quản lý xe — Smart Mobility.png`, `Quản lý nhân viên - Smart mobility.png`.
+  - [`db/01-schema.sql`](../../db/01-schema.sql) & [`db/02-seed.sql`](../../db/02-seed.sql).
+  - [`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-09`, `TL-10`, `TL-11`).
 - **Issue / Description**:
-  - Frontend introduces `Vé quý` (`1.200.000đ`), `Xe điện`, new staff positions, and different ticket prices (`50k`/`500k` vs seeded `10k`/`100k` in `OQ-57`).
-  - Ticket `VT0002` has `effective_from = effective_to = 10/5/2026`, violating `ck_ticket_time_order CHECK (effective_to > effective_from)` if stored as identical midnight timestamps.
-- **Proposed Default / Resolution**: **OWNER APPROVED DEFAULT `[PROPOSAL]` (`D6`)**: Keep ticket, vehicle, and position seeds unchanged until the Product Owner confirms prices and categories; keep `Sắp hết hạn` (ticket), `Đang đỗ`/`Đã rời bãi` (vehicle), and `Không hoạt động` (`account.is_active`) derived rather than adding redundant status columns; store 1-day tickets with `effective_to = effective_from + INTERVAL '1 day'`.
-- **Authority / Owner**: **PO**
+  - Frontend defines 4 staff positions (`Quản lý`, `Nhân viên vận hành`, `Nhân viên thu ngân`, `Kỹ thuật viên`), 3 vehicle types (`Ô tô`, `Xe máy`, `Xe điện`), 4 ticket types (`Vé ngày` `50k`, `Vé tháng` `500k`, `Vé quý` `1.2M`, `Vé năm`), ticket status `"Đang gia hạn"` (`RENEWING`) and derived `"Sắp hết hạn"`, employee status `"Không hoạt động"` (`INACTIVE`), and same-day 1-day ticket dates (`VT0002` `10/5/2026`–`10/5/2026`).
+- **Proposed Default / Resolution**: **RESOLVED & IMPLEMENTED (`TL-09`, `TL-10`, `TL-11`, Round 23)**: Seeded `position` (4 rows: `QL`, `NVVH`, `NVTN`, `KTV`), `vehicle_type` (3 rows: `CAR`, `MOTO`, `EV`), and `ticket_type` (4 rows: `DAILY`, `MONTHLY`, `QUARTERLY`, `YEARLY`) in `db/02-seed.sql`; added `'RENEWING'` to `ck_ticket_status_enum` and `employee.status IN ('ACTIVE', 'INACTIVE')`; kept `"Sắp hết hạn"` and vehicle parking status (`"Đang đỗ"` / `"Đã rời bãi"`) derived; and stored 1-day tickets as half-open intervals `[effective_from, effective_from + INTERVAL '1 day')`.
+- **Authority / Owner**: **Owner & Team Lead**
 
 ### OQ-77: Manual Slot Status Override Buttons vs Trigger-Managed Slot Status
 
-- **Priority / Status**: Important — `status = deferred to PO / Owner approved default D7`
+- **Priority / Status**: Important — `status = resolved & implemented (TL-03, TL-04)`
 - **Sources**:
   - Frontend `Sơ đồ bãi đậu xe — Smart Mobility.png` (`Chi tiết ô đỗ`: manual buttons `Đánh dấu trống`, `Đánh dấu có xe`, `Đánh dấu đặt trước`, `Đánh dấu bảo trì`).
-  - `db/01-schema.sql:517, 872-1046` (`ck_slot_status_enum`, `fn_sync_slot_status_on_ticket`, `fn_sync_slot_status_on_traffic`).
-  - `06-frontend-srs-db-alignment.md` (`F11`, `D7`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) lines 1755–2088 (`fn_guard_parking_slot_status`, `trg_guard_parking_slot_status`, `fn_recompute_slot_status`).
+  - [`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-03`, `TL-04`).
 - **Issue / Description**:
-  - Frontend provides manual buttons to set a slot to `Trống`, `Có xe`, `Đặt trước`, or `Bảo trì`.
-  - In `db/01-schema.sql` (`OQ-63`), `AVAILABLE`, `OCCUPIED`, and `RESERVED` are automatically synchronized by database triggers from active tickets and open entry/exit sessions; manual overrides would immediately desynchronize slot state from ticket/session truth.
-- **Proposed Default / Resolution**: **OWNER APPROVED DEFAULT `[PROPOSAL]` (`D7`)**: Only `MAINTENANCE` is a manual slot status; `AVAILABLE`, `OCCUPIED`, and `RESERVED` remain strictly trigger-managed (`fn_sync_slot_status_on_ticket`, `fn_sync_slot_status_on_traffic`).
-- **Authority / Owner**: **PO**
+  - Frontend provides manual slot status buttons (`Đánh dấu trống`, `Đánh dấu có xe`, `Đánh dấu đặt trước`, `Đánh dấu bảo trì`), which must not desynchronize `parking_slot.status` from open sessions or active tickets/reservations.
+- **Proposed Default / Resolution**: **RESOLVED & IMPLEMENTED (`TL-03`, `TL-04`, Round 23)**: Added `fn_guard_parking_slot_status()` (`BEFORE UPDATE OF status ON parking_slot`) to block changing an occupied slot away from `OCCUPIED` while an open session exists (`PROP-4.5.2-P02`), block manually setting `OCCUPIED` without an open session (`PROP-4.5.2-P03`), and block manually setting `AVAILABLE` while an active ticket or active reservation exists (`PROP-4.5.2-P04`), while `fn_recompute_slot_status()` automatically synchronizes slot state across sessions, tickets, and reservations.
+- **Authority / Owner**: **Owner & Team Lead**
 
 ### OQ-78: ERD Module Diagram Completeness (`F27`), Intentional Stub Layout (`F28`) & Master Legend Count (`F31`)
 
-- **Priority / Status**: Important — `status = implemented (Owner approved D8)`
+- **Priority / Status**: Important — `status = implemented for Schema v1 (Rounds 19 & 21); Schema v2 ERD regeneration scheduled for Round 24`
 - **Sources**:
   - [`db/03-erd.asta`](../../db/03-erd.asta) and [`db/04-erd.png`](../../db/04-erd.png)–[`db/09-erd-reference-views.png`](../../db/09-erd-reference-views.png).
-  - [`db/00-README.md`](../../db/00-README.md) lines 314–318.
-  - `06-frontend-srs-db-alignment.md` (`F27`, `F28`, `F31`, Section 4.3, `D8`).
+  - [`db/00-README.md`](../../db/00-README.md).
 - **Issue / Description**:
-  - While `04-erd.png` renders all 44 FKs (`33` business + `11` `deleted_by`), module diagrams `05..08` previously omitted 12 non-`deleted_by` FKs whose both end tables are drawn (`5` in `Parking_Ticket`: `fk_ticket_issued_by`, `fk_renewal_old_slot`, `fk_renewal_old_ticket_type`, `fk_vehicle_ticket_type`, `fk_vehicle_type`; `5` in `Operations_Content`: `fk_log_exit_staff`, `fk_ticket_issued_by`, `fk_ticket_slot`, `fk_ticket_vehicle_customer`, `fk_employee_account`; `1` in `Account_Staff`: `fk_admin_ward_district`; `1` in `Customer_Vehicle`: `fk_admin_ward_district`), and `04-erd.png` legend note said `209-attribute` instead of `213-attribute` (with `235` total including 22 view columns).
-  - Duplicate stub nodes (`F28`) are an intentional layout choice per `db/00-README.md` ("Collapsed Neighbor Stubs", at most one link per boundary side).
-  - Verification of the `astah-uml` MCP tools confirmed that 4 of the 5 operations (`astah_add_presentation_link` by FK name, `astah_add_attribute` with `VARCHAR(20)` and `stereotype="PUQ"`, `astah_delete_element` + `astah_add_attribute`, and `astah_add_presentation_node` / `astah_set_presentation_style` with `width=240, height=45`) already worked, and only Note text editing (`astah_set_note_text`) was missing.
-- **Proposed Default / Resolution**: **IMPLEMENTED (`D8`, Round 19 Task D & Task E)**: Added `astah_set_note_text` to `D:\GitHub\Server\mcp-uml` (`39` tools total); kept the collapsed-neighbor-stub layout design (`F28`); updated `vehicle` and `vehicle_entry_exit_log` with `license_plate : VARCHAR(20)` and `license_plate_norm : VARCHAR(20) «PUQ»` (`213` table attributes + `22` view attributes = `235` total across `41` classes); added all 12 missing non-`deleted_by` business FKs across `05..08` (`F27`, `0` missing business FKs across `04..09`, `0` table crossings); updated the `04-erd.png` legend note to `213-attribute` (`F31`); and re-exported `db/04-erd.png`..`db/09-erd-reference-views.png` at 400 DPI via `astah_export_diagram_image`.
+  - Rounds 19 and 21 completed all ERD diagram links, orthogonal routing, and legend counts for Schema v1 (`19` tables, `4` views, `44` FKs). Following the Round 23 rework to Schema v2 (`28` tables, `8` views, `69` FKs), the Astah UML model and exported PNG diagrams require regeneration.
+- **Proposed Default / Resolution**: **SCHEDULED FOR ROUND 24**: Keep `db/03-erd.asta` and `db/04-erd.png`..`db/09-erd-reference-views.png` untouched in Round 23 and regenerate all ERD diagrams for Schema v2 in Round 24.
 - **Authority / Owner**: **Owner & Team Lead**
+
+### OQ-79: Year Ticket Default Tariff (`4.800.000đ` vs Annual Discount)
+
+- **Priority / Status**: Important — `status = open [PROPOSAL]`
+- **Sources**:
+  - Frontend `Quản lý vé — Smart Mobility.png` (`Vé ngày` `50.000đ`, `Vé tháng` `500.000đ`, `Vé quý` `1.200.000đ`) & `Quản lý xe — Smart Mobility.png` (`Vé năm`).
+  - SRS 4.6.1 & 4.7.1 (`Tháng / Quý / Năm`).
+  - [`db/02-seed.sql`](../../db/02-seed.sql) (`ticket_type` code `'YEARLY'`, `default_price = 4800000.00`).
+- **Issue / Description**:
+  - Frontend `Quản lý vé — Smart Mobility.png` explicitly shows prices for `Vé ngày` (`50.000đ`), `Vé tháng` (`500.000đ`), and `Vé quý` (`1.200.000đ`), while `Quản lý xe — Smart Mobility.png` (`XE0005`) and SRS 4.6/4.7 also include `Vé năm` (`YEARLY`, `365` days) without a Frontend-confirmed annual tariff.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT `[PROPOSAL]` (`TL-10`, `OQ-79`)**: Seed `YEARLY` (`"Vé năm"`, `365` days) with `default_price = 4800000.00` (`1.200.000đ × 4` quarters) pending Product Owner confirmation of whether an annual discount applies.
+- **Authority / Owner**: **Product Owner**
+
+### OQ-80: Per-Session Parking Tariff Rules (Hourly/Daily Rate by Vehicle Type, Grace Period & Overstay Fee)
+
+- **Priority / Status**: Important — `status = open [PROPOSAL]`
+- **Sources**:
+  - Frontend `Lịch sử ra/vào — Smart Mobility.png` (`Cước phí`: `0đ`), `Trang chủ — Smart Mobility.png` (`Cảnh báo đỗ xe quá 48 giờ tại vị trí B2 - 55`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) (`vehicle_entry_exit_log.fee_amount`).
+- **Issue / Description**:
+  - Frontend displays per-session `Cước phí` and alerts on vehicles parked over `48` hours, but neither the Frontend nor the SRS defines the exact calculation formula (hourly vs block tariff by `CAR`/`MOTO`/`EV`, free grace minutes, overnight surcharge, or overstay penalty).
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT `[PROPOSAL]` (`TL-05`, `TL-07`, `OQ-80`)**: Store computed session fee in `vehicle_entry_exit_log.fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0` (`0` when covered by an active ticket) and await Product Owner confirmation of the exact per-session tariff schedule and overstay fee formula.
+- **Authority / Owner**: **Product Owner**
+
+### OQ-81: Status Value Lists & Database Guard Messages Not Shown in the Frontend
+
+- **Priority / Status**: Important — `status = open [PROPOSAL]`
+- **Sources**:
+  - [`db/01-schema.sql`](../../db/01-schema.sql) (`ck_reservation_status_enum`, `ck_payment_status_enum`, `ck_alert_type_enum`, `ck_alert_severity_enum`, `ck_log_recognition_source_enum`, `ck_log_review_status_enum`, `fn_guard_parking_slot_status`, `fn_guard_slot_reservation_on_entry`, `fn_prevent_activity_log_mutation`).
+  - [`docs/requirements/05-proposed-messages.md`](05-proposed-messages.md) (`PROP-4.5.2-P02`–`PROP-4.5.2-P06`).
+- **Issue / Description**:
+  - While the Frontend shows UI badges such as `"Đặt trước"`, `"Ảnh khớp"`, and `"Cần duyệt"`, it does not enumerate every internal lifecycle code for `slot_reservation.status`, `payment.status`, `system_alert.severity`, or `vehicle_entry_exit_log.review_status` / `recognition_source`, nor does it specify verbatim error strings when manual slot status overrides, slot reservations, or `activity_log` mutations are rejected.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT `[PROPOSAL]` (`TL-03`, `TL-04`, `TL-06`, `TL-07`, `TL-12`, `TL-13`, `OQ-81`)**: Enforce `slot_reservation.status IN ('ACTIVE', 'FULFILLED', 'EXPIRED', 'CANCELLED')`, `payment.status IN ('UNPAID', 'PAID', 'CANCELLED', 'REFUNDED')`, `system_alert.alert_type IN ('BLACKLIST_PLATE', 'OVERSTAY', 'CAMERA_QUALITY', 'SYSTEM')`, `system_alert.severity IN ('INFO', 'WARNING', 'CRITICAL')`, `vehicle_entry_exit_log.recognition_source IN ('AI', 'MANUAL')`, and `vehicle_entry_exit_log.review_status IN ('AUTO', 'MATCHED', 'NEEDS_REVIEW', 'APPROVED', 'REJECTED')`, and use proposed Vietnamese guard messages `PROP-4.5.2-P02`–`PROP-4.5.2-P06` pending Product Owner review.
+- **Authority / Owner**: **Product Owner** & **Team Lead**
+
+### OQ-82: VietQR Payment Provider, Webhook Verification & Transfer Reference Format
+
+- **Priority / Status**: Important — `status = open [PROPOSAL]`
+- **Sources**:
+  - Frontend `Main Page.png` (`VietQR`), `Trang chủ — Smart Mobility.png` (`Tiền mặt: 18% | QR: 82%`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) (`payment.method`, `payment.provider_ref`).
+- **Issue / Description**:
+  - Frontend specifies `VietQR` / `QR` alongside `Tiền mặt`, but does not specify the acquiring bank/payment gateway, webhook signature verification protocol, or transfer narrative format stored in `payment.provider_ref`.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT `[PROPOSAL]` (`TL-07`, `OQ-82`)**: Provision `payment.method IN ('CASH', 'VIETQR')` and `payment.provider_ref VARCHAR(100) NULL` to store external transaction references or bank transfer narratives, pending Product Owner selection of the payment gateway provider.
+- **Authority / Owner**: **Product Owner** & **Team Lead**
+
+### OQ-83: Camera & AI License-Plate Recognition Service Integration
+
+- **Priority / Status**: Important — `status = open [PROPOSAL]`
+- **Sources**:
+  - Frontend `Trang chủ — Smart Mobility.png` (`Tỉ lệ AI nhận dạng: 98.4%`, `Xem ảnh (99%)`, `Ảnh khớp`, `Cần duyệt`), `Main Page.png` (`4 Cổng quét tự động`).
+  - [`db/01-schema.sql`](../../db/01-schema.sql) (`parking_gate.camera_status`, `parking_gate.is_auto_scan`, `vehicle_entry_exit_log.ai_confidence`, `recognition_source`, `review_status`).
+- **Issue / Description**:
+  - Frontend displays AI OCR confidence percentages (`98.4%`, `99%`), automatic vs manual review states (`Ảnh khớp`, `Cần duyệt`), and gate camera status, but does not specify the OCR engine/edge device protocol or the exact confidence threshold separating `MATCHED` from `NEEDS_REVIEW`.
+- **Proposed Default / Resolution**: **PROPOSED DEFAULT `[PROPOSAL]` (`TL-06`, `OQ-83`)**: Store `ai_confidence NUMERIC(5,2) NULL`, `recognition_source`, and `review_status` on `vehicle_entry_exit_log` (with default threshold `ai_confidence >= 85.00` for `MATCHED` vs `NEEDS_REVIEW` in the application service layer) pending Product Owner confirmation.
+- **Authority / Owner**: **Product Owner** & **Team Lead**

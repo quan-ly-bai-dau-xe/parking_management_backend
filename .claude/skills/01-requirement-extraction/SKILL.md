@@ -7,12 +7,12 @@ description: Extract functional requirements, data fields, business rules, and v
 
 ## 1. Objective
 
-This skill defines the standardized procedure for extracting and mapping business requirements from the canonical requirements catalog (`docs/requirements/00-srs-catalog.md`) into backend architectural components without fabricating specifications.
+This skill defines the standardized procedure for extracting and mapping business requirements from the primary Frontend-First specification (`docs/requirements/06-frontend-srs-db-alignment.md`) and secondary SRS catalog (`docs/requirements/00-srs-catalog.md`, where the Frontend is silent) into backend architectural components without fabricating specifications.
 
 ## 2. Step-by-Step Execution Workflow
 
 1. **Step 1: Identify Target Screen / Use Case**:
-   - Locate the target section in `docs/requirements/00-srs-catalog.md` (Sections 4.1 through 4.8).
+   - Locate the target Frontend screen (`S01`–`S11`) and Team Lead decision (`TL-01`–`TL-16`) in `docs/requirements/06-frontend-srs-db-alignment.md`, and consult `docs/requirements/00-srs-catalog.md` (Sections 4.1 through 4.8) where the Frontend is silent.
    - Review project plan scope additions in `docs/requirements/02-scope-additions-from-plan.md` if applicable.
 2. **Step 2: Extract Field Inventory**:
    - Collect Stable IDs (`REQ-<Screen>-F<N>`), Field Name, Data Type, Maximum Length, Mandatory flag, and Default Value.

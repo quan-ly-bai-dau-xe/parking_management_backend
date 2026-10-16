@@ -1,179 +1,160 @@
-# Frontend Design, SRS v4.1, and PostgreSQL Schema Alignment Report
+# Frontend-First Specification & Database Schema v2 Decision Record
 
-## 1. Scope
+<!-- cspell:words VIETQR nonnulls NVVH NVTN -->
 
-Alignment audit across the 11 Frontend PNGs in `D:\GitHub\codegym\[FE-BE-Thực tập]-Project\Parking Project` (`9` screens + `2` icons `Vector.png`, `clarity_edit-line.png`; full inventory in `.agents/round17_fe_inventory.md`), SRS v4.1 (`Quan ly bai dau xe oto_SRS_v4.1.docx`, `image1.png`–`image25.png`), PostgreSQL 18.6 ([`db/01-schema.sql`](../../db/01-schema.sql), [`db/02-seed.sql`](../../db/02-seed.sql)), and ERD ([`db/03-erd.asta`](../../db/03-erd.asta), [`db/04-erd.png`](../../db/04-erd.png)–[`db/09-erd-reference-views.png`](../../db/09-erd-reference-views.png)). Statuses: `MATCH`, `FE-ONLY`, `SRS-ONLY`, `CONFLICT`, `SAMPLE-DATA-ERROR`, `UNVERIFIED`. Owner decisions `D1`–`D8` and [`01-open-questions.md`](01-open-questions.md) (`OQ-71`–`OQ-78`) are updated through Round 19 (`D5` and `D8` implemented; `D1`–`D4`, `D6`, `D7` deferred).
-
----
-
-## 2. Alignment Matrix (`FRONTEND <-> SRS v4.1 <-> DATABASE`)
-
-### 2.1 Screen-by-Screen Alignment Matrix
-
-| Screen (`Filename & Size`)|FE Evidence|SRS v4.1 Evidence|DB Evidence (`01-schema.sql` / `02-seed.sql`)|Status & Findings |
-| :---|:---|:---|:---|:--- |
-| `login-container.png` (`1200x693`)|`Email hoặc Số điện thoại`, `Mật khẩu` (`Hiện`), `Ghi nhớ đăng nhập`, `Quên mật khẩu?`, `Đăng ký ngay`|4.1 (`image2.png` R5–9): `Tên đăng nhập` (`MSG-4.1-M03`), `Mật khẩu`, `Ghi nhớ mật khẩu`, `Quên mật khẩu` link (no dialog); 4.3.2 (`image5.png`): Admin-only provisioning|`account.username` (`lines 26, 37`, rejects `@`); no `email`/`phone`/self-signup (`OQ-02`, `OQ-55`); `persistent_login_token` (`lines 61-73`), `password_reset_token` (`lines 93-103`)|`CONFLICT` / `MATCH` (`F01`, `F02`, `D1`, `OQ-01`, `OQ-71`) |
-| All 8 screens (`Main Page.png`..`Quản lý vé — Smart Mobility.png`)|Top bar (`LOGO`, `Camera`, `Admin`) + 7 top tabs (`Quản lý loại vé` on 6 screens vs `Quản lý vé` on 2)|4.2 (`image3.png` Home): LEFT side menu of 7 items (`Quản lý nhân viên`, `Quản lý khách hàng`, `Quản lý xe vào/ra`, `Quản lý vé`, `Thống kê`, `Quản lý bãi đỗ xe`, `Bảng thông báo`) + `Quản lý tài khoản` dropdown + `Chào admin`|`account.role` (`MANAGER`, `EMPLOYEE`, `CUSTOMER`, `line 38`)|`CONFLICT` (`F03`, `F04`, `F26`, `OQ-74`) |
-| `Main Page.png` (`1278x2065`)|`VietQR`, 5 badges (+`Sạc xe điện`), `24` lots, `78.4%` (`392+108=500`), `35.4M`, `4 Cổng`, `Tầng B1..B3`, `Khu A..C` (`28.4%` vs `28/100=28.0%`), `SmartPark UI Template Kit`|4.5.2 (`image14.png`) & 4.7.1 (`image19.png`): 2 slot colors (green/red), single lot, integer floors, no EV/VietQR/zones/gates|`ck_slot_status_enum` (`line 517`, 4 states), `v_revenue_statistics` (`line 1140`), `v_vehicle_traffic_daily` (`line 1180`), `v_slot_occupancy_by_floor` (`line 1195`)|`CONFLICT` / `FE-ONLY` / `SAMPLE-DATA-ERROR` (`F04`–`F11`, `F23`, `F24`, `D3`, `D4`, `D7`) |
-| `Trang chủ — Smart Mobility.png` (`1440x911`)|`342/550` vs `298/550`, `150.000đ (Tiền mặt: 18% \| QR: 82%)`, `AI: 98.4%`, `Cổng vào/ra`, `Xem ảnh (99%)`, `51G-888.88 Blacklist (Nợ phí)`, `>48h`, camera alert|4.2 (`image3.png`): Left menu & `Bảng thông báo`; traffic charts in 4.7.2 (`image20.png`)|Computable: logs, >48h, hourly traffic, floor occupancy. Not in DB: `QR`/`Tiền mặt`, AI score, gates, blacklist|`SAMPLE-DATA-ERROR` / `FE-ONLY` (`F04`–`F09`, `F23`, `F25`, `D2`, `D4`, `OQ-72`, `OQ-74`) |
-| `Khách hàng — Smart Mobility.png` (`1440x911`)|Cards (`1,420`, `1,280`, `42`, `Blacklist: 15`), 4 cols (`Mã KH`, `Tên KH`, `SĐT`, `Số CCCD`) + `Chưa có dữ liệu`|4.4.1 (`image8.png`): 8 cols (`ID`, `Họ tên`, `Ngày sinh`, `CMND`, `Số ĐT`, `Email`, `Địa chỉ`, `Giới tính`) + 3 icons + Vehicle sub-table|`customer` (`lines 292-321`): `ck_customer_idcard_digits` (`line 316`); no `is_blacklisted`|`CONFLICT` / `SAMPLE-DATA-ERROR` (`F08`, `F22`, `F23`, `D4`, `OQ-74`) |
-| `Quản lý xe — Smart Mobility.png` (`1470x1580`)|`Tổng: 6` vs `4+2+1=7`, 11 cols, dotted plates (`51K-992.14`, `30A-123.45`), `Xe điện`, `Vé quý`, `Đang đỗ`/`Đã rời bãi`, `↓ Xuất CSV`, bottom cards (`12/12/2026` vs `VT0001` `12/06/2026`, `Slot 42`, `Ghi chú`, `module Vé/Giao dịch`)|4.4.1–4.4.2 (`image8.png`, `image9.png`): Sub-table in Customer. 4.5.1/4.8.2: `Xe 4/7/12 chỗ`, `Xe máy`; no `Ghi chú` or `Giao dịch`|`vehicle` (`lines 437-461`) has `license_plate_norm` (`line 443`, `D5`/`OQ-75`), `v_customer_vehicle_summary` (`line 1277`); no `image_url`, `notes`, `status`. `02-seed.sql:34-54`|`CONFLICT` / `SAMPLE-DATA-ERROR` (`F05`, `F13`, `F14`, `F17` fixed, `F18`, `F19`, `F23`, `F26`, `D5`, `D6`) |
-| `Lịch sử ra\vào — Smart Mobility.png` (`1440x911`)|5 filters (`00:00`, no buttons, `F29`); 7 cols (`Mã phiên đỗ xe`, `Tổng thời gian đỗ`, `Cước phí`)|4.5.1 (`image13.png`) live gate; 4.7.2 (`image20.png`) traffic chart; no session code/fee|`vehicle_entry_exit_log` (`lines 688-712`): `id`, `license_plate_norm` (`line 692`), `entry_time`, `exit_time`, `notes`; no `fee_amount`|`FE-ONLY` / `CONFLICT` (`F05`, `F20`, `F29`, `D2`, `OQ-72`) |
-| `Sơ đồ bãi đậu xe — Smart Mobility.png` (`1440x1750`)|`+ Thêm tầng/khu/ô đỗ`, `Tầng B1`, `Khu A`, `Tổng: 24` (`7+12+5`), bar `18/24`, `16` cells (`XE ƯU TIÊN`), `A-01` green `TRỐNG` vs `Đang đỗ (30A-123.45)`, 4 manual status buttons, `Tầng B1 (72 ô)` vs `24+24=48 ô`, `Hoạt động gần đây`|4.5.2 (`image14.png`): Floors `1..10`, `108` slots/floor, `Rộng x Dài x Cao`. 4.8 (`image21.png`–`image25.png`): Per-slot CRUD, read-only detail popup (`image24.png`)|`parking_slot` (`lines 494-519`): `floor_number`, `slot_number`, `code`, `width`, `length`, `height`, `map_row`, `map_col`, `status` synced by triggers (`lines 872-1046`); only `MAINTENANCE` is manual|`CONFLICT` / `SAMPLE-DATA-ERROR` (`F09`–`F12`, `F18`, `F23`, `F26`, `D3`, `D4`, `D7`, `OQ-73`, `OQ-74`, `OQ-77`) |
-| `Quản lý nhân viên - Smart mobility.png` (`1470x1299`)|`● Dữ liệu minh họa — chưa kết nối API`, 4 positions, `KHU VỰC` (`Hải Châu Đà Nẵng`), `TRẠNG THÁI` (`Không hoạt động`)|4.3.1 (`image4.png`): `ID`, `Họ tên`, `Ngày sinh`, `Địa chỉ`, `Số ĐT`, `Email`, `Giới tính`, `Vị trí` (`Bảo vệ`, `Giữ xe`) + `Sửa`, `Xóa`|`employee` (`lines 232-260`), `account.is_active` (`line 29`), `02-seed.sql:21-26` (`BV`, `GX`, `QL`). District ended `01-07-2025` (Law 72/2025/QH15)|`CONFLICT` (`F21`, `F23`, `F24`, `D6`, `OQ-50`, `OQ-57`, `OQ-76`) |
-| `Quản lý vé — Smart Mobility.png` (`3470x911`) — Main|8 filters, 10 cols (omits `Họ tên`, `SĐT`, `Thao tác`, `F30`). `VT0001` (`51K-992-14`, `500k`), `VT0002` (`10/5/2026`–`10/5/2026`, `50k`, `Sắp hết hạn`), `VT0004` (`Vé quý`, `1.2M`), `VT0005` (`Đang gia hạn`)|4.6.1 (`image15.png`): Has `Họ tên`, `Số điện thoại`, `Sửa`, `Xóa` (`4.6.4`), no `Trạng thái`; `Vé Năm` = `100.000đ`|`ticket` (`lines 570-598`): `ck_ticket_time_order` (`line 589`) and `ck_ticket_status_enum` (`ACTIVE`, `EXPIRED`, `RENEWED`, `CANCELLED`, `line 591`)|`CONFLICT` / `SAMPLE-DATA-ERROR` (`F09`, `F13`, `F15`–`F17`, `F23`, `F30`, `D5`, `D6`, `OQ-75`, `OQ-76`) |
-| `Quản lý vé — Smart Mobility.png` — Dialog 1|`Thêm vé mới`: `Khách hàng *`, `Xe *`, `Loại vé *`, `Vị trí đỗ xe *`, `Ngày hiệu lực *`, editable `Ngày hết hạn *`, `Giá vé *`, `Ghi chú`|4.6.2 (`image16.png`): Read-only `Họ tên`, `SĐT`, `Loại xe`, `Ngày hết hạn`; separate `Tầng` + `Vị trí`; no `Ghi chú`|`ticket` (`lines 570-598`) has no `notes` column|`CONFLICT` / `FE-ONLY` (`F16`, `F18`, `D4`, `OQ-74`, `OQ-76`) |
-| `Quản lý vé — Smart Mobility.png` — Dialog 2|`Gia hạn vé`: `Mã vé` (`Chọn Gia hạn từ danh sách`), `Loại vé mới *`, `Vị trí đỗ xe mới *`, `Ngày hết hạn mới *`, `Giá gia hạn *`, `Ghi chú`|4.6.3 (`image17.png`): Read-only header + editable `Loại vé`, `Tầng`, `Vị trí`, `Giá`, `Ngày gia hạn`, `Ngày hết hạn`; no `Ghi chú`|`ticket_renewal` (`lines 634-658`, `OQ-58`) has no `notes` column|`CONFLICT` / `FE-ONLY` (`F16`, `F18`, `F30`, `D4`, `OQ-58`, `OQ-74`) |
-| `Quản lý vé — Smart Mobility.png` — Dialog 3|`Chi tiết vé`: `VT0001`, `KH0001`, `51K-992-14`, `12/05/2026`–`12/06/2026`, `NV0005 (Nguyễn Văn A)`, `Ghi chú: -`, `Lịch sử gia hạn`|Not in SRS v4.1 (4.6 has only List, Add, Edit/Renew, Delete)|Backed by `ticket` + `ticket_renewal` + `employee` (no `ticket.notes`)|`FE-ONLY` / `SAMPLE-DATA-ERROR` (`F17`, `F18`, `F23`, `D4`, `OQ-74`) |
-| `Vector.png` (`17x17`), `clarity_edit-line.png` (`18x18`)|Standalone pencil edit icons|Row edit (`Sửa`)|N/A|`MATCH` |
-
-### 2.2 SRS v4.1 Screens Missing from FE (`SRS-ONLY` / `F03`) & Unspecified PO Questions
-
-| SRS (`Wireframes`)|Requirement vs Frontend Export|DB Support (`db/01-schema.sql`)|Classification |
-| :---|:---|:---|:---: |
-| **4.1 & 4.2** (`image2.png`, `image3.png`)|**`Quên mật khẩu` & `Đổi mật khẩu/profile`**: SRS 4.1 (`image2.png` R8) has `Quên mật khẩu` link only; SRS 4.2 (`image3.png`) has `Quản lý tài khoản` dropdown only.|`password_reset_token` (`lines 93-103`), `account.password_hash` (`line 27`)|**Not specified by SRS — PO Question** (`OQ-01`) |
-| **4.3.2–4.3.4** (`image5.png`–`image7.png`)|**Add/Edit/Delete Employee Modals**: `Tỉnh/Huyện/Xã`, `Vị trí`, default password checkbox, delete popup.|`employee`, `account`, `position`, `administrative_*`|`SRS-ONLY` (`F03`) |
-| **4.4.2–4.4.5** (`image9.png`–`image12.png`)|**Customer `Thông tin xe` & Add/Edit/Delete Customer Modals**: Master-detail customer/vehicle forms, delete popup.|`customer`, `vehicle`, `administrative_*`|`SRS-ONLY` (`F03`) |
-| **4.5.1** (`image13.png`)|**Barrier Gate Check-In/Out (`Quản lý xe ra/vào`)**: Dual-camera ANPR (`Xe vào`/`Xe ra`), `Tìm xe`, slot selection, `Lưu thông tin`.|`vehicle_entry_exit_log`, `fn_guard_slot_reservation_on_entry`, `fn_sync_slot_status_on_traffic`|`SRS-ONLY` (`F03`) |
-| **4.6.4** (`image15.png`, `image18.png`)|**Ticket Row Actions (`Sửa`, `Xóa`) & Delete Ticket Popup (`Xác nhận xóa vé`)**: Expired, non-renewed tickets (`TH1..TH3`).|`ticket` (`ck_ticket_delete_only_expired`, `line 592`)|`SRS-ONLY` (`F03`, `F30`) |
-| **4.7.1–4.7.2** (`image19.png`, `image20.png`)|**Statistics (`Thống kê tổng hợp`, `Thống kê chi tiết`)**: Revenue by `Tháng`/`Quý`/`Năm` (`"Tuần"` not in SRS), daily traffic, floor occupancy, vehicles-by-customer.|`v_revenue_statistics`, `v_vehicle_traffic_daily`, `v_slot_occupancy_by_floor`, `v_customer_vehicle_summary`, `fn_stat_*` (`lines 1140-1519`)|`SRS-ONLY` (`F03`) |
-| **4.8.1–4.8.5** (`image21.png`–`image25.png`)|**Add/Edit/Detail/Delete Slot Modals**: Per-slot forms (`Rộng`, `Dài`, `Cao`), allowed vehicle types, delete popup.|`parking_slot`, `slot_allowed_vehicle_type`|`SRS-ONLY` (`F03`, `F12`) |
-| **4.2 / Plan** (`image3.png`, Tasks 2 & 17)|**`Bảng thông báo` & `Quản lý tin tức`**: Left menu item on `image3.png` and `Tasks_Sprint_1`.|`news` (`lines 749-789`), `notification` (`lines 794-822`)|`SRS-ONLY` (`F03`, `OQ-51`) |
+This document records the authoritative **Frontend-First (`FE-First`)** specification hierarchy established in Round 23, the **Team Lead Decisions (`TL-01`–`TL-16`)** (which supersede the earlier `D1`–`D8` defaults), the **11-file Frontend-to-Database traceability summary**, and the **Schema v2 catalog delta** implemented in [`db/01-schema.sql`](../../db/01-schema.sql) and [`db/02-seed.sql`](../../db/02-seed.sql).
 
 ---
 
-## 3. Candidate Findings (`F01..F27`) & Additional Findings (`F28..F31`)
+## 1. Source Hierarchy & Governance
 
-All 31 findings are **Confirmed** (`F28` re-classified `INTENTIONAL-LAYOUT`, `F17` implemented Round 18, `F27` & `F31` implemented Round 19):
-
-| ID (`Status`)|Evidence Summary (FE PNG, SRS v4.1, `db/01-schema.sql` / `db/02-seed.sql`) |
-| :---|:--- |
-| **F01** (`CONFLICT`)|`login-container.png`: `"Email hoặc Số điện thoại"` vs SRS 4.1 (`image2.png` R5) `"Tên đăng nhập"` (`MSG-4.1-M03`) & `account.username` (`lines 26, 37`) (`D1`, `OQ-71`). |
-| **F02** (`CONFLICT`)|`login-container.png`: `"Đăng ký ngay"` vs SRS 3 & 4.3.2 (`image5.png` R14) Admin-only provisioning (`D1`, `OQ-71`). |
-| **F03** (`SRS-ONLY`)|FE omits `Thống kê` (`4.7`), gate check-in/out (`4.5.1`), Employee/Customer/Slot CRUD modals (`4.3`, `4.4`, `4.8`), Delete Ticket (`4.6.4`), `Bảng thông báo` (`4.2` `image3.png`). (`Quên mật khẩu` dialog & `Đổi mật khẩu/profile` not specified in SRS — PO question). |
-| **F04** (`CONFLICT` / `SAMPLE-DATA-ERROR`)|Tab 6 `"Quản lý loại vé"` (6 screens) vs `"Quản lý vé"` (2 screens); `Main Page.png` (`500` slots, `35.4M`) conflicts with `Trang chủ` (`550` slots, `150.000đ`). |
-| **F05** (`FE-ONLY` / `CONFLICT`)|FE shows `"Cước phí"`, `"Tiền mặt: 18% \| QR: 82%"`, `"VietQR"`, `"module Vé/Giao dịch"`; SRS 4.7.1 (`image19.png`) & `v_revenue_statistics` (`line 1140`) use tickets/renewals only (`D2`, `OQ-72`). |
-| **F06** (`FE-ONLY`)|`Main Page.png` & `Trang chủ` show `"4 Cổng quét tự động"`, `"Cổng vào 1/2"`, `"Cổng ra 1/2/3"`; not in SRS or DB (`D4`, `OQ-74`). |
-| **F07** (`FE-ONLY`)|`Trang chủ` & `Lịch sử ra\vào` show AI score (`98.4%`, `Xem ảnh (99%)`, `Ảnh khớp`, `Cần duyệt`, camera alert); DB (`lines 697-698`) has image URLs only (`D4`, `OQ-74`). |
-| **F08** (`FE-ONLY`)|`Main Page`, `Trang chủ`, `Khách hàng` show `"Blacklist (Nợ phí)"` and `"Blacklist/Tạm khoá: 15"`; not in SRS or DB (`D4`, `OQ-74`). |
-| **F09** (`CONFLICT`)|FE uses `"Tầng B1..B3, F1"`; SRS 4.5.2/4.8.2 & `ck_slot_floor_range` (`line 511`) require positive integers `1..99` (`D3`, `OQ-73`). |
-| **F10** (`FE-ONLY` / `CONFLICT`)|FE shows `"24 Khu bãi"`, `"Bãi xe Smart Mobility"`, `"Khu A..C"`, `"+ Thêm tầng/khu"`, `"Quản lý cấu trúc bãi"`; no lot/zone tables in DB (`D3`, `OQ-73`). |
-| **F11** (`CONFLICT`)|`Main Page` adds `"Sạc xe điện"`; `Sơ đồ` adds 4 manual status buttons. In DB (`lines 517, 872-1046`), only `MAINTENANCE` is manual (`D4`, `D7`, `OQ-74`, `OQ-77`). |
-| **F12** (`FE-ONLY` / `SRS-ONLY`)|`Sơ đồ` adds `"Người đặt trước"`, `"Ghi chú"`, `"ĐÃ ĐẶT 13:30"`, `"1h24m"`, `"XE ƯU TIÊN"`, ultrasonic badge, omitting SRS `Rộng`, `Dài`, `Cao` (`lines 501-503`) (`D4`, `OQ-74`). |
-| **F13** (`CONFLICT`)|FE uses `Vé ngày` (`50k`), `Vé tháng` (`500k`), `Vé quý` (`1.2M`), `Vé năm` vs `02-seed.sql:49-54` (`100k`/`100k`/`10k`, no `Vé quý`, `OQ-57`) (`D6`, `OQ-76`). |
-| **F14** (`CONFLICT`)|FE uses `Ô tô`, `Xe máy`, `Xe điện` vs SRS 4.5.1/4.8.2 & `02-seed.sql:34-41` (`Xe 4/7/12 chỗ`, `Xe máy`, `Loại khác`) (`D6`, `OQ-76`). |
-| **F15** (`CONFLICT`)|`Quản lý vé` shows 5 statuses (`+Sắp hết hạn`, `+Đang gia hạn`) vs `ck_ticket_status_enum` (`line 591`, 4 states) and omits Delete Ticket (`line 592`) (`D6`, `OQ-76`). |
-| **F16** (`CONFLICT` / `SAMPLE-DATA-ERROR`)|`Quản lý vé` mixes `mm/dd/yyyy` & `d/m/yyyy`; `VT0002` has `10/5/2026`–`10/5/2026`, violating `ck_ticket_time_order` (`line 589`) (`D6`, `OQ-76`). |
-| **F17** (`CONFLICT` -> **RESOLVED `D5`**)|`XE0001` `"51K-992.14"` vs `"51K-992-14"` (`VT0001`); `XE0002` `"30A-123.45"` vs `"30A-123-45"`. **Implemented (`D5`, `OQ-75`)**: `fn_normalize_license_plate(text)`, stored `license_plate_norm VARCHAR(20)` (`lines 443, 692`), unique indexes (`lines 482, 739`), normalized guard (`line 1069`). |
-| **F18** (`FE-ONLY`)|FE adds `"Ghi chú"` on `ticket`, `ticket_renewal`, `vehicle`, `parking_slot`; only `vehicle_entry_exit_log.notes` (`line 701`) exists in DB (`D4`, `OQ-74`). |
-| **F19** (`FE-ONLY`)|`Quản lý xe` shows `Trạng thái` (`Đang đỗ`, `Đang hoạt động`, `Đã rời bãi`); derived from open `vehicle_entry_exit_log` rows (`D6`, `OQ-76`). |
-| **F20** (`FE-ONLY`)|`Lịch sử ra\vào` shows `Mã phiên đỗ` and `Tổng thời gian đỗ`; derived from `id` and `exit_time - entry_time` (`D2`, `OQ-72`). |
-| **F21** (`CONFLICT`)|`Quản lý nhân viên` uses 4 non-SRS positions, `"Không hoạt động"` (`account.is_active`, `line 29`), district `"KHU VỰC"` (ended `01-07-2025`, Law 72/2025/QH15), omitting `Ngày sinh`, `Giới tính`, `Địa chỉ` (`D6`, `OQ-76`). |
-| **F22** (`CONFLICT`)|`Khách hàng` has 4 cols and no actions, omitting SRS 4.4.1 (`image8.png`) cols `Ngày sinh`, `Email`, `Địa chỉ`, `Giới tính` and icons (`D4`, `D6`, `OQ-74`, `OQ-76`). |
-| **F23** (`SAMPLE-DATA-ERROR`)|7 mockup errors: (1) `A-01` green `TRỐNG` vs `Đang đỗ (30A-123.45)`; (2) `16` cells vs `Tổng: 24` (`12+5=17 != 18/24`) and `72` vs `24+24=48`; (3) `Trang chủ` `342/550` vs `138+120+40=298/550`; (4) `Main Page` `28/100=28.0% != 28.4%` and `24` vs `392+108=500`; (5) `Main Page` vs `Trang chủ` conflict & identical `09:24:32` times; (6) `NV005` (`Võ Ngọc Linh`) vs `NV0005 (Nguyễn Văn A)`; (7) `XE0001` `12/12/2026` (`Slot 42`) vs `VT0001` `12/06/2026` (`Tầng B1 - A10`), `4+2+1=7 != 6`, `1,420` customers above `Chưa có dữ liệu`. |
-| **F24** (`MATCH`)|`Main Page.png` (`SmartPark UI Template Kit`) and `Quản lý nhân viên` (`Dữ liệu minh họa — chưa kết nối API`) confirm static mockups. |
-| **F25** (`FE-ONLY` / `DB-AHEAD`)|Computable: logs, >48h parked, hourly traffic, floor occupancy (`v_slot_occupancy_by_floor`), ticket revenue (`v_revenue_statistics`). Not computable: Blacklist/debt (`F08`), AI/camera alerts (`F07`), gates (`F06`), Cash/QR split (`F05`). |
-| **F26** (`FE-ONLY`)|Top bar `Camera`, `↓ Xuất CSV`, `↓ Xuất báo cáo`, and `Hoạt động gần đây` have no audit log table in DB (`D4`, `OQ-74`). |
-| **F27** (`DIAGRAM-DEFECT` -> **RESOLVED `D8`**)|`04-erd.png` draws all `44` FKs (`33` business + `11` `deleted_by`, `db/00-README.md:290`); `05..08` omitted **12 business FKs**. **Implemented (`D8`, `OQ-78`)**: all 12 added via `astah_add_presentation_link` (`0` missing across `04..09`). |
-| **F28** (`INTENTIONAL-LAYOUT`)|`Parking_Ticket` (`07`) renders `parking_slot` & `ticket_type` as full tables and `240x45` stubs; `Operations_Content` (`08`) renders two `employee` stubs. Per [`db/00-README.md`](../../db/00-README.md) lines `314–318` (*"Collapsed Neighbor Stubs... each boundary side receives at most one relationship link"*), this is an **intentional layout choice**; missing links (`F27`) were the real defect. |
-| **F29** (`FE-ONLY` / `CONFLICT`)|`Lịch sử ra\vào` `Bộ lọc nhanh` has `00:00` time-only inputs and **no `Tìm kiếm` or `Reset` button**. |
-| **F30** (`CONFLICT`)|`Quản lý vé` main table omits `Họ tên`, `Số điện thoại`, and `Thao tác` (`Sửa`/`Xóa`) required by SRS 4.6.1/4.6.4 and Dialog 2. |
-| **F31** (`DIAGRAM-DEFECT` -> **RESOLVED `D8`**)|`04-erd.png` note said `"209-attribute schemas"` (`211` pre-Round 18 table + `22` view = `233`). **Implemented (`D8`, `OQ-78`)**: `db/03-erd.asta` synced to **213** table + **22** view = **235** cols; `04-erd.png` note updated to `"213-attribute"` via `astah_set_note_text`. |
+1. **Primary Source — Frontend Design (`FE`)**: The 11 exported UI files in `Parking Project` (verified byte-for-byte identical against `Parking Project.zip`) are the primary specification for screens, fields, labels, status badges, filters, and workflows.
+2. **Secondary Source — SRS v4.1 (`SRS`)**: `Quan ly bai dau xe oto_SRS_v4.1.docx` (cataloged in [`00-srs-catalog.md`](00-srs-catalog.md) and [`03-delete-rules-catalog.md`](03-delete-rules-catalog.md)) governs only where the Frontend is silent (e.g., 3-level address hierarchy `province -> district -> ward`, `date_of_birth`, `gender`, `identity_card_number`, soft-delete guards, and verbatim error messages not overridden by the Frontend).
+3. **Tertiary Source — Explicit Proposals (`[PROPOSAL]`)**: Any status code, tariff rule, or database guard message not explicitly shown in either the Frontend or the SRS is tagged `[PROPOSAL]` and linked to an Open Question in [`01-open-questions.md`](01-open-questions.md) and [`05-proposed-messages.md`](05-proposed-messages.md).
 
 ---
 
-## 4. Database Verification (`F17`), Relationship Chain Correction & ERD Audit (`F27`, `D8`)
+## 2. Team Lead Decisions (`TL-01`–`TL-16`)
 
-### 4.1 PostgreSQL 18.6 Verification of `F17` (`D5` Implemented in `db/01-schema.sql`)
+### 2.1. Compact Decision Index
 
-Tested in throwaway `postgres:18.6` containers (`--rm --tmpfs /var/lib/postgresql:rw`, random password, `docker volume ls -q` = `27`): `fn_normalize_license_plate(p_input TEXT)` (`db/01-schema.sql:424-432`) returns `UPPER(REGEXP_REPLACE(p_input, '[^A-Za-z0-9]', '', 'g'))`. `vehicle.license_plate_norm` (`line 443`) and `vehicle_entry_exit_log.license_plate_norm` (`line 692`) are `STORED` generated columns with `CHECK (license_plate_norm <> '')` (`lines 458, 705`). `uq_vehicle_license_plate_active` (`line 482`) and `uq_log_open_session_plate` (`line 739`) reject duplicate variants (`'51K-992.14'`, `'51K-992-14'`, `'51K99214'`, `'51K 992 14'`, `'51k-992.14'` -> `'51K99214'`) with `SQLSTATE 23505` (`T1`, `T5`) and allow reuse after soft-delete (`T4`). `fn_guard_slot_reservation_on_entry()` (`line 1069`) compares normalized plates, accepting all 4 variants (`T2`) and rejecting `'51K-992.15'` with `SQLSTATE 23514` (`'Lỗi dữ liệu không tìm thấy đê lưu'`, `T3`).
+| ID | Domain | Primary FE Evidence | Schema v2 Target |
+| :--- | :--- | :--- | :--- |
+| `TL-01` | Login & Self-Registration | `login-container.png` | `account` (`email`, `phone`, `CUSTOMER`) |
+| `TL-02` | 4-Level Parking Hierarchy | `Main Page`, `Trang chủ`, `Sơ đồ bãi` | `parking_lot`, `parking_floor`, `parking_zone`, `parking_slot` |
+| `TL-03` | Slot Kinds, EV & Statuses | `Main Page.png`, `Sơ đồ bãi đậu xe — Smart Mobility.png` | `parking_slot`, `fn_guard_parking_slot_status` |
+| `TL-04` | Slot Reservations | `Main Page.png`, `Sơ đồ bãi đậu xe — Smart Mobility.png` | `slot_reservation`, `excl_reservation_slot_time_overlap` |
+| `TL-05` | Visitor Entry & Session Code | `Lịch sử ra/vào — Smart Mobility.png` | `vehicle_entry_exit_log` (`vehicle_id NULL`, `session_code`) |
+| `TL-06` | Gates & AI Plate Recognition | `Trang chủ`, `Main Page`, `Lịch sử ra/vào` | `parking_gate`, `vehicle_entry_exit_log` |
+| `TL-07` | Payments (`CASH`, `VIETQR`) | `Trang chủ`, `Main Page`, `Quản lý vé`, `Quản lý xe` | `payment`, `v_revenue_today_by_method` |
+| `TL-08` | Customer & Plate Blacklist | `Trang chủ`, `Main Page`, `Khách hàng` | `customer`, `plate_blacklist` |
+| `TL-09` | Vehicles (`CAR`, `MOTO`, `EV`) | `Quản lý xe — Smart Mobility.png` | `vehicle_type`, `vehicle` |
+| `TL-10` | Tickets, Tariffs & Renewals | `Quản lý vé — Smart Mobility.png`, `Quản lý xe` | `ticket_type`, `ticket`, `ticket_renewal` |
+| `TL-11` | Employees & 4 Positions | `Quản lý nhân viên - Smart mobility.png` | `position`, `employee` |
+| `TL-12` | Operational Activity Feed | `Sơ đồ bãi đậu xe — Smart Mobility.png` | `activity_log`, `trg_activity_log_immutable` |
+| `TL-13` | Anomaly & Emergency Alerts | `Trang chủ — Smart Mobility.png`, `Main Page.png` | `system_alert` |
+| `TL-14` | Dashboard KPIs & Analytics | `Trang chủ — Smart Mobility.png`, `Main Page.png` | `v_slot_occupancy_by_floor`, `v_traffic_by_hour`, `v_ai_recognition_stats` |
+| `TL-15` | Preserved SRS Rules & Views | SRS 4.1–4.8, `Tasks_Sprint_1` | `administrative_*`, `news`, `notification`, `fn_stat_*` |
+| `TL-16` | Pure UI / Marketing Elements | `Main Page.png`, `Vector.png`, `clarity_edit-line.png` | UI only (`0` database tables) |
 
-### 4.2 Why `parking_slot -> ticket -> vehicle -> employee` Is Wrong & Corrected 25-FK Table
+### 2.2. Detailed Decision Specifications
 
-1. **Reversed Direction**: `ticket.slot_id` references `parking_slot(id)` (`fk_ticket_slot`, `line 595`: **`ticket -> parking_slot`**).
-2. **Zero `vehicle <-> employee` FKs (`0`)**: `pg_constraint` confirms `0` FKs between `vehicle` and `employee`. `vehicle` references `customer`, `vehicle_type`, `ticket_type` (`lines 454-456`); `employee` is referenced by `ticket.issued_by` (`fk_ticket_issued_by`), `ticket_renewal.renewed_by`, `vehicle_entry_exit_log.entry_staff_id`/`exit_staff_id`, and `news.author_id`.
-3. **Visual Cause (`07-erd-parking-ticket.png`)**: Stub `employee` (`x=1250,y=920`) sat beside stub `vehicle` (`x=800,y=920`) below `ticket` (`x=760,y=460`) while **`fk_ticket_issued_by` (`ticket -> employee`) was omitted** before Round 19 (`D8`).
-
-| FK Constraint (`Child -> Parent`)|Note|
-| :---|:---|
-| `fk_ticket_slot`: `ticket(slot_id) -> parking_slot(id)`|`ticket->parking_slot`|
-| `fk_ticket_vehicle_customer`: `ticket(vehicle_id, customer_id) -> vehicle(id, customer_id)`|`ticket->vehicle->customer`|
-| `fk_vehicle_customer`: `vehicle(customer_id) -> customer(id)`|`vehicle->customer`|
-| `fk_ticket_issued_by`: `ticket(issued_by) -> employee(id)`|Added `07`,`08` (`D8`)|
-| `fk_ticket_type`: `ticket(ticket_type_id) -> ticket_type(id)`|`ticket->ticket_type`|
-| `fk_vehicle_type`: `vehicle(vehicle_type_id) -> vehicle_type(id)`|Added `07` (`D8`)|
-| `fk_vehicle_ticket_type`: `vehicle(ticket_type_id) -> ticket_type(id)`|Added `07` (`D8`)|
-| `fk_renewal_ticket`: `ticket_renewal(ticket_id) -> ticket(id)`|`ticket_renewal->ticket`|
-| `fk_renewal_old_slot`: `ticket_renewal(old_slot_id) -> parking_slot(id)`|Added `07` (`D8`)|
-| `fk_renewal_new_slot`: `ticket_renewal(new_slot_id) -> parking_slot(id)`|`ticket_renewal->parking_slot`|
-| `fk_renewal_renewed_by`: `ticket_renewal(renewed_by) -> employee(id)`|`ticket_renewal->employee`|
-| `fk_slot_allowed_slot`: `slot_allowed_vehicle_type(slot_id) -> parking_slot(id)`|`slot_allowed->parking_slot`|
-| `fk_log_ticket`: `vehicle_entry_exit_log(ticket_id) -> ticket(id)`|`log->ticket`|
-| `fk_log_vehicle`: `vehicle_entry_exit_log(vehicle_id) -> vehicle(id)`|`log->vehicle`|
-| `fk_log_slot`: `vehicle_entry_exit_log(slot_id) -> parking_slot(id)`|`log->parking_slot`|
-| `fk_log_entry_staff`: `vehicle_entry_exit_log(entry_staff_id) -> employee(id)`|`log->employee`|
-| `fk_log_exit_staff`: `vehicle_entry_exit_log(exit_staff_id) -> employee(id)`|Added `08` (`D8`)|
-| `fk_news_author`: `news(author_id) -> employee(id)`|`news->employee`|
-| `fk_employee_account`: `employee(account_id) -> account(id)`|Added `08` (`D8`)|
-| `fk_employee_position`: `employee(position_id) -> position(id)`|`employee->position`|
-| `fk_employee_district_province`: `employee(district_id, province_id) -> administrative_district(id, province_id)`|`employee->district`|
-| `fk_employee_ward_district`: `employee(ward_id, district_id) -> administrative_ward(id, district_id)`|`employee->ward`|
-| `fk_customer_account`: `customer(account_id) -> account(id)`|`customer->account`|
-| `fk_customer_district_province`: `customer(district_id, province_id) -> administrative_district(id, province_id)`|`customer->district`|
-| `fk_customer_ward_district`: `customer(ward_id, district_id) -> administrative_ward(id, district_id)`|`customer->ward`|
-
-### 4.3 Per-Diagram FK Link Audit (`F27`, `F28`, `F31`) & `astah-uml` MCP Tool Implementation (`D8`)
-
-Per [`db/00-README.md`](../../db/00-README.md) lines `290` & `314–318`, `11` `deleted_by` FKs are on `04-erd.png`, and `05..09` use **Collapsed Neighbor Stubs** (`200..240x45 px`, `F28`). In Round 19 (`D8`, `OQ-78`), all **12 missing business FKs** on `05..08`, the two `license_plate_norm` columns (`213` table + `22` view = `235` total attributes), and the `04-erd.png` legend note (`"213-attribute"`) were added via `astah-uml` MCP tools (**0** missing business FKs remaining):
-
-| Diagram (`PNG`, `Unique/Nodes`, `Before->After FKs`)|12 Business FKs Added in Round 19 (`F27`, **0** Missing After)|Layout / Sync Result (`F28`, `F31`)|
-| :---|:---|:---|
-| **`ERD_Overview`** (`04-erd.png`, `23/23`, **44->44**)|**0** (`33` business + `11` `deleted_by` drawn)|Note `209-attribute` -> `213-attribute`; `2` `license_plate_norm` cols (`F31`)|
-| **`Account_Staff`** (`05-erd-account-staff.png`, `7/7`, **6->7**)|**+1**: `fk_admin_ward_district` (**0** missing)|Stubs retained; `0` crossings|
-| **`Customer_Vehicle`** (`06-erd-customer-vehicle.png`, `7/7`, **6->7**)|**+1**: `fk_admin_ward_district` (**0** missing)|`vehicle.license_plate_norm` (`«PUQ»`) added; `0` crossings|
-| **`Parking_Ticket`** (`07-erd-parking-ticket.png`, `8/10`, **9->14**)|**+5**: `fk_ticket_issued_by`, `fk_renewal_old_slot`, `fk_renewal_old_ticket_type`, `fk_vehicle_ticket_type`, `fk_vehicle_type` (**0** missing)|`parking_slot` & `ticket_type` stubs (`F28`) retained; `0` crossings|
-| **`Operations_Content`** (`08-erd-operations-content.png`, `8/9`, **6->11**)|**+5**: `fk_log_exit_staff`, `fk_ticket_issued_by`, `fk_ticket_slot`, `fk_ticket_vehicle_customer`, `fk_employee_account` (**0** missing)|`vehicle_entry_exit_log.license_plate_norm` (`«PUQ»`) added; 2nd `employee` stub (`F28`) retained; `0` crossings|
-| **`Reference_Views`** (`09-erd-reference-views.png`, `7/7`, **2->2**)|**0** (`fk_admin_district_province`, `fk_admin_ward_district` drawn)|`22` view cols (`6+4+6+6`) present|
-
-**Why `D8` Paused in Round 18 Per Owner Decision (6) & Round 19 Verification (`38 -> 39` `astah-uml` MCP Tools)**:
-Testing a sandbox copy of `db/03-erd.asta` against `C:\Users\Kirito\.gemini\antigravity\mcp\astah-uml\*.json` and `D:\GitHub\Server\mcp-uml\bridge\src\com\mcp\astah\{ModelOperations,DiagramOperations}.java` confirmed **4 of 5 operations reported in Round 18 already worked**, leaving **1 real gap** (fixed in Round 19 Task D & applied in Task E):
-
-- **Verified Working (4/5)**: (1) `astah_add_presentation_link` (`DiagramOperations.java:339-464`, `line 351`) resolves `relationship` by FK name; (2) `astah_add_attribute` (`ModelOperations.java:224-268`, `lines 231, 237, 244`) with `type="VARCHAR(20)"` and `stereotype="PUQ"` binds to `DataTypes::VARCHAR(20)` (`41` classes unchanged); (3) `«PUQ»` removal works via `astah_delete_element` + `astah_add_attribute` (`ModelOperations.java:224-268, 469-507`); (4) `astah_add_presentation_node` (`DiagramOperations.java:271-327`, `lines 277-303`) and `astah_set_presentation_style` (`lines 482-564`, `lines 495-525`) accept `width` and `height`.
-- **Single Real Gap (1/5 — Fixed in Round 19 Task D & Applied in Task E)**: None of the 38 tools called `IPresentation.setLabel(String)` on a `Note` (`DiagramOperations.java:87-127`, `lines 482-564`; `handleGetDiagramInfo` `lines 571-640` reads `node.getLabel()` at `line 586`). Task D added `astah_set_note_text` (`39` tools, `DiagramOperations.java:1383-1497`), and Task E regenerated `db/03-erd.asta` and `db/04-erd.png`..`db/09-erd-reference-views.png` via MCP tools.
+- **`TL-01` — Login & Account**:
+  - **FE Evidence**: `login-container.png` labels the login input `"Email hoặc Số điện thoại"`, includes `"Ghi nhớ đăng nhập"`, `"Quên mật khẩu?"`, and `"Chưa có tài khoản? Đăng ký ngay"`.
+  - **Resolution**: Replaced `account.username` with `email VARCHAR(100) NULL` and `phone VARCHAR(15) NULL`, enforced `ck_account_login_identifier_present CHECK (num_nonnulls(email, phone) >= 1)`, `ck_account_email_format`, `ck_account_phone_digits CHECK (phone IS NULL OR phone ~ '^[0-9]{9,15}$')`, and active partial unique indexes `uq_account_email_active` (`email`) and `uq_account_phone_active` (`phone`). Kept `role IN ('MANAGER', 'EMPLOYEE', 'CUSTOMER')` so self-registration creates a `CUSTOMER` account + `customer` profile. Retained `persistent_login_token` and `password_reset_token`.
+- **`TL-02` — Parking Structure (Lot -> Floor -> Zone -> Slot)**:
+  - **FE Evidence**: `Sơ đồ bãi đậu xe — Smart Mobility.png` (`"Bãi đỗ xe: Bãi xe Smart Mobility"`, `"+ Thêm tầng"`, `"+ Thêm khu"`, `"+ Thêm ô đỗ xe"`, `"Quản lý cấu trúc bãi"`, `"Tầng B1"`, `"Tầng B2"`, `"Tầng F1"`, `"Khu A"`, `"Khu B"`, `"Khu C"`, slots `"A-01"`..`"A-08"`, `"B-01"`..`"B-08"`), `Trang chủ — Smart Mobility.png` (`"Tầng B1"`, `"Tầng B2"`, `"Tầng B3"`), `Quản lý vé — Smart Mobility.png` (`"Tầng B1 - A10"`, `"Tầng B2 - B12"`, `"Tầng B1 - C03"`, `"Tầng B3 - A01"`), and `Quản lý xe — Smart Mobility.png` (`"Khu A · Tầng 2 · Slot 42"`, `"Khu B · Slot M12"`).
+  - **Resolution**: Added `parking_lot` (`code`, `name`, `address`, `is_active`), `parking_floor` (`lot_id`, `code VARCHAR(20)`, `name VARCHAR(50)`, `sort_order`, `uq_parking_floor_lot_code_active`), and `parking_zone` (`floor_id`, `code VARCHAR(20)`, `name VARCHAR(50)`, `description`, `uq_parking_zone_floor_code_active`). Updated `parking_slot` to reference `zone_id` via `fk_slot_zone FOREIGN KEY (zone_id) REFERENCES parking_zone (id) ON DELETE RESTRICT`, `code VARCHAR(20)` (`ck_slot_code_format`, `uq_parking_slot_zone_code_active`), and retained `map_row`, `map_col` (`uq_parking_slot_zone_map_pos_active`), `width`, `length`, and `height`.
+- **`TL-03` — Slot Types, EV Charging & Statuses**:
+  - **FE Evidence**: `Main Page.png` (`"Chỗ trống (Available)"`, `"Đã đỗ xe (Occupied)"`, `"Đã đặt trước (Reserved)"`, `"Sạc xe điện (EV Charging)"`, `"Bảo trì / Tạm khóa"`), `Sơ đồ bãi đậu xe — Smart Mobility.png` (`"DÃY A1 - A08 (XE Ô TÔ TIÊU CHUẨN)"`, `"DÃY B1 - B08 (XE ƯU TIÊN)"`, `"CẢM BIẾN SIÊU ÂM ACTIVE"`, `"Trống (Available)"`, `"Có xe (Occupied)"`, `"Đặt trước (Reserved)"`, `"BẢO TRÌ"`, and manual buttons `"Đánh dấu trống"`, `"Đánh dấu có xe"`, `"Đánh dấu đặt trước"`, `"Đánh dấu bảo trì"`).
+  - **Resolution**: Added `slot_kind VARCHAR(20) NOT NULL DEFAULT 'STANDARD'` (`ck_slot_kind_enum CHECK (slot_kind IN ('STANDARD', 'PRIORITY', 'EV_CHARGING'))`), `status IN ('AVAILABLE', 'OCCUPIED', 'RESERVED', 'CHARGING', 'MAINTENANCE')` (`ck_slot_status_enum`), `ck_slot_charging_requires_ev_kind CHECK (status <> 'CHARGING' OR slot_kind = 'EV_CHARGING')`, and `notes TEXT NULL` on `parking_slot`. Slot statuses are synchronized by `fn_recompute_slot_status()` while `fn_guard_parking_slot_status()` blocks manual status changes that contradict open sessions or active tickets/reservations (`PROP-4.5.2-P02`..`P04`, `OQ-81`).
+- **`TL-04` — Slot Reservation (`Đặt trước`)**:
+  - **FE Evidence**: `Sơ đồ bãi đậu xe — Smart Mobility.png` shows `"Đặt trước / Bảo trì"`, `"A-04 ĐÃ ĐẶT 13:30"`, `"A-05 ĐÃ ĐẶT 14:30"`, `"B-07 ĐÃ ĐẶT 15:00"`, `"Người đặt trước"`, and `"Đánh dấu đặt trước"`.
+  - **Resolution**: Added `slot_reservation` (`code`, `slot_id`, `customer_id NULL`, `vehicle_id NULL`, `reserved_name`, `reserved_phone`, `reserved_from`, `reserved_until`, `status IN ('ACTIVE', 'FULFILLED', 'EXPIRED', 'CANCELLED')` `[PROPOSAL]` `OQ-81`, `notes`, `created_by`, soft-delete + `row_version`) with GiST exclusion constraint `excl_reservation_slot_time_overlap` (`tstzrange(reserved_from, reserved_until, '[)') WHERE (deleted_at IS NULL AND status = 'ACTIVE')`), `fn_guard_slot_reservation_write()`, `fn_sync_slot_status_on_reservation()`, and conflict check in `fn_guard_slot_reservation_on_entry()` (`PROP-4.5.2-P05`, `OQ-81`).
+- **`TL-05` — Unregistered Visitor Vehicles & Session Code**:
+  - **FE Evidence**: `Lịch sử ra/vào — Smart Mobility.png` displays `"Mã phiên đỗ"` / `"Mã phiên đỗ xe"`, `"Biển số xe"`, `"Thời gian vào"`, `"Thời gian ra"`, `"Tổng thời gian đỗ"`, `"Cước phí"`, and `"Hình ảnh đối soát"`.
+  - **Resolution**: Changed `vehicle_entry_exit_log.vehicle_id` to `BIGINT NULL` so unregistered visitors can check in and out. Added `session_code VARCHAR(30) NOT NULL UNIQUE` (`uq_log_session_code`) and `fee_amount NUMERIC(12,2) NOT NULL DEFAULT 0` (`ck_log_fee_nonnegative`). Kept `license_plate` and stored generated `license_plate_norm`. Updated `uq_log_open_session_vehicle` to `WHERE exit_time IS NULL AND vehicle_id IS NOT NULL` while `uq_log_open_session_plate` prevents duplicate open sessions for any normalized plate. Updated `fn_guard_slot_reservation_on_entry()` to verify normalized plate match only when `NEW.vehicle_id IS NOT NULL` (raising verbatim SRS message `'Lỗi dữ liệu không tìm thấy đê lưu'` on mismatch). Parking duration (`Tổng thời gian đỗ`) is derived from `COALESCE(exit_time, CURRENT_TIMESTAMP) - entry_time`.
+- **`TL-06` — Gates & AI License-Plate Recognition**:
+  - **FE Evidence**: `Trang chủ — Smart Mobility.png` (`"Tỉ lệ AI nhận dạng"` `98.4%`, `"AI: 98.4% (Tự động mở)"`, `"Nhập thủ công: 1.6% (19 xe)"`, `"Cổng vào 1"`, `"Cổng vào 2"`, `"Cổng ra 2"`, `"Xem ảnh (99%)"`, `"Ảnh khớp"`, `"Cần duyệt"`, `"Camera cổng ra 1: Độ sáng thấp, tỉ lệ chính xác thấp"`), `Main Page.png` (`"4 Cổng quét tự động"`, `"Cổng ra 1"`, `"Cổng vào 2"`, `"Cổng vào 1"`, `"Cổng ra 3"`).
+  - **Resolution**: Added `parking_gate` (`lot_id`, `code`, `name`, `direction IN ('IN', 'OUT')`, `camera_status IN ('ONLINE', 'LOW_LIGHT', 'DEGRADED', 'OFFLINE')`, `is_auto_scan`, `is_active`, `uq_parking_gate_lot_code_active`) and added `entry_gate_id`, `exit_gate_id`, `ai_confidence NUMERIC(5,2) NULL` (`0..100`), `recognition_source VARCHAR(20) NOT NULL DEFAULT 'AI'` (`'AI'`, `'MANUAL'`), and `review_status VARCHAR(20) NOT NULL DEFAULT 'AUTO'` (`'AUTO'`, `'MATCHED'`, `'NEEDS_REVIEW'`, `'APPROVED'`, `'REJECTED'` `[PROPOSAL]` `OQ-81`) on `vehicle_entry_exit_log`.
+- **`TL-07` — Payments (`Tiền mặt`, `QR` / `VietQR`, Per-Session & Ticket Fees)**:
+  - **FE Evidence**: `Trang chủ — Smart Mobility.png` (`"Doanh thu hôm nay"` `150.000đ`, `"Tiền mặt: 18% | QR: 82%"`), `Main Page.png` (`"VietQR"`, `"DOANH THU HÔM NAY"` `35.4M`), `Quản lý vé — Smart Mobility.png` (`"Giá vé"`, `"Giá gia hạn"`), `Lịch sử ra/vào — Smart Mobility.png` (`"Cước phí"`), and `Quản lý xe — Smart Mobility.png` (`"Chi phí thuộc module Vé/Giao dịch"`).
+  - **Resolution**: Added `payment` (`code`, `amount`, `method IN ('CASH', 'VIETQR')`, `status IN ('UNPAID', 'PAID', 'CANCELLED', 'REFUNDED')` `[PROPOSAL]` `OQ-81`, `paid_at`, `received_by`, `provider_ref`, `session_id`, `ticket_id`, `renewal_id`, `notes`, `ck_payment_single_target CHECK (num_nonnulls(session_id, ticket_id, renewal_id) = 1)`, `ck_payment_paid_timestamp`). Added `v_revenue_today_by_method` and updated `v_revenue_statistics` and `fn_stat_revenue_by_period`.
+- **`TL-08` — Customer Status, Blacklist & Debt**:
+  - **FE Evidence**: `Khách hàng — Smart Mobility.png` (`"Tổng khách hàng"` `1,420`, `"Thuê bao kích hoạt"` `1,280`, `"Sắp hết hạn (7 ngày)"` `42`, `"Blacklist/Tạm khoá"` `15`), `Trang chủ — Smart Mobility.png` & `Main Page.png` (`"Biển số 51G-888.88 thuộc Blacklist (Nợ phí)"`).
+  - **Resolution**: Added `status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'` (`'ACTIVE'`, `'SUSPENDED'`, `'BLACKLISTED'`) and `status_reason TEXT NULL` (`ck_customer_blacklist_reason`) on `customer`. Added `plate_blacklist` (`license_plate`, `license_plate_norm`, `reason NOT NULL`, `unpaid_amount NUMERIC(12,2) NOT NULL DEFAULT 0`, `is_active`, `added_by`, `uq_plate_blacklist_norm_active`) and view `v_customer_status_summary`.
+- **`TL-09` — Vehicles (`Ô tô`, `Xe máy`, `Xe điện`, `Ảnh`, `Ghi chú`, Derived Status)**:
+  - **FE Evidence**: `Quản lý xe — Smart Mobility.png` (`"Mã xe"`, `"Ảnh"`, `"Loại xe"`: `"Ô tô"`, `"Xe máy"`, `"Xe điện"`, `"Ghi chú"`, `"Trạng thái"`: `"Đang đỗ"`, `"Đang hoạt động"`, `"Đã rời bãi"`, `"Khách hàng liên kết với phương tiện"`).
+  - **Resolution**: Seeded `vehicle_type` with 3 rows (`CAR` `"Ô tô"`, `MOTO` `"Xe máy"`, `EV` `"Xe điện"`). Added `image_url TEXT NULL` and `notes TEXT NULL` on `vehicle` and kept `customer_id NOT NULL`. Vehicle parking status (`Đang đỗ` / `Đã rời bãi` / `Đang hoạt động`) is derived from `vehicle_entry_exit_log` (`exit_time IS NULL`).
+- **`TL-10` — Tickets, Types, Prices, Statuses & Renewals**:
+  - **FE Evidence**: `Quản lý vé — Smart Mobility.png` (`"Vé ngày"` `50.000đ`, `"Vé tháng"` `500.000đ`, `"Vé quý"` `1.200.000đ`) and `Quản lý xe — Smart Mobility.png` (`"Vé năm"`); 5 status badges on `Quản lý vé` (`"Đang hoạt động"`, `"Sắp hết hạn"`, `"Đã hết hạn"`, `"Đã hủy"`, `"Đang gia hạn"`); 3 dialogs (`"Thêm vé mới"`, `"Gia hạn vé"`, `"Chi tiết vé"` with `"Ghi chú"` and `"Lịch sử gia hạn"`).
+  - **Resolution**: Seeded `ticket_type` with 4 rows (`DAILY` `"Vé ngày"` `1` day `50000.00`, `MONTHLY` `"Vé tháng"` `30` days `500000.00`, `QUARTERLY` `"Vé quý"` `90` days `1200000.00`, `YEARLY` `"Vé năm"` `365` days `4800000.00` `[PROPOSAL]` `OQ-79`). Updated `ck_ticket_status_enum` to `('ACTIVE', 'RENEWING', 'RENEWED', 'EXPIRED', 'CANCELLED')`; `"Sắp hết hạn"` is derived when `status = 'ACTIVE' AND effective_to <= CURRENT_TIMESTAMP + INTERVAL '7 days'`. Added `notes TEXT NULL` on `ticket` and `ticket_renewal`. Kept `ck_ticket_time_order CHECK (effective_to > effective_from)` (1-day tickets stored as `[effective_from, effective_from + INTERVAL '1 day')`).
+- **`TL-11` — Employees & Positions**:
+  - **FE Evidence**: `Quản lý nhân viên - Smart mobility.png` (`"MÃ NV"`: `NV001..NV008`; 4 positions `"Quản lý"`, `"Nhân viên vận hành"`, `"Nhân viên thu ngân"`, `"Kỹ thuật viên"`; statuses `"Đang hoạt động"`, `"Không hoạt động"`) and `Quản lý vé — Smart Mobility.png` Dialog 3 (`"Nhân viên phát hành: NV0005"`).
+  - **Resolution**: Seeded `position` with 4 rows (`QL` `"Quản lý"`, `NVVH` `"Nhân viên vận hành"`, `NVTN` `"Nhân viên thu ngân"`, `KTV` `"Kỹ thuật viên"`). Updated `ck_employee_code_format` to `CHECK (code ~ '^NV[0-9]{3,4}$')` and added `employee.status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE'` (`CHECK (status IN ('ACTIVE', 'INACTIVE'))`).
+- **`TL-12` — Activity Feed (`Hoạt động gần đây`)**:
+  - **FE Evidence**: `Sơ đồ bãi đậu xe — Smart Mobility.png` (`"Hoạt động gần đây"` / `"Nhật ký thao tác"`).
+  - **Resolution**: Added append-only table `activity_log` (`id`, `actor_account_id`, `action`, `entity_type`, `entity_id`, `message`, `occurred_at`) protected by `trg_activity_log_immutable` (`fn_prevent_activity_log_mutation()`, `PROP-4.5.2-P06`, `OQ-81`).
+- **`TL-13` — Dashboard Alerts (`Cảnh báo bất thường và khẩn cấp`)**:
+  - **FE Evidence**: `Trang chủ — Smart Mobility.png` & `Main Page.png` (`"Biển số 51G-888.88 thuộc Blacklist (Nợ phí)"`, `"Cảnh báo đỗ xe quá 48 giờ tại vị trí B2 - 55"`, `"Camera cổng ra 1: Độ sáng thấp, tỉ lệ chính xác thấp"`).
+  - **Resolution**: Added `system_alert` (`id`, `alert_type IN ('BLACKLIST_PLATE', 'OVERSTAY', 'CAMERA_QUALITY', 'SYSTEM')`, `severity IN ('INFO', 'WARNING', 'CRITICAL')` `[PROPOSAL]` `OQ-81`, `message`, `entity_type`, `entity_id`, `occurred_at`, `resolved_at`, `resolved_by`, `created_at`).
+- **`TL-14` — Dashboard KPIs & Charts**:
+  - **FE Evidence**: `Trang chủ — Smart Mobility.png` (`"Kho vị trí"`, `"Lượt xe trong ngày"`, `"Doanh thu hôm nay"`, `"Tỉ lệ AI nhận dạng"`, `"Sơ đồ các tầng"`, `"Biểu đồ lưu lượng và công suất theo giờ"`).
+  - **Resolution**: Updated `v_slot_occupancy_by_floor` (grouping by `parking_lot`, `parking_floor`, and `parking_zone` with `occupied_slots`, `reserved_slots`, `charging_slots`, `available_slots`, `maintenance_slots`, `priority_slots`, `ev_charging_slots`, and `occupancy_rate_pct`) and added `v_revenue_today_by_method`, `v_traffic_by_hour`, and `v_ai_recognition_stats`.
+- **`TL-15` — Keep SRS Rules Where FE Is Silent**:
+  - **Resolution**: Preserved 3-level administrative address hierarchy (`administrative_province`, `administrative_district`, `administrative_ward` with composite FKs on `employee` and `customer`), `date_of_birth`, `gender IN ('Nam', 'Nữ')`, `identity_card_number`, `news`, `notification`, `v_customer_vehicle_summary`, `v_vehicle_traffic_daily`, `v_revenue_statistics`, `fn_stat_*` functions, `row_version` OCC triggers, soft-delete columns (`deleted_at`, `deleted_by`), and `ON DELETE RESTRICT` across all `69` foreign keys.
+- **`TL-16` — Pure UI / Marketing Elements (`UI only`)**:
+  - **FE Evidence**: `Main Page.png` (hero banner copy, `SmartPark UI Template Kit` footer), `Vector.png` (`17x17` icon), `clarity_edit-line.png` (`18x18` icon), and CSV/report export buttons (`"Xuất CSV"`, `"Xuất báo cáo"`).
+  - **Resolution**: Classified as pure frontend presentation / query-parameter controls requiring `0` database tables or columns.
 
 ---
 
-## 5. Owner / Product Owner Decision List (`D1..D8` — All Owner Approved)
+## 3. Frontend Screen-to-Database Traceability Summary
 
-| ID (`Topic & Findings / OQs`)|Owner-Approved Default|Round 19 Status|
-| :---|:---|:---:|
-| **D1** (`F01`, `F02`, `OQ-71`: Login Identifier & Self-Signup)|Login by `username` (`Tên đăng nhập`) per SRS 4.1; remove `"Đăng ký ngay"` on FE (no DB change).|**Owner Approved — Deferred to PO / FE**|
-| **D2** (`F05`, `F20`, `F25`, `F29`, `OQ-72`: Fees & Payments)|Keep payments, per-session fees, and transactions out of v1; derive duration/ID from `vehicle_entry_exit_log`.|**Owner Approved — Deferred to PO**|
-| **D3** (`F09`, `F10`, `OQ-73`: Floor Naming & Zones)|Keep `floor_number INTEGER` (`1..99`); add no `parking_lot` or `parking_zone` tables.|**Owner Approved — Deferred to PO**|
-| **D4** (`F06`–`F08`, `F11`, `F12`, `F18`, `F25`, `F26`, `OQ-74`: Non-SRS FE Extras)|Defer EV, priority, blacklist, gates, AI, extra notes, and activity feed to PO; retain `width`, `length`, `height` on `parking_slot`.|**Owner Approved — Deferred to PO**|
-| **D5** (`F17`, `OQ-75`: License-Plate Normalization)|Add `fn_normalize_license_plate(text)`, stored generated `license_plate_norm VARCHAR(20)`, unique indexes, and normalized trigger comparison.|**Owner Approved — IMPLEMENTED (`db/01-schema.sql`)**|
-| **D6** (`F13`–`F16`, `F19`, `F21`, `F22`, `F30`, `OQ-76`: Taxonomy, Seeds & Derived Statuses)|Keep seeds until PO confirms prices/types; keep `Sắp hết hạn`, `Đang đỗ`/`Đã rời bãi`, `Không hoạt động` derived; enforce `effective_to > effective_from`.|**Owner Approved — Deferred to PO**|
-| **D7** (`F11`, `OQ-77`: Manual Slot Buttons vs Trigger Sync)|Only `MAINTENANCE` is manual; `AVAILABLE`, `OCCUPIED`, `RESERVED` remain trigger-managed.|**Owner Approved — Deferred to PO / FE**|
-| **D8** (`F27`, `F28`, `F31`, `OQ-78`: Module ERD Links, Stubs & Legend)|Keep stub layout (`F28`), add `license_plate_norm` cols, draw 12 missing business FKs (`F27`), update `04-erd.png` note to `213-attribute` (`F31`) via `astah-uml` MCP tools (`astah_set_note_text` added in Task D).|**Owner Approved — IMPLEMENTED (`db/03-erd.asta`, `db/04..09.png`)**|
+All `11` PNG files in `Parking Project` (including the 3 ticket dialogs on `Quản lý vé — Smart Mobility.png`) were audited at full resolution:
+
+| # | FE File Name | Dimensions | Primary Database Tables & Views |
+| :-: | :--- | :---: | :--- |
+| `01` | `Khách hàng — Smart Mobility.png` | `1440x911` | `customer`, `ticket`, `v_customer_status_summary`, `v_customer_vehicle_summary` |
+| `02` | `Lịch sử ra/vào — Smart Mobility.png` | `1440x911` | `vehicle_entry_exit_log`, `parking_gate`, `parking_slot`, `vehicle`, `payment` |
+| `03` | `Main Page.png` | `1278x2065` | `parking_lot`, `parking_floor`, `parking_zone`, `parking_slot`, `system_alert`, `vehicle_entry_exit_log`, `v_slot_occupancy_by_floor`; template copy is `UI only (TL-16)` |
+| `04` | `Quản lý nhân viên - Smart mobility.png` | `1470x1299` | `employee`, `position`, `account`, `administrative_province`, `administrative_district`, `administrative_ward` |
+| `05a` | `Quản lý vé — Smart Mobility.png` (Main) | `3470x911` | `ticket`, `ticket_type`, `vehicle`, `customer`, `parking_floor`, `parking_zone`, `parking_slot` |
+| `05b` | `Quản lý vé — Smart Mobility.png` (`Thêm vé mới`) | `3470x911` | `ticket`, `ticket_type`, `vehicle`, `customer`, `parking_slot`, `payment` |
+| `05c` | `Quản lý vé — Smart Mobility.png` (`Gia hạn vé`) | `3470x911` | `ticket`, `ticket_renewal`, `ticket_type`, `parking_slot`, `payment` |
+| `05d` | `Quản lý vé — Smart Mobility.png` (`Chi tiết vé`) | `3470x911` | `ticket`, `ticket_renewal`, `ticket_type`, `vehicle`, `customer`, `parking_slot`, `employee` |
+| `06` | `Quản lý xe — Smart Mobility.png` | `1470x1580` | `vehicle`, `vehicle_type`, `customer`, `ticket`, `ticket_type`, `parking_zone`, `parking_floor`, `parking_slot`, `vehicle_entry_exit_log`, `v_customer_vehicle_summary` |
+| `07` | `Sơ đồ bãi đậu xe — Smart Mobility.png` | `1440x1750` | `parking_lot`, `parking_floor`, `parking_zone`, `parking_slot`, `slot_allowed_vehicle_type`, `slot_reservation`, `vehicle_entry_exit_log`, `activity_log`, `v_slot_occupancy_by_floor` |
+| `08` | `Trang chủ — Smart Mobility.png` | `1440x911` | `v_slot_occupancy_by_floor`, `v_revenue_today_by_method`, `v_traffic_by_hour`, `v_ai_recognition_stats`, `system_alert`, `plate_blacklist`, `vehicle_entry_exit_log`, `parking_gate` |
+| `09` | `Vector.png` | `17x17` | UI action/delete icon asset (`UI only (TL-16)`) |
+| `10` | `clarity_edit-line.png` | `18x18` | UI pencil/edit icon asset (`UI only (TL-16)`) |
+| `11` | `login-container.png` | `1200x693` | `account` (`email`, `phone`, `password_hash`, `role`), `persistent_login_token`, `password_reset_token`, `customer` |
 
 ---
 
-## 6. Implemented DDL for `D5` / `F17` / `OQ-75` in `db/01-schema.sql`
+## 4. Schema v1 to Schema v2 Delta Summary
 
-```sql
-CREATE FUNCTION fn_normalize_license_plate(p_input TEXT)
-RETURNS TEXT LANGUAGE sql IMMUTABLE STRICT PARALLEL SAFE AS $$
-    SELECT UPPER(REGEXP_REPLACE(p_input, '[^A-Za-z0-9]', '', 'g'));
-$$;
--- vehicle (lines 443, 458, 482) & vehicle_entry_exit_log (lines 692, 705, 731, 739):
--- license_plate_norm VARCHAR(20) GENERATED ALWAYS AS (fn_normalize_license_plate(license_plate)) STORED,
--- CONSTRAINT ck_vehicle_license_plate_norm_nonempty CHECK (license_plate_norm <> ''),
--- CONSTRAINT ck_log_license_plate_norm_nonempty CHECK (license_plate_norm <> ''),
-CREATE UNIQUE INDEX uq_vehicle_license_plate_active ON vehicle (license_plate_norm) WHERE deleted_at IS NULL;
-CREATE INDEX idx_log_license_plate ON vehicle_entry_exit_log (license_plate_norm);
-CREATE UNIQUE INDEX uq_log_open_session_plate ON vehicle_entry_exit_log (license_plate_norm) WHERE exit_time IS NULL;
--- fn_guard_slot_reservation_on_entry() (line 1069):
--- IF NOT FOUND OR fn_normalize_license_plate(NEW.license_plate) <> fn_normalize_license_plate(v_registered_plate) THEN
---     RAISE EXCEPTION 'Lỗi dữ liệu không tìm thấy đê lưu' USING ERRCODE = 'check_violation';
--- END IF;
-```
+### 4.1. Catalog Counts Comparison
+
+| Catalog Metric | Schema v1 (`HEAD`) | Schema v2 (Round 23) | Delta |
+| :--- | :---: | :---: | :---: |
+| Base tables (`public`) | `19` | `28` | `+9` |
+| Views (`public`) | `4` | `8` | `+4` |
+| Foreign keys (`contype = 'f'`) | `44` | `69` | `+25` |
+| Non-`RESTRICT` FKs (`confdeltype <> 'r'`) | `0` | `0` | `0` |
+| User triggers (`NOT tgisinternal`) | `14` | `25` | `+11` |
+| Trigger functions (`RETURNS TRIGGER`) | `5` | `9` | `+4` |
+| Non-trigger user SQL/PLpgSQL functions | `5` | `6` | `+1` |
+| Base table columns | `213` | `338` | `+125` |
+| View columns | `22` | `55` | `+33` |
+| Total columns (tables + views) | `235` | `393` | `+158` |
+| Undocumented tables / views / columns | `0` | `0` | `0` |
+
+### 4.2. New & Reworked Database Objects
+
+1. **9 New Base Tables**:
+   - `parking_lot`, `parking_floor`, `parking_zone` (`TL-02`)
+   - `slot_reservation` (`TL-04`)
+   - `parking_gate` (`TL-06`)
+   - `payment` (`TL-07`)
+   - `plate_blacklist` (`TL-08`)
+   - `activity_log` (`TL-12`)
+   - `system_alert` (`TL-13`)
+2. **4 New Views**:
+   - `v_revenue_today_by_method` (`TL-07`, `TL-14`)
+   - `v_traffic_by_hour` (`TL-14`)
+   - `v_ai_recognition_stats` (`TL-06`, `TL-14`)
+   - `v_customer_status_summary` (`TL-08`)
+3. **10 Modified Base Tables**:
+   - `account` (`email`/`phone` login identifiers replacing `username`, `TL-01`)
+   - `position` (seeded with 4 FE positions: `QL`, `NVVH`, `NVTN`, `KTV`, `TL-11`)
+   - `employee` (`code ~ '^NV[0-9]{3,4}$'`, `status IN ('ACTIVE', 'INACTIVE')`, `TL-11`)
+   - `customer` (`status IN ('ACTIVE', 'SUSPENDED', 'BLACKLISTED')`, `status_reason`, `TL-08`)
+   - `vehicle_type` (seeded with `CAR`, `MOTO`, `EV`, `TL-09`)
+   - `ticket_type` (seeded with `DAILY`, `MONTHLY`, `QUARTERLY`, `YEARLY`, `TL-10`)
+   - `vehicle` (`image_url TEXT NULL`, `notes TEXT NULL`, `TL-09`)
+   - `parking_slot` (`zone_id`, `code VARCHAR(20)`, `slot_kind`, `status` adds `'CHARGING'`, `notes TEXT NULL`, retained `map_row`/`map_col` & `width`/`length`/`height`, `TL-02`, `TL-03`)
+   - `ticket` (`status` adds `'RENEWING'`, `notes TEXT NULL`, `TL-10`) and `ticket_renewal` (`notes TEXT NULL`, `TL-10`)
+   - `vehicle_entry_exit_log` (`session_code`, `vehicle_id NULL`, `entry_gate_id`, `exit_gate_id`, `ai_confidence`, `recognition_source`, `review_status`, `fee_amount`, `TL-05`, `TL-06`)
+4. **ERD Notice**:
+   - The Astah UML model ([`db/03-erd.asta`](../../db/03-erd.asta)) and exported diagrams ([`db/04-erd.png`](../../db/04-erd.png)–[`db/09-erd-reference-views.png`](../../db/09-erd-reference-views.png)) remain at Schema v1 hashes in Round 23 and will be regenerated in Round 24.

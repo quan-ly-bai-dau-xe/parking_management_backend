@@ -13,7 +13,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
    - Test conditions in the SRS Failure column without verbatim text are cataloged as **Scenario Descriptions** (`CASE-<Screen>-TH<Number>`).
 2. **Standardization of Proposals ([PROPOSAL])**:
    - When a backend API must return an error or success message where the SRS provides no text, assign a proposal code: `PROP-<Screen>-P<Number>`.
-   - Each `PROP-` entry links directly to an open question in `docs/requirements/01-open-questions.md` (`OQ-13` through `OQ-38`, `OQ-63`, `OQ-67`).
+   - Each `PROP-` entry links directly to an open question in `docs/requirements/01-open-questions.md` (`OQ-13` through `OQ-38`, `OQ-63`, `OQ-67`, `OQ-81`).
    - Strictly prohibit claiming these proposals as "verbatim SRS messages" in rules, skills, or agent prompts.
 
 ---
@@ -43,11 +43,16 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ---
 
-### 2.3. Vehicle In/Out & Parking Map Module (SRS 4.5)
+### 2.3. Vehicle In/Out & Parking Map Module (SRS 4.5 & FE `Sơ đồ bãi đậu xe`)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
-| **PROP-4.5.2-P01** | 4.5.2 Parking Map (Bản đồ bãi xe) / 4.5.1 Vehicle In/Out | Attempting to occupy or select a slot currently under maintenance | SRS does not define error dialogue string for maintenance slots | `Vị trí này đang bảo trì.` | 400 Bad Request | **OQ-63**, **OQ-67** |
+| **PROP-4.5.2-P01** | 4.5.2 Parking Map / 4.5.1 Vehicle In/Out | Attempting to occupy or select a slot currently under maintenance | SRS does not define error dialogue string for maintenance slots | `Vị trí này đang bảo trì.` | 400 Bad Request | **OQ-63**, **OQ-67** |
+| **PROP-4.5.2-P02** | `Sơ đồ bãi đậu xe` (`TL-03`) | Changing slot status away from `OCCUPIED` while an open session exists | FE & SRS do not define guard message | `Không thể chuyển trạng thái vị trí khi đang có xe đỗ trong ô.` | 400 Bad Request | **OQ-81** |
+| **PROP-4.5.2-P03** | `Sơ đồ bãi đậu xe` (`TL-03`) | Manually setting slot to `OCCUPIED` without an open parking session | FE & SRS do not define guard message | `Không thể chuyển vị trí sang trạng thái đang có xe khi không có phiên đỗ xe đang mở.` | 400 Bad Request | **OQ-81** |
+| **PROP-4.5.2-P04** | `Sơ đồ bãi đậu xe` (`TL-03`) | Manually setting slot to `AVAILABLE` while an active ticket or reservation exists | FE & SRS do not define guard message | `Không thể đánh dấu vị trí trống khi đang có xe đỗ hoặc đặt trước còn hiệu lực.` | 400 Bad Request | **OQ-81** |
+| **PROP-4.5.2-P05** | 4.5.1 Vehicle In/Out (`TL-04`) | Attempting to enter a slot reserved via `slot_reservation` for another vehicle | FE & SRS do not define reservation conflict message | `Vị trí này đã được đặt trước cho phương tiện khác.` | 400 Bad Request | **OQ-81** |
+| **PROP-4.5.2-P06** | `Sơ đồ bãi đậu xe` (`TL-12`) | Attempting `UPDATE` or `DELETE` on append-only `activity_log` | FE & SRS do not define immutability guard message | `Nhật ký hoạt động là bảng chỉ ghi (append-only), không cho phép cập nhật hoặc xóa.` | 400 Bad Request | **OQ-81** |
 
 ---
 

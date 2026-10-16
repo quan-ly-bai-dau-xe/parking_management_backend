@@ -1,6 +1,6 @@
 # Car Parking Lot Management System Backend
 
-Intelligent Parking Lot Management System — Backend REST API.
+Intelligent Parking Lot Management System (`Bãi xe Smart Mobility`) — Backend REST API.
 
 [![Python 3.14.7](https://img.shields.io/badge/python-3.14.7-blue.svg)](https://www.python.org/downloads/)
 [![Django 6.1.2](https://img.shields.io/badge/django-6.1.2-green.svg)](https://www.djangoproject.com/)
@@ -9,7 +9,9 @@ Intelligent Parking Lot Management System — Backend REST API.
 ## 1. Project Overview & Scope
 
 - **Scope**: Backend REST API only (`parking_management_backend`). Client apps integrate via OpenAPI 3.0.
+- **Specification Hierarchy**: The Frontend design (`docs/requirements/06-frontend-srs-db-alignment.md`, `TL-01`–`TL-16`) is the **primary** source of requirements; the SRS v4.1 catalog (`docs/requirements/00-srs-catalog.md`) is **secondary** where the Frontend is silent.
 - **Fixed Tech Stack**: Python `3.14.7` (3.15 forbidden), Django `6.1.2` (LTS roadmap to 6.2 in April 2027), DRF `3.18.3`, PostgreSQL `18.6` via Docker Compose (psycopg `3.3.6`). Details in [ADR-0001](docs/adr/0001-fixed-tech-stack-and-lts-roadmap.md).
+- **Database Schema v2 (`db/`)**: `28` base tables, `8` analytical views, `69` `ON DELETE RESTRICT` foreign keys, and `25` triggers documented in [`db/00-README.md`](db/00-README.md).
 - **Public Repo Security**: Zero secrets, zero production tokens, zero live credentials.
 
 ## 2. Architecture & Data Safety
@@ -19,10 +21,10 @@ Intelligent Parking Lot Management System — Backend REST API.
   - `services/`: Write business logic, transactional boundaries (`@transaction.atomic`), safe-delete guards.
   - `selectors/`: Read-only queries with `select_related()` / `prefetch_related()`.
 - **Safe Data Deletion ([ADR-0003](docs/adr/0003-data-deletion-soft-delete-protect-and-audit.md))**:
-  - Soft delete by default (`deleted_at`, `deleted_by`) on all business models. Hard deletion is prohibited.
+  - Soft delete by default (`deleted_at`, `deleted_by`) on business models. Hard deletion is prohibited.
   - `on_delete=models.PROTECT` on foreign keys prevents physical hard deletion; service guards prevent soft delete if active relations exist.
-  - Financial records (`Ticket`, `VehicleEntryExitLog`) are strictly immutable.
-  - Concurrency control via pessimistic row locking (`select_for_update()`).
+  - Financial and operational audit records (`Ticket`, `TicketRenewal`, `VehicleEntryExitLog`, `Payment`, `ActivityLog`) are protected by immutability / soft-delete guards.
+  - Concurrency control via pessimistic row locking (`select_for_update()`) and optimistic concurrency (`row_version`).
 
 ## 3. Quick Start (Development)
 
@@ -45,7 +47,8 @@ Intelligent Parking Lot Management System — Backend REST API.
 
 ## 4. Documentation & AI Operating System
 
-- **Requirements**: [`docs/requirements/`](docs/requirements/) (SRS catalog, open questions, DoD).
+- **Requirements**: [`docs/requirements/`](docs/requirements/) (`06-frontend-srs-db-alignment.md` primary FE-first decisions, `00-srs-catalog.md` secondary SRS catalog, open questions, DoD).
+- **Database**: [`db/00-README.md`](db/00-README.md), [`db/01-schema.sql`](db/01-schema.sql), [`db/02-seed.sql`](db/02-seed.sql).
 - **Architecture Decision Records**: [`docs/adr/`](docs/adr/) (0001 to 0005).
 - **Claude Code AI Rules**: [`.claude/rules/`](.claude/rules/) (01 to 09) and [`CLAUDE.md`](CLAUDE.md).
 
