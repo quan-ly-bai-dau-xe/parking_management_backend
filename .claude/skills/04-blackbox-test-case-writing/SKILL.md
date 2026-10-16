@@ -1,12 +1,14 @@
 ---
-name: blackbox-test-case-writing
+name: 04-blackbox-test-case-writing
 description: Design black-box test suites for backend APIs matching the 5-sheet template structure (Cover, Test_Case_List, Layout, Test_Case_Screen, Data_DB_Screen).
 ---
 
 # Skill: Black-box Test Case Specification
 
 ## 1. Objective
+
 Design black-box test cases for backend API endpoints, directly mapping to the 5-sheet structure found in the project's official test template (`01-Template/Blackbox_TC/`):
+
 1. **Sheet 1: `Cover`**: Module metadata, author, date, document version.
 2. **Sheet 2: `Test_Case_List`**: Summary matrix of test case identifiers, objectives, and execution status.
 3. **Sheet 3: `Layout`**: Contract validation (HTTP headers, status codes, JSON schema, data types).
@@ -16,7 +18,9 @@ Design black-box test cases for backend API endpoints, directly mapping to the 5
 ## 2. Test Specification Workflow
 
 ### Structure of Sheet `Test_Case_<Screen>`
+
 Each test case must include standardized attributes:
+
 - **Test Case ID**: `TC_<Screen>_<Type>_<Number>` (e.g. `TC_4.3.4_DELETE_01`, `TC_4.1_LOGIN_02`).
 - **Classification**:
   - `Normal`: Valid input data returning HTTP 200/201/204.
@@ -31,7 +35,9 @@ Each test case must include standardized attributes:
   - Verbatim message string matching SRS (`MSG-...`) or proposal catalog (`PROP-...`).
 
 ### Structure of Sheet `Data_DB_<Screen>`
+
 Document explicit database state changes:
+
 - **Pre-Test Data**:
   - `id=101, license_plate='43A-12345', deleted_at=NULL, deleted_by=NULL`
 - **Post-Test Data**:
@@ -39,6 +45,7 @@ Document explicit database state changes:
   - Historical audit snapshot: `history_type='~'`, `history_change_reason='Soft deleted'`
 
 ## 3. Generic Test Suite Template
+
 ```markdown
 <!-- ILLUSTRATIVE TEST SUITE -->
 ### Test Suite: Parking Ticket Deletion (SRS 4.6.4)
@@ -53,6 +60,7 @@ Document explicit database state changes:
 ```
 
 ## 4. Verification Checklist
+
 - [ ] Expected error messages cite canonical entries from `docs/requirements/00-srs-catalog.md` or proposal registry.
 - [ ] Comprehensive coverage: Normal, Boundary, Missing fields, Unauthorized, Concurrency.
 - [ ] Explicit Pre-DB and Post-DB states defined for mutating operations.

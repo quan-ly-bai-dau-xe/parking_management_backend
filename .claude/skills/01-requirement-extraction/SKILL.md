@@ -1,14 +1,16 @@
 ---
-name: requirement-extraction
+name: 01-requirement-extraction
 description: Extract functional requirements, data fields, business rules, and verbatim SRS messages with stable citations and traceability matrices.
 ---
 
 # Skill: Requirement Extraction & Traceability Matrix
 
 ## 1. Objective
+
 This skill defines the standardized procedure for extracting and mapping business requirements from the canonical requirements catalog (`docs/requirements/00-srs-catalog.md`) into backend architectural components without fabricating specifications.
 
 ## 2. Step-by-Step Execution Workflow
+
 1. **Step 1: Identify Target Screen / Use Case**:
    - Locate the target section in `docs/requirements/00-srs-catalog.md` (Sections 4.1 through 4.8).
    - Review project plan scope additions in `docs/requirements/02-scope-additions-from-plan.md` if applicable.
@@ -25,6 +27,7 @@ This skill defines the standardized procedure for extracting and mapping busines
    - Map each action to an API Endpoint / Service method.
 
 ## 3. Output Format Template
+
 ```markdown
 ### Use Case: [Use Case Name / Endpoint]
 - **SRS Screen Identifier**: [e.g. SRS 4.3.2 Add Employee]
@@ -42,6 +45,7 @@ This skill defines the standardized procedure for extracting and mapping busines
 ```
 
 ## 4. Verification Checklist
+
 - [ ] Every data field has a Stable ID and stable Section + Table + Row citation.
 - [ ] Zero fabricated error messages (cross-verified against canonical catalog).
 - [ ] Zero ungrounded validation rules (e.g. invented 18-60 age bounds).

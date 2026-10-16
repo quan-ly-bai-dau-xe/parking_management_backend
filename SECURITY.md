@@ -18,5 +18,5 @@ All vulnerability disclosures must be submitted strictly and exclusively through
    - **Potential impact**: Assessment of severity and exploitability.
 4. Submit the report. This establishes a private communication advisory visible only to the repository maintainers and the reporter.
 
-> **CRITICAL REMINDER**: 
+> **CRITICAL REMINDER**:
 > Public disclosure of vulnerabilities puts users and systems at immediate risk. Do not publish details or open public issues until a remediation patch has been reviewed and released by the Team Lead.

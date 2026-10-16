@@ -106,6 +106,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 ---
 
 ## 3. Approval and Implementation Protocol
+
 1. Backend developers and AI coding agents **MUST NOT** modify the strings above without authorization.
 2. In API serializers and exception handlers, reference centralized constants (e.g. `apps.common.messages.PROPOSAL_MESSAGES`), explicitly marking `[PROPOSAL]` and referencing `PROP-` IDs.
 3. When the Product Owner formally approves any proposed message string, it transitions to formal specification status and is integrated into the core product catalog.

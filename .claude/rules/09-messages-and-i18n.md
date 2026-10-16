@@ -1,15 +1,18 @@
 # 09-messages-and-i18n.md — Verbatim Messages & Localization Standards
 
 ## 1. Verbatim Message Authority
+
 - All user-facing error and notification strings returned by the API must be transcribed verbatim from `docs/requirements/00-srs-catalog.md` and `docs/requirements/03-delete-rules-catalog.md`.
 - Never invent error messages or paraphrase SRS strings. Historical refuted inventions are strictly forbidden.
 - For behaviors lacking verbatim messages, refer to `docs/requirements/05-proposed-messages.md` for proposals (`[PROPOSAL]`).
 
 ## 2. Check_Quality Formatting Rules (Item 6)
+
 - **Punctuation**: Verbatim SRS messages terminate without ending punctuation (e.g., `Đã thêm thành công nhân viên`, `Xóa thành công`). Preserve verbatim text without adding invented periods. Proposed messages include ending periods pending PO review (OQ-46).
 - **Item Name**: Errors for specific fields must include the field name (e.g., `Dữ liệu {item} không hợp lệ, xin mời nhập lại dữ liệu`).
 
 ## 3. Core Verbatim Messages by Module
+
 - **Login (4.1)**:
   - `MSG-4.1-M01`: `Tên đăng nhập không chứa ký tự đặc biệt`
   - `MSG-4.1-M02`: `Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu`
