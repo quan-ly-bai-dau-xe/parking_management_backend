@@ -329,12 +329,12 @@ All ERD deliverables are verified with SHA-256 checksums:
 
 | Artifact File | Description | SHA-256 Checksum | Dimensions / File Size |
 |---|---|---|---|
-| `03-erd.asta` | Master Astah UML Model | `9D7468DEF8FD8A5946EFCE992F84E8CEEC47AE4E262A254D81382989A167B199` | 55,517 bytes |
+| `03-erd.asta` | Master Astah UML Model | `147487C932782F3B850EFB3D5121BC30F17ACF48AAD3C17FD60AE12561BD19C4` | 56,762 bytes |
 | `04-erd.png` | Master ERD Overview (44 Links) | `93CAB0653BA799F1FD79AF16842FF01D7F93D32E509FE76A0B2BF311BD3DC5FB` | 4166 × 1432 px (204,481 bytes) |
-| `05-erd-account-staff.png` | Account & Staff Module ERD (7 Links) | `606CE91C9A7A2AC86B9A660FCB42797F153FF322B4E0D42CE3811D14853D0545` | 1473 × 1564 px (142,609 bytes) |
-| `06-erd-customer-vehicle.png` | Customer & Vehicle Module ERD (7 Links) | `1C67D84F023F4FCF4CCE29A06168D27A124029C38617AC43D0268520130F51BE` | 2006 × 1097 px (122,549 bytes) |
-| `07-erd-parking-ticket.png` | Parking & Ticket Module ERD (14 Links) | `0E1572E09EFCD930E5B5166B8C34FB2D0299DE6CB0A5413319BDCD0E4B3E7F8E` | 2520 × 1736 px (217,467 bytes) |
-| `08-erd-operations-content.png` | Operations & Content Module ERD (11 Links) | `94D76460E06B2AFE63B6FF9B6BA7F51350E47A23EF41484ADD3AC6F49AE4CEF1` | 2513 × 1276 px (149,600 bytes) |
+| `05-erd-account-staff.png` | Account & Staff Module ERD (7 Links) | `9CF15751FD37B0207161B4C000E087CC17F8E2545FF3B7AC4FACBB9AA6FEB560` | 1713 × 1564 px (149,444 bytes) |
+| `06-erd-customer-vehicle.png` | Customer & Vehicle Module ERD (7 Links) | `DCD4BA760DAF074E9D6233825AF61C15F9DDA30F9C901964A4D4AF7CD9EBB689` | 2006 × 1097 px (128,426 bytes) |
+| `07-erd-parking-ticket.png` | Parking & Ticket Module ERD (14 Links) | `2E979559DF66971D7066C74324FC69FAFB5746698F731291F255BB2100135135` | 2706 × 1736 px (231,397 bytes) |
+| `08-erd-operations-content.png` | Operations & Content Module ERD (11 Links) | `E3D0A7504BB7CB5595D7092D5266B613DEBA03017942738293BFF71B55344F46` | 2513 × 1276 px (160,000 bytes) |
 | `09-erd-reference-views.png` | Reference & Views Module ERD (2 Links) | `7DD070142C7D07DB90B752F8885353BD608FCACCD55169CFACE7E2E7BE4EDEEA` | 1500 × 1046 px (92,638 bytes) |
 
 ### 7.6. Method Disclosure & Integrity Attestation
