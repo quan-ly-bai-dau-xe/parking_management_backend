@@ -1,14 +1,16 @@
 ---
-name: detail-design
+name: 03-detail-design
 description: Technical detail design matching the 4-sheet template structure (Use_Case, Class_Diagram, Sequence_Diagram, Pseudo_Code).
 ---
 
 # Skill: Technical Detail Design
 
 ## 1. Objective
+
 Guide the creation of technical Detail Design conforming to the 4-sheet structure found in the project's official template (`01-Template/Detail_Design/`).
 
 ## 2. 4-Sheet Specification Structure
+
 1. **Sheet 1: `Use_Case`**:
    - Metadata: Use Case ID (`UC-<Screen-ID>`), Actor (`Manager` / `Employee`), Pre-conditions, Post-conditions.
    - Basic Flow: Step-by-step request flow, authorization check, service coordination, atomic commit, verbatim response.
@@ -23,6 +25,7 @@ Guide the creation of technical Detail Design conforming to the 4-sheet structur
    - Structured algorithmic steps covering: Input validation, concurrency row lock, business guard evaluations, soft-delete timestamping (`deleted_at`, `deleted_by`), audit logging via `django-simple-history`, and verbatim response mapping.
 
 ## 3. Verification Checklist
+
 - [ ] Matches all 4 sheets in the official template structure (`01-Template/Detail_Design/`).
 - [ ] Concurrency handling defines `select_for_update()` inside `transaction.atomic()`.
 - [ ] All error messages cite canonical IDs (`MSG-*` from SRS catalog or `PROP-*` from proposals).

@@ -1,14 +1,16 @@
 ---
-name: verification-before-done
+name: 11-verification-before-done
 description: Comprehensive verification workflow and independent evidence generation before reporting completion of engineering tasks.
 ---
 
 # Skill: Verification Before Done & Evidence Generation
 
 ## 1. Objective
+
 Enforce independent inspection, real terminal command execution, and attached verbatim evidence before declaring any task or PR complete.
 
 ## 2. 5-Step Verification Workflow
+
 1. **Review Task Scope**: Verify deliverables systematically against assignment checklist.
 2. **Static Quality Checks**:
    - `ruff check . && ruff format --check .` (Format and style).
@@ -22,6 +24,7 @@ Enforce independent inspection, real terminal command execution, and attached ve
    - `git status --ignored` (Ensure zero secrets, dumps, or private keys are tracked).
 
 ## 3. Evidence Report Template
+
 ```markdown
 ## VERIFICATION EVIDENCE
 - Static checks: `ruff check .` -> Passed cleanly
@@ -31,6 +34,7 @@ Enforce independent inspection, real terminal command execution, and attached ve
 ```
 
 ## 4. Verification Checklist
+
 - [ ] No fabricated test outputs, dummy facades, or simulated strings.
 - [ ] Verification commands executed live with verbatim output recorded.
 - [ ] All defects caught during verification are remediated before handover.
