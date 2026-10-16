@@ -29,7 +29,7 @@ paths:
 2. **Services (`apps/<module>/services/`)**:
    - Contain all write business logic, multi-table transactions (`transaction.atomic`), referential guards, and safe-delete operations.
 3. **Selectors (`apps/<module>/selectors/`)**:
-   - Encapsulate read queries. Always use `select_related()` and `prefetch_related()` to eliminate N+1 query antipatterns.
+   - Encapsulate read queries. Always use `select_related()` and `prefetch_related()` to eliminate N+1 query anti-patterns.
 4. **Serializers (`apps/<module>/serializers/`)**:
    - Validate request inputs thoroughly and return all validation errors simultaneously (Check_Quality item 8: "Các message check validate có xuất hiện cùng lúc chưa?").
    - Automatically trim leading/trailing whitespace on all string inputs before validation and storage (Check_Quality item 11: "Đã thực hiện Trim character khi input space chưa?").
