@@ -59,11 +59,11 @@ jobs:
               (SELECT count(*) FROM pg_constraint WHERE contype='f' AND confdeltype <> 'r'),
               (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal)")
           echo "tables views foreign_keys non_restrict_fks triggers = ${actual}"
-          test "${actual}" = "19 4 44 0 14"
+          test "${actual}" = "28 8 69 0 25"
 
       - name: Second load must fail without data loss
         run: |
           if psql -v ON_ERROR_STOP=1 -q -f db/01-schema.sql; then
             echo "Second load unexpectedly succeeded"; exit 1
           fi
-          test "$(psql -At -c 'SELECT count(*) FROM position')" = "3"
+          test "$(psql -At -c 'SELECT count(*) FROM position')" = "4"
