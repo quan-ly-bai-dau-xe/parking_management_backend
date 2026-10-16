@@ -1,5 +1,4 @@
 {
-  "$schema": "https://raw.githubusercontent.com/DavidAnson/markdownlint-cli2/v0.23.3/schema/markdownlint-cli2-config-schema.json",
   "globs": [
     "**/*.md"
   ],
