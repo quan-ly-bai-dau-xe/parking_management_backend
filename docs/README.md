@@ -12,7 +12,8 @@ Requirements specifications under the Frontend-First (`FE-First`) hierarchy, whe
 - [`03-delete-rules-catalog.md`](requirements/03-delete-rules-catalog.md): Complete entity deletion governance, immutability, and dependency guard matrix.
 - [`04-dod-and-quality-check.md`](requirements/04-dod-and-quality-check.md): Definition of Done (DoD) criteria and quality verification gates.
 - [`05-proposed-messages.md`](requirements/05-proposed-messages.md): Canonical error, warning, and confirmation message inventory.
-- [`06-frontend-srs-db-alignment.md`](requirements/06-frontend-srs-db-alignment.md): Frontend-first specification, Team Lead decisions (`TL-01`–`TL-22`), and Schema v2 alignment record.
+- [`06-frontend-srs-db-alignment.md`](requirements/06-frontend-srs-db-alignment.md): Frontend-first specification, Team Lead decisions (`TL-01`–`TL-35`), and Schema v2 alignment record.
+- [`07-fe-srs-traceability.md`](requirements/07-fe-srs-traceability.md): Bidirectional Frontend (11 UI screens) and SRS v4.1 requirements traceability matrix and `TL-28` SQL proof queries.
 
 ## 2. Architecture Decision Records (`docs/adr/`)
 

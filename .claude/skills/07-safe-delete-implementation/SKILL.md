@@ -1,54 +1,58 @@
 ---
 name: 07-safe-delete-implementation
-description: Step-by-step implementation guide for safe soft deletion, domain guards, concurrency locking, and comprehensive verification test matrices.
-disable-model-invocation: true
+description: Standardized implementation guide for business entity soft deletion, serializer isDeleted mapping, domain guards, and concurrency locking.
 ---
 
 # Skill: Safe Delete Implementation
 
 ## 1. Objective
 
-Standardize entity soft deletion adhering to `06-data-deletion-and-destructive-operations.md` and [ADR-0003](../../../docs/adr/0003-data-deletion-soft-delete-protect-and-audit.md) across DEL-01 (Employee), DEL-02 (Customer), DEL-03 (Vehicle), DEL-04 (Ticket), DEL-05 (Slot).
+Standardize the implementation of soft deletion for daily business entities adhering to `06-data-deletion-and-destructive-operations.md`, [ADR-0003](../../../docs/adr/0003-data-deletion-soft-delete-protect-and-audit.md), and `TL-23`–`TL-27` across `DEL-01` (`employee`, `account`), `DEL-02` (`customer`), `DEL-03` (`vehicle`), `DEL-04` (`ticket`), `DEL-05` (`parking_slot`), and `DEL-06` (`parking_lot`, `parking_floor`, `parking_zone`, `ticket_type`, `position`, `vehicle_type`, `parking_gate`).
 
-## 2. Core Architectural Principle: PROTECT vs Domain Guards
+## 2. API Contract & Database Duality (TL-23)
 
-- **Critical Architectural Truth**: Django's `on_delete=models.PROTECT` operates strictly at the ORM/DB level during physical hard deletions (raising `ProtectedError`). It does NOT prevent soft deletions (which only execute SQL `UPDATE` setting `deleted_at`).
-- Therefore, the Service layer MUST implement explicit domain guards to inspect active dependent relations (e.g. active tickets or parked vehicles) before setting `deleted_at`.
+- **Serializer Layer**: Expose `isDeleted: bool` (read-only boolean field computed from `obj.deleted_at is not None`).
+- **Model / Database Layer**: Under the hood, set `deleted_at = timezone.now()` and `deleted_by = request.user` (`ck_<table_short>_soft_delete_pair CHECK (deleted_by IS NULL OR deleted_at IS NOT NULL)`). Never execute physical `DELETE FROM`.
 
 ## 3. Implementation Workflow
 
-1. **Model**: Inherit from `SafeDeleteModel` (`deleted_at`, `deleted_by`).
-2. **Domain Service**: Wrap in `@transaction.atomic` with row-locking (`select_for_update()`):
+1. **Serializer Mapping**:
+
+   ```python
+   class EntitySerializer(serializers.ModelSerializer):
+       isDeleted = serializers.SerializerMethodField()
+
+       def get_isDeleted(self, obj) -> bool:
+           return obj.deleted_at is not None
+   ```
+
+2. **Domain Service**: Wrap in `@transaction.atomic` with pessimistic row locking (`select_for_update()`):
 
    ```python
    @transaction.atomic
-   def delete_entity_service(*, entity_id: int, user) -> Entity:
-       entity = Entity.objects.select_for_update().filter(id=entity_id).first()
-       if not entity: raise NotFoundError("Entity does not exist.")
-       # Domain guard: evaluate business constraints
+   def soft_delete_entity_service(*, entity_id: int, user) -> Entity:
+       entity = Entity.objects.select_for_update().filter(id=entity_id, deleted_at__isnull=True).first()
+       if not entity:
+           raise NotFoundError("Dữ liệu không tồn tại")
+       # Service-layer pre-flight check (backed by DB trigger fn_guard_soft_delete_and_restore, TL-25)
        if entity.has_active_dependencies():
            raise BusinessValidationError("Cannot delete entity with active dependencies.")
        entity.deleted_at = timezone.now()
        entity.deleted_by = user
        entity.save(update_fields=["deleted_at", "deleted_by"])
+       # Note: DB trigger trg_audit_soft_delete_and_restore_* (fn_audit_soft_delete_and_restore)
+       # automatically appends action='SOFT_DELETE' to activity_log (TL-26).
        return entity
    ```
 
-3. **Thin ViewSet**: Call service from `destroy()`, return HTTP 200 with verbatim success message (`Xóa thành công`).
-4. **Financial Immutability**: Statistics (SRS 4.7) query through `all_objects` to include soft-deleted tickets.
+3. **Thin ViewSet**: Call service from `destroy()`, returning HTTP 200 with verbatim SRS message (e.g., `Xóa thành công`).
 
-## 4. 6-Criteria Test Matrix
+## 4. Verification Checklist
 
-1. **Happy Path**: Soft deletion updates `deleted_at` and `deleted_by`.
-2. **Business Guard Block**: Rejection with exact SRS message when constraints violated.
-3. **Not Found / Already Deleted**: Returns HTTP 404.
-4. **Referential Integrity**: Physical delete blocked by DB `on_delete=PROTECT`; soft delete blocked by service guards if active children exist.
-5. **Concurrency**: Pessimistic row locking resolves simultaneous deletion safely.
-6. **Unique Re-creation**: Entity with same code can be created after soft delete.
-
-## 5. Verification Checklist
-
-- [ ] Zero physical `DELETE FROM` SQL statements execute against domain tables.
-- [ ] Tickets and vehicle entry/exit records are immutable (never hard deleted).
-- [ ] Service layer guards active relations before soft delete.
-- [ ] Error messages cite canonical SRS catalog strings.
+- [ ] API response serializes `isDeleted: true` upon deletion.
+- [ ] Database stores valid `deleted_at` and `deleted_by` (`ck_*_soft_delete_pair`).
+- [ ] Database `BEFORE DELETE` triggers block physical SQL deletion on 25 business tables (`TL-24`), while explicitly permitting plain `DELETE` on `persistent_login_token`, `password_reset_token` (`TL-36`) and `slot_allowed_vehicle_type` (`TL-37`, guarded by `trg_guard_slot_allowed_vehicle_type_delete`).
+- [ ] Database `BEFORE UPDATE OF deleted_at` triggers (`fn_guard_soft_delete_and_restore`) block prohibited soft deletions (`DEL-01`–`DEL-06`, `TL-25`) and strictly reject soft-deleting `payment` records with `status IN ('PAID', 'REFUNDED')` (`PROP-DEL-PAYMENT-SETTLED`, `TL-39`).
+- [ ] Database `payment` mutation trigger (`trg_guard_payment_update`, `TL-42`) blocks invalid payment status transitions (`PROP-PAY-STATUS-TRANSITION`) and enforces immutability of settled/refunded payment financial and link columns (`PROP-PAY-SETTLED-IMMUTABLE`).
+- [ ] Database `AFTER UPDATE OF deleted_at` triggers (`fn_audit_soft_delete_and_restore`) record `'SOFT_DELETE'` in `activity_log` (`TL-26`).
+- [ ] Querysets for `list`/`detail`/`update`/`create` automatically exclude soft-deleted rows (`deleted_at IS NULL`, `TL-27`).
