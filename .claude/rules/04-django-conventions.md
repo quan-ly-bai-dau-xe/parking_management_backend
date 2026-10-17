@@ -15,7 +15,7 @@ paths:
   - `apps/customers/`: Customer management and owned vehicle lists (4.4).
   - `apps/vehicles/`: Vehicle tracking, entries, exits, plate OCR (4.5).
   - `apps/tickets/`: Ticket issuance, renewal, expiration, soft deletion (4.6).
-  - `apps/parking/`: Slot management, floor layouts 1..10, slot capacity (4.8).
+  - `apps/parking/`: Lot, floor (`B1`..`F1` / `B3`), zone (`A`..`C`), slot management, and slot reservations (4.8 & FE `Sơ đồ bãi đậu xe`).
   - `apps/reports/`: Revenue and vehicle volume analytics (4.7).
 - Configuration lives in `config/`:
   - `config/settings/base.py`: Shared core settings.
@@ -37,6 +37,10 @@ paths:
    - Automatically trim leading/trailing whitespace on all string inputs before validation and storage (Check_Quality item 11: "Đã thực hiện Trim character khi input space chưa?").
    - Mark non-updatable identifiers as `read_only=True` and reject modification attempts per specification (Check_Quality item 10: "Xử lí enable/disable cho các item đã đúng theo spec chưa?").
    - Enforce `max_length` strictly at serializer and database levels to prevent truncation or obscuring of data (Check_Quality item 12: "Tất cả các item load data hiển thị trên màn hình đã test trường hợp data max length chưa?").
+5. **API-First & Automatic Mapping (Meeting 16/10/2026, Points a & e)**:
+   - Design serializers and OpenAPI 3.0 contracts (`drf-spectacular`) before writing service logic.
+   - Strictly utilize `ModelSerializer` and serializer hydration (`validated_data`) to map data into forms, avoiding manual dictionary-to-object mappings.
+   - Return mock responses using fixtures (`db/02-seed.sql`) during early integration to unblock frontend developers.
 
 ## 3. Standardized Error Response Format
 
@@ -47,11 +51,11 @@ All non-2xx responses must return a uniform JSON envelope:
   "success": false,
   "error": {
     "code": "VALIDATION_ERROR",
-    "message": "[PROPOSAL] Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu",
+    "message": "Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu",
     "details": [
       {
-        "field": "ten_dang_nhap",
-        "message": "Tên đăng nhập không chứa ký tự đặc biệt"
+        "field": "email",
+        "message": "Dữ liệu Email không đúng định dạng, .."
       }
     ]
   }

@@ -39,10 +39,10 @@ Each test case must include standardized attributes:
 Document explicit database state changes:
 
 - **Pre-Test Data**:
-  - `id=101, license_plate='43A-12345', deleted_at=NULL, deleted_by=NULL`
+  - `id=101, license_plate='43A-123.45', deleted_at=NULL, deleted_by=NULL`
 - **Post-Test Data**:
-  - `id=101, license_plate='43A-12345', deleted_at='2026-10-11 12:00:00+00', deleted_by=1`
-  - Historical audit snapshot: `history_type='~'`, `history_change_reason='Soft deleted'`
+  - `id=101, license_plate='43A-123.45', deleted_at='2026-10-17 12:00:00+07', deleted_by=1`
+  - Append-only audit row in `activity_log`: `action='SOFT_DELETE'`, `entity_type='vehicle'`, `entity_id=101` (`fn_audit_soft_delete_and_restore`)
 
 ## 3. Generic Test Suite Template
 
@@ -52,8 +52,8 @@ Document explicit database state changes:
 
 | Test Case ID | Test Objective | Input Condition | Expected HTTP Code | Expected Message (Exact SRS / Proposal) | Post-Test DB State |
 | :--- | :--- | :--- | :---: | :--- | :--- |
-| **TC_4.6.4_01** | Delete valid expired ticket | Ticket id=50 (end_date < now, is_renewed=False) | 200 OK | `Xóa thành công` (MSG-4.6.4-M01) | `deleted_at IS NOT NULL` |
-| **TC_4.6.4_02** | Prevent deleting active ticket | Ticket id=51 (end_date >= now) | 400 Bad Request | `Vé chưa hết hạn sử dụng, không được phép xóa.` [PROP-4.6.4-P01] | Unchanged |
+| **TC_4.6.4_01** | Delete valid expired ticket | Ticket id=50 (`effective_to <= now`, `status='EXPIRED'`) | 200 OK | `Xóa thành công` (MSG-4.6.4-M01) | `deleted_at IS NOT NULL`, `activity_log` row `'SOFT_DELETE'` |
+| **TC_4.6.4_02** | Prevent deleting active ticket | Ticket id=51 (`effective_to > now`, `status='ACTIVE'`) | 400 Bad Request | `Vé chưa hết hạn, không được phép xóa.` [PROP-4.6.4-P01] | Unchanged |
 | **TC_4.6.4_03** | Prevent deleting soft-deleted ticket | Ticket id=50 (already deleted) | 404 Not Found | `Vé không tồn tại hoặc đã bị xóa.` [PROP-4.6.4-P05] | Unchanged |
 | **TC_4.6.4_04** | Concurrent deletion contention | 2 parallel delete requests for id=52 | 1 request: 200, 1 request: 409 | `Vé đang được xử lý bởi người dùng khác, vui lòng thử lại sau.` [PROP-4.6.4-P03] | 1 record soft-deleted |
 | **TC_4.6.4_05** | RBAC: Employee blocked | Auth: Role=EMPLOYEE | 403 Forbidden | Access denied (DEL-04: Manager-only) | Unchanged |

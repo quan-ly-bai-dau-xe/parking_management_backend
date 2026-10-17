@@ -12,16 +12,16 @@ This skill defines the standardized procedure for extracting and mapping busines
 ## 2. Step-by-Step Execution Workflow
 
 1. **Step 1: Identify Target Screen / Use Case**:
-   - Locate the target Frontend screen (`S01`–`S11`) and Team Lead decision (`TL-01`–`TL-22`) in `docs/requirements/06-frontend-srs-db-alignment.md`, and consult `docs/requirements/00-srs-catalog.md` (Sections 4.1 through 4.8) where the Frontend is silent.
+   - Locate the target Frontend screen (`S01`–`S11`) and Team Lead decision (`TL-01`–`TL-35`) in `docs/requirements/06-frontend-srs-db-alignment.md` and `docs/requirements/07-fe-srs-traceability.md`, and consult `docs/requirements/00-srs-catalog.md` (Sections 4.1 through 4.8) where the Frontend is silent.
    - Review project plan scope additions in `docs/requirements/02-scope-additions-from-plan.md` if applicable.
 2. **Step 2: Extract Field Inventory**:
    - Collect Stable IDs (`REQ-<Screen>-F<N>`), Field Name, Data Type, Maximum Length, Mandatory flag, and Default Value.
    - Record stable citations (Section + Table + Row, or wireframe image element).
 3. **Step 3: Extract Actions and Verbatim Messages**:
    - Collect Action IDs (`ACT-<Screen>-A<N>`).
-   - Copy verbatim success and error message strings (`MSG-<Screen>-M<N>`). Strictly avoid rewriting, translating, or fabricating dialogue text.
+   - Copy verbatim success and error message strings (`MSG-<Screen>-M<N>`) and proposed messages (`PROP-*`, `PROP-DEL-*`). Strictly avoid rewriting, translating, or fabricating dialogue text.
 4. **Step 4: Check Deletion and Destruction Rules**:
-   - If the use case involves deletion, inspect the corresponding protection rules in `docs/requirements/03-delete-rules-catalog.md` (DEL-01 through DEL-05).
+   - If the use case involves deletion, inspect the corresponding protection rules in `docs/requirements/03-delete-rules-catalog.md` (`DEL-01` through `DEL-06`).
 5. **Step 5: Construct Traceability Matrix**:
    - Map each data field to a Django Model field / Serializer field.
    - Map each action to an API Endpoint / Service method.
