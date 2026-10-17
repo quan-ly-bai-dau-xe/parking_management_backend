@@ -5,13 +5,12 @@
 -- DESCRIPTION:
 --   Enterprise-grade relational database schema (Schema v2 — Frontend-First).
 --   Primary source: Frontend export (`Parking Project`, 11 PNG screens) and
---   Team Lead Decisions TL-01 through TL-16.
+--   Team Lead Decisions TL-01 through TL-22.
 --   Secondary source: SRS v4.1 (`Quan ly bai dau xe oto_SRS_v4.1.docx`) where
 --   the Frontend is silent.
 --   Strictly adheres to ADR-0003 (Soft Delete & ON DELETE RESTRICT), ADR-0004
 --   (OWASP Persistent Login Token), and Rule 05 (PostgreSQL Data Modeling).
 --   NOTE: Pure creation script. Zero destructive statements are permitted.
---   cspell:words btrim nonnulls savt ALPR CHECKIN TRUNC VIETQR vietqr NVVH NVTN
 -- =============================================================================
 
 BEGIN;
@@ -76,7 +75,7 @@ CREATE TABLE account (
 );
 
 CREATE UNIQUE INDEX uq_account_email_active
-    ON account (email)
+    ON account (lower(email))
     WHERE deleted_at IS NULL AND email IS NOT NULL;
 
 CREATE UNIQUE INDEX uq_account_phone_active
@@ -89,7 +88,7 @@ CREATE INDEX idx_account_role_active
 
 COMMENT ON TABLE account IS 'System authentication accounts using email or phone login identifiers and supporting self-registered customers (login-container.png, TL-01, TL-15).';
 COMMENT ON COLUMN account.id IS 'Primary key identifier of the system account.';
-COMMENT ON COLUMN account.email IS 'Login email address for authentication ("Email hoặc Số điện thoại" on login-container.png, TL-01); unique among active accounts when present.';
+COMMENT ON COLUMN account.email IS 'Login email address for authentication ("Email hoặc Số điện thoại" on login-container.png, TL-01); case-insensitively unique via lower(email) among active accounts when present (TL-21, OQ-84).';
 COMMENT ON COLUMN account.phone IS 'Login phone number (9-15 digits) for authentication ("Email hoặc Số điện thoại" on login-container.png, TL-01); unique among active accounts when present.';
 COMMENT ON COLUMN account.password_hash IS 'Cryptographic password hash (Argon2id/PBKDF2) for "Mật khẩu" on login-container.png (TL-01, ADR-0004).';
 COMMENT ON COLUMN account.role IS 'Authorization role: MANAGER (Quản lý), EMPLOYEE (Nhân viên), or CUSTOMER (Khách hàng self-registration per TL-01, OQ-03, OQ-55).';
@@ -291,18 +290,18 @@ COMMENT ON COLUMN administrative_ward.updated_at IS 'Record modification timesta
 -- -----------------------------------------------------------------------------
 -- 2.3. Table: employee
 -- Source: Frontend `Quản lý nhân viên - Smart mobility.png` (Mã NV NV001..NV008 and NV0005,
---         Trạng thái Đang hoạt động / Ngừng hoạt động, Chức vụ, Khu vực), TL-11, TL-15
+--         Trạng thái Đang hoạt động / Ngừng hoạt động, Chức vụ, Khu vực), TL-11, TL-15, TL-18
 -- -----------------------------------------------------------------------------
 CREATE TABLE employee (
     id BIGSERIAL,
     code VARCHAR(10) NOT NULL,
     full_name VARCHAR(45) NOT NULL,
-    date_of_birth DATE NOT NULL,
-    gender VARCHAR(10) NOT NULL,
-    identity_card_number VARCHAR(20) NOT NULL,
+    date_of_birth DATE NULL,
+    gender VARCHAR(10) NULL,
+    identity_card_number VARCHAR(20) NULL,
     phone VARCHAR(15) NOT NULL,
     email VARCHAR(100) NOT NULL,
-    address VARCHAR(100) NOT NULL,
+    address VARCHAR(100) NULL,
     province_id BIGINT NULL,
     district_id BIGINT NULL,
     ward_id BIGINT NULL,
@@ -327,12 +326,12 @@ CREATE TABLE employee (
         REFERENCES account (id) ON DELETE RESTRICT,
     CONSTRAINT ck_employee_code_format CHECK (code ~ '^NV[0-9]{3,4}$'),
     CONSTRAINT ck_employee_full_name_nonempty CHECK (btrim(full_name) <> ''),
-    CONSTRAINT ck_employee_dob_past CHECK (date_of_birth < CURRENT_DATE),
-    CONSTRAINT ck_employee_gender CHECK (gender IN ('Nam', 'Nữ')),
-    CONSTRAINT ck_employee_idcard_digits CHECK (identity_card_number ~ '^[0-9]{9,20}$'),
+    CONSTRAINT ck_employee_dob_past CHECK (date_of_birth IS NULL OR date_of_birth < CURRENT_DATE),
+    CONSTRAINT ck_employee_gender CHECK (gender IS NULL OR gender IN ('Nam', 'Nữ')),
+    CONSTRAINT ck_employee_idcard_digits CHECK (identity_card_number IS NULL OR identity_card_number ~ '^[0-9]{9,20}$'),
     CONSTRAINT ck_employee_phone_digits CHECK (phone ~ '^[0-9]{9,15}$'),
     CONSTRAINT ck_employee_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
-    CONSTRAINT ck_employee_address_nonempty CHECK (btrim(address) <> ''),
+    CONSTRAINT ck_employee_address_nonempty CHECK (address IS NULL OR btrim(address) <> ''),
     CONSTRAINT ck_employee_ward_requires_district CHECK (
         (ward_id IS NULL OR district_id IS NOT NULL) AND
         (district_id IS NULL OR province_id IS NOT NULL)
@@ -350,10 +349,10 @@ CREATE UNIQUE INDEX uq_employee_code_active
 
 CREATE UNIQUE INDEX uq_employee_idcard_active
     ON employee (identity_card_number)
-    WHERE deleted_at IS NULL;
+    WHERE deleted_at IS NULL AND identity_card_number IS NOT NULL;
 
 CREATE UNIQUE INDEX uq_employee_email_active
-    ON employee (email)
+    ON employee (lower(email))
     WHERE deleted_at IS NULL;
 
 CREATE UNIQUE INDEX uq_employee_phone_active
@@ -368,16 +367,16 @@ CREATE INDEX idx_employee_position_id ON employee (position_id) WHERE deleted_at
 CREATE INDEX idx_employee_status_active ON employee (status) WHERE deleted_at IS NULL;
 CREATE INDEX idx_employee_full_name ON employee (full_name) WHERE deleted_at IS NULL;
 
-COMMENT ON TABLE employee IS 'Employee HR records with code format NV + 3 or 4 digits (NV005 / NV0005), operational status (ACTIVE / INACTIVE), and 3-level address hierarchy (Quản lý nhân viên - Smart mobility.png, TL-11, TL-15).';
+COMMENT ON TABLE employee IS 'Employee HR records with code format NV + 3 or 4 digits (NV005 / NV0005), operational status (ACTIVE / INACTIVE), and 3-level address hierarchy (Quản lý nhân viên - Smart mobility.png, TL-11, TL-15, TL-18).';
 COMMENT ON COLUMN employee.id IS 'Primary key identifier of the employee.';
 COMMENT ON COLUMN employee.code IS 'Employee code matching ^NV[0-9]{3,4}$ (supports both NV001..NV008 and NV0005 on Quản lý nhân viên, TL-11, OQ-48).';
-COMMENT ON COLUMN employee.full_name IS 'Full name of the employee ("Họ và tên", max 45 chars).';
-COMMENT ON COLUMN employee.date_of_birth IS 'Employee date of birth ("Ngày sinh", must be in the past).';
-COMMENT ON COLUMN employee.gender IS 'Employee gender ("Giới tính": Nam or Nữ).';
-COMMENT ON COLUMN employee.identity_card_number IS 'National ID / CCCD number ("Số CCCD / CMND", 9-20 digits).';
-COMMENT ON COLUMN employee.phone IS 'Employee contact phone number ("Số điện thoại", 9-15 digits).';
-COMMENT ON COLUMN employee.email IS 'Employee work email address ("Email công việc").';
-COMMENT ON COLUMN employee.address IS 'Detailed street address ("Địa chỉ chi tiết").';
+COMMENT ON COLUMN employee.full_name IS 'Full name of the employee ("Họ và tên", max 45 chars, required per TL-18).';
+COMMENT ON COLUMN employee.date_of_birth IS 'Optional employee date of birth ("Ngày sinh", must be in the past when provided, TL-18).';
+COMMENT ON COLUMN employee.gender IS 'Optional employee gender ("Giới tính": Nam or Nữ when provided, TL-18).';
+COMMENT ON COLUMN employee.identity_card_number IS 'Optional national ID / CCCD number ("Số CCCD / CMND", 9-20 digits, unique among active non-null rows, TL-18).';
+COMMENT ON COLUMN employee.phone IS 'Employee contact phone number ("Số điện thoại", 9-15 digits, required per TL-18).';
+COMMENT ON COLUMN employee.email IS 'Employee work email address ("Email công việc", required per TL-18 and case-insensitively unique via lower(email) among active rows per TL-21, OQ-84).';
+COMMENT ON COLUMN employee.address IS 'Optional detailed street address ("Địa chỉ chi tiết", TL-18).';
 COMMENT ON COLUMN employee.province_id IS 'Foreign key referencing administrative_province ("Tỉnh / Thành phố", TL-11, OQ-62).';
 COMMENT ON COLUMN employee.district_id IS 'Foreign key referencing administrative_district ("Quận / Huyện", TL-11, OQ-62).';
 COMMENT ON COLUMN employee.ward_id IS 'Foreign key referencing administrative_ward ("Phường / Xã", TL-11, OQ-62).';
@@ -391,24 +390,24 @@ COMMENT ON COLUMN employee.deleted_at IS 'Soft deletion timestamp (ADR-0003).';
 COMMENT ON COLUMN employee.deleted_by IS 'Account that performed soft deletion.';
 
 -- =============================================================================
--- SECTION 3: CUSTOMER, BLACKLIST & VEHICLE MANAGEMENT (TL-08, TL-09, TL-15)
+-- SECTION 3: CUSTOMER, BLACKLIST & VEHICLE MANAGEMENT (TL-08, TL-09, TL-15, TL-18)
 -- =============================================================================
 
 -- -----------------------------------------------------------------------------
 -- 3.1. Table: customer
 -- Source: Frontend `Khách hàng — Smart Mobility.png` ("Tổng khách hàng", "Đang hoạt động",
---         "Tạm ngừng", "Blacklist/Tạm khoá"), TL-08, TL-15
+--         "Tạm ngừng", "Blacklist/Tạm khoá"), TL-08, TL-15, TL-18
 -- -----------------------------------------------------------------------------
 CREATE TABLE customer (
     id BIGSERIAL,
     code VARCHAR(10) NOT NULL,
     full_name VARCHAR(45) NOT NULL,
-    date_of_birth DATE NOT NULL,
-    gender VARCHAR(10) NOT NULL,
+    date_of_birth DATE NULL,
+    gender VARCHAR(10) NULL,
     identity_card_number VARCHAR(20) NOT NULL,
     phone VARCHAR(15) NOT NULL,
-    email VARCHAR(100) NOT NULL,
-    address VARCHAR(100) NOT NULL,
+    email VARCHAR(100) NULL,
+    address VARCHAR(100) NULL,
     province_id BIGINT NULL,
     district_id BIGINT NULL,
     ward_id BIGINT NULL,
@@ -433,12 +432,12 @@ CREATE TABLE customer (
         REFERENCES account (id) ON DELETE RESTRICT,
     CONSTRAINT ck_customer_code_format CHECK (code ~ '^[A-Za-z0-9-]+$'),
     CONSTRAINT ck_customer_full_name_nonempty CHECK (btrim(full_name) <> ''),
-    CONSTRAINT ck_customer_dob_past CHECK (date_of_birth < CURRENT_DATE),
-    CONSTRAINT ck_customer_gender CHECK (gender IN ('Nam', 'Nữ')),
+    CONSTRAINT ck_customer_dob_past CHECK (date_of_birth IS NULL OR date_of_birth < CURRENT_DATE),
+    CONSTRAINT ck_customer_gender CHECK (gender IS NULL OR gender IN ('Nam', 'Nữ')),
     CONSTRAINT ck_customer_idcard_digits CHECK (identity_card_number ~ '^[0-9]{9,20}$'),
     CONSTRAINT ck_customer_phone_digits CHECK (phone ~ '^[0-9]{9,15}$'),
-    CONSTRAINT ck_customer_email_format CHECK (email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
-    CONSTRAINT ck_customer_address_nonempty CHECK (btrim(address) <> ''),
+    CONSTRAINT ck_customer_email_format CHECK (email IS NULL OR email ~* '^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}$'),
+    CONSTRAINT ck_customer_address_nonempty CHECK (address IS NULL OR btrim(address) <> ''),
     CONSTRAINT ck_customer_ward_requires_district CHECK (
         (ward_id IS NULL OR district_id IS NOT NULL) AND
         (district_id IS NULL OR province_id IS NOT NULL)
@@ -465,8 +464,8 @@ CREATE UNIQUE INDEX uq_customer_idcard_active
     WHERE deleted_at IS NULL AND is_anonymized = FALSE;
 
 CREATE UNIQUE INDEX uq_customer_email_active
-    ON customer (email)
-    WHERE deleted_at IS NULL AND is_anonymized = FALSE;
+    ON customer (lower(email))
+    WHERE deleted_at IS NULL AND is_anonymized = FALSE AND email IS NOT NULL;
 
 CREATE UNIQUE INDEX uq_customer_phone_active
     ON customer (phone)
@@ -479,20 +478,20 @@ CREATE UNIQUE INDEX uq_customer_account_active
 CREATE INDEX idx_customer_full_name ON customer (full_name) WHERE deleted_at IS NULL;
 CREATE INDEX idx_customer_status_active ON customer (status) WHERE deleted_at IS NULL;
 
-COMMENT ON TABLE customer IS 'Customer profile table with operational status (ACTIVE, SUSPENDED, BLACKLISTED) and status reason (Khách hàng — Smart Mobility.png, TL-08, TL-15).';
+COMMENT ON TABLE customer IS 'Customer profile table with operational status (ACTIVE, SUSPENDED, BLACKLISTED) and status reason (Khách hàng — Smart Mobility.png, TL-08, TL-15, TL-18).';
 COMMENT ON COLUMN customer.id IS 'Primary key identifier of the customer.';
 COMMENT ON COLUMN customer.code IS 'Customer code ("Mã KH", e.g., KH0001..KH0004).';
-COMMENT ON COLUMN customer.full_name IS 'Full name of the customer ("Họ và tên").';
-COMMENT ON COLUMN customer.date_of_birth IS 'Customer date of birth ("Ngày sinh").';
-COMMENT ON COLUMN customer.gender IS 'Customer gender ("Giới tính": Nam or Nữ).';
-COMMENT ON COLUMN customer.identity_card_number IS 'National ID / CCCD number ("CCCD", 9-20 digits).';
-COMMENT ON COLUMN customer.phone IS 'Customer phone number ("Số điện thoại").';
-COMMENT ON COLUMN customer.email IS 'Customer email address ("Email").';
-COMMENT ON COLUMN customer.address IS 'Customer residential address ("Địa chỉ").';
+COMMENT ON COLUMN customer.full_name IS 'Full name of the customer ("Họ và tên", required per TL-18).';
+COMMENT ON COLUMN customer.date_of_birth IS 'Optional customer date of birth ("Ngày sinh", must be in the past when provided, TL-18).';
+COMMENT ON COLUMN customer.gender IS 'Optional customer gender ("Giới tính": Nam or Nữ when provided, TL-18).';
+COMMENT ON COLUMN customer.identity_card_number IS 'National ID / CCCD number ("CCCD", 9-20 digits, required per TL-18).';
+COMMENT ON COLUMN customer.phone IS 'Customer phone number ("Số điện thoại", required per TL-18).';
+COMMENT ON COLUMN customer.email IS 'Optional customer email address ("Email", case-insensitively unique via lower(email) among active non-anonymized non-null rows per TL-18, TL-21, OQ-84).';
+COMMENT ON COLUMN customer.address IS 'Optional customer residential address ("Địa chỉ", TL-18).';
 COMMENT ON COLUMN customer.province_id IS 'Optional foreign key referencing administrative_province (OQ-62).';
 COMMENT ON COLUMN customer.district_id IS 'Optional foreign key referencing administrative_district (OQ-62).';
 COMMENT ON COLUMN customer.ward_id IS 'Optional foreign key referencing administrative_ward (OQ-62).';
-COMMENT ON COLUMN customer.account_id IS 'Optional foreign key referencing self-registered customer login account (TL-01, OQ-55).';
+COMMENT ON COLUMN customer.account_id IS 'Optional foreign key referencing self-registered customer login account (TL-01, TL-18, OQ-55).';
 COMMENT ON COLUMN customer.status IS 'Customer status: ACTIVE ("Đang hoạt động"), SUSPENDED ("Tạm ngừng"), or BLACKLISTED ("Blacklist/Tạm khoá", TL-08).';
 COMMENT ON COLUMN customer.status_reason IS 'Reason for suspension or blacklisting; required when status is BLACKLISTED (TL-08).';
 COMMENT ON COLUMN customer.is_anonymized IS 'Decree 13/2023/ND-CP PII anonymization flag (OQ-12).';
@@ -557,7 +556,7 @@ COMMENT ON COLUMN plate_blacklist.deleted_by IS 'Account that performed soft del
 -- -----------------------------------------------------------------------------
 -- 3.3. Table: vehicle_type
 -- Source: Frontend `Quản lý xe — Smart Mobility.png` & `Quản lý vé — Smart Mobility.png`
---         ("Ô tô", "Xe máy", "Xe điện"), TL-09, TL-15
+--         ("Ô tô", "Xe điện"), TL-09, TL-15, TL-20
 -- -----------------------------------------------------------------------------
 CREATE TABLE vehicle_type (
     id BIGSERIAL,
@@ -588,10 +587,10 @@ CREATE UNIQUE INDEX uq_vehicle_type_name_active
     ON vehicle_type (name)
     WHERE deleted_at IS NULL;
 
-COMMENT ON TABLE vehicle_type IS 'Vehicle classification catalog ("Loại xe": Ô tô, Xe máy, Xe điện on Quản lý xe and Quản lý vé, TL-09, OQ-49).';
+COMMENT ON TABLE vehicle_type IS 'Vehicle classification catalog ("Loại xe": Ô tô, Xe điện on Quản lý xe and Quản lý vé; cars only per TL-09, TL-20, OQ-49).';
 COMMENT ON COLUMN vehicle_type.id IS 'Primary key identifier of the vehicle type.';
-COMMENT ON COLUMN vehicle_type.code IS 'Unique code for the vehicle type (CAR, MOTO, EV).';
-COMMENT ON COLUMN vehicle_type.name IS 'Display name of the vehicle category (Ô tô, Xe máy, Xe điện per TL-09).';
+COMMENT ON COLUMN vehicle_type.code IS 'Unique code for the vehicle type (CAR, EV per TL-20).';
+COMMENT ON COLUMN vehicle_type.name IS 'Display name of the vehicle category (Ô tô, Xe điện per TL-09, TL-20).';
 COMMENT ON COLUMN vehicle_type.description IS 'Detailed description of the vehicle category.';
 COMMENT ON COLUMN vehicle_type.row_version IS 'Optimistic concurrency control version counter (TL-15, OQ-64).';
 COMMENT ON COLUMN vehicle_type.created_at IS 'Record creation timestamp.';
@@ -715,12 +714,12 @@ COMMENT ON COLUMN vehicle.id IS 'Primary key identifier of the vehicle.';
 COMMENT ON COLUMN vehicle.code IS 'Vehicle business code ("Mã xe", e.g., XE0001..XE0008).';
 COMMENT ON COLUMN vehicle.license_plate IS 'Raw license plate string preserved as entered for UI display (e.g., 51K-992.14, 51K-992-14).';
 COMMENT ON COLUMN vehicle.license_plate_norm IS 'Canonical normalized license plate computed via fn_normalize_license_plate(license_plate) for uniqueness and barrier matching (TL-15, OQ-75).';
-COMMENT ON COLUMN vehicle.model_name IS 'Commercial vehicle model name (e.g., Camry 2.5Q, SH 150i, VF 8 Plus).';
-COMMENT ON COLUMN vehicle.brand IS 'Vehicle manufacturer brand (e.g., Toyota, Honda, VinFast; nullable per OQ-53).';
+COMMENT ON COLUMN vehicle.model_name IS 'Commercial vehicle model name (e.g., Camry 2.5Q, Mazda CX-5, VF 8 Plus).';
+COMMENT ON COLUMN vehicle.brand IS 'Vehicle manufacturer brand (e.g., Toyota, Mazda, VinFast; nullable per OQ-53).';
 COMMENT ON COLUMN vehicle.color IS 'Exterior color of the vehicle (e.g., Trắng, Đen, Xanh rêu).';
 COMMENT ON COLUMN vehicle.image_url IS 'Optional vehicle photo URI/path ("Ảnh" column on Quản lý xe — Smart Mobility.png, TL-09).';
 COMMENT ON COLUMN vehicle.notes IS 'Optional free-text vehicle notes ("Ghi chú" column and "Ghi chú phương tiện" on Quản lý xe — Smart Mobility.png, TL-09).';
-COMMENT ON COLUMN vehicle.vehicle_type_id IS 'Foreign key referencing vehicle_type ("Loại xe": Ô tô, Xe máy, Xe điện, TL-09).';
+COMMENT ON COLUMN vehicle.vehicle_type_id IS 'Foreign key referencing vehicle_type ("Loại xe": Ô tô, Xe điện per TL-09, TL-20).';
 COMMENT ON COLUMN vehicle.customer_id IS 'Foreign key referencing the owning customer ("Chủ sở hữu (Khách hàng)").';
 COMMENT ON COLUMN vehicle.ticket_type_id IS 'Synchronized active ticket type preference (OQ-52, TL-15).';
 COMMENT ON COLUMN vehicle.ticket_expires_at IS 'Synchronized active ticket expiration timestamp (OQ-52, TL-15).';
@@ -1937,14 +1936,17 @@ CREATE TRIGGER trg_guard_slot_reservation_write
 
 -- -----------------------------------------------------------------------------
 -- 8.5. Trigger Function: fn_guard_slot_reservation_on_entry()
--- Enforces TL-05, TL-03, TL-04, TL-15 on vehicle_entry_exit_log:
---   1. Visitors (vehicle_id IS NULL) are allowed; if the plate matches an active
---      registered vehicle, or if vehicle_id IS NOT NULL, the normalized plate must
---      match the registered vehicle (else raises verbatim 'Lỗi dữ liệu không tìm thấy đê lưu').
---   2. Rejects check-in into MAINTENANCE slots with 'Vị trí này đang bảo trì.'.
---   3. Rejects check-in into a slot reserved by an active ticket for another vehicle/plate
+-- Enforces TL-05, TL-03, TL-04, TL-15, TL-17 on vehicle_entry_exit_log:
+--   1. When a session is inserted or its plate changes with vehicle_id IS NULL
+--      and the normalized plate matches an active registered vehicle, sets
+--      NEW.vehicle_id to that vehicle (TL-17).
+--   2. When an open session (exit_time IS NULL) has vehicle_id IS NOT NULL on INSERT
+--      or when license_plate/vehicle_id changes, the normalized plate must match the
+--      active registered vehicle (else raises verbatim 'Lỗi dữ liệu không tìm thấy đê lưu').
+--   3. Rejects check-in into MAINTENANCE slots with 'Vị trí này đang bảo trì.'.
+--   4. Rejects check-in into a slot reserved by an active ticket for another vehicle/plate
 --      with verbatim 'Vị trí này đã có xe đk vé và đang sử dụng'.
---   4. Rejects check-in into a slot reserved by an active slot_reservation for another vehicle/plate.
+--   5. Rejects check-in into a slot reserved by an active slot_reservation for another vehicle/plate.
 -- -----------------------------------------------------------------------------
 CREATE FUNCTION fn_guard_slot_reservation_on_entry()
 RETURNS TRIGGER
@@ -1960,11 +1962,31 @@ DECLARE
     v_res_plate_norm TEXT;
     v_has_conflicting_reservation BOOLEAN;
 BEGIN
-    IF NEW.exit_time IS NULL THEN
-        v_norm_new_plate := fn_normalize_license_plate(NEW.license_plate);
+    v_norm_new_plate := fn_normalize_license_plate(NEW.license_plate);
 
-        -- 1. If vehicle_id is provided, verify normalized plate matches the active registered vehicle (TL-05, OQ-75)
-        IF NEW.vehicle_id IS NOT NULL THEN
+    -- 1. Visitor plate auto-link: if vehicle_id IS NULL on INSERT or plate/vehicle_id change,
+    --    and normalized plate matches an active registered vehicle, link NEW.vehicle_id (TL-17).
+    IF NEW.vehicle_id IS NULL AND (
+        TG_OP = 'INSERT'
+        OR NEW.license_plate IS DISTINCT FROM OLD.license_plate
+        OR NEW.vehicle_id IS DISTINCT FROM OLD.vehicle_id
+    ) THEN
+        SELECT v.id INTO NEW.vehicle_id
+        FROM vehicle v
+        WHERE v.license_plate_norm = v_norm_new_plate
+          AND v.deleted_at IS NULL
+        LIMIT 1;
+    END IF;
+
+    IF NEW.exit_time IS NULL THEN
+        -- 2. If vehicle_id is provided on INSERT or when plate/vehicle_id changes on an open session,
+        --    verify normalized plate matches the active registered vehicle (TL-05, TL-17, OQ-75).
+        --    Never run when closing a session (NEW.exit_time IS NOT NULL) so soft-deleted vehicles can exit.
+        IF NEW.vehicle_id IS NOT NULL AND (
+            TG_OP = 'INSERT'
+            OR NEW.license_plate IS DISTINCT FROM OLD.license_plate
+            OR NEW.vehicle_id IS DISTINCT FROM OLD.vehicle_id
+        ) THEN
             SELECT v.license_plate INTO v_registered_plate
             FROM vehicle v
             WHERE v.id = NEW.vehicle_id
@@ -1977,7 +1999,7 @@ BEGIN
             END IF;
         END IF;
 
-        -- 2. If slot_id is assigned, guard maintenance, active ticket reservation, and active slot_reservation
+        -- 3. If slot_id is assigned, guard maintenance, active ticket reservation, and active slot_reservation
         IF NEW.slot_id IS NOT NULL THEN
             SELECT s.status INTO v_slot_status
             FROM parking_slot s
@@ -2044,7 +2066,7 @@ BEGIN
 END;
 $$;
 
-COMMENT ON FUNCTION fn_guard_slot_reservation_on_entry() IS 'Validates barrier check-in sessions: permits unregistered visitors (vehicle_id NULL), enforces normalized plate match when vehicle_id is provided, blocks MAINTENANCE slots, and guards slots reserved by tickets or slot_reservation (TL-03, TL-04, TL-05, TL-15).';
+COMMENT ON FUNCTION fn_guard_slot_reservation_on_entry() IS 'Validates barrier check-in sessions: auto-links visitor sessions matching an active registered vehicle plate (TL-17), permits unregistered visitors (vehicle_id NULL), enforces normalized plate match when vehicle_id is provided, blocks MAINTENANCE slots, and guards slots reserved by tickets or slot_reservation (TL-03, TL-04, TL-05, TL-15, TL-17).';
 
 CREATE TRIGGER trg_guard_slot_reservation_on_entry
     BEFORE INSERT OR UPDATE OF slot_id, exit_time, vehicle_id, license_plate ON vehicle_entry_exit_log
