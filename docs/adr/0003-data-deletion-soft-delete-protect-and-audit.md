@@ -11,30 +11,29 @@ Operational parking data (tickets, entry/exit logs, slots, vehicles) governs phy
 
 ## 2. Decision Outcome
 
-### 2.1. Universal Soft Delete by Default
+### 2.1. Universal Soft Delete & API `isDeleted` Exposure (`TL-23`)
 
-- 100% of business entities inherit from `SafeDeleteModel` (`deleted_at`, `deleted_by`).
-- Custom `SafeDeleteManager` filters default queries with `WHERE deleted_at IS NULL`.
-- Calling `delete()` sets timestamps instead of executing physical deletion. Administrative access uses `.all_with_deleted()`.
+- All `18` soft-deletable business tables enforce `deleted_at TIMESTAMPTZ NULL` and `deleted_by BIGINT NULL` with `ck_<table_short>_soft_delete_pair CHECK (deleted_by IS NULL OR deleted_at IS NOT NULL)`.
+- The 16/10/2026 team meeting's `isDeleted` boolean is exposed at the API/serializer layer (`deleted_at is not None`); no duplicate boolean column is stored in PostgreSQL (`TL-23`).
+- Custom `SafeDeleteManager` filters default queries with `WHERE deleted_at IS NULL`, and all `8` statistic views and `4` `fn_stat_*` functions consistently exclude soft-deleted records (`TL-27`).
 
-### 2.2. Referential Integrity: PROTECT vs Service-Layer Guards
+### 2.2. Database-Enforced Soft-Delete, Restore, and Plain-Delete Guards (`TL-24`–`TL-26`)
 
-- All foreign keys to business models use `on_delete=models.PROTECT` (PostgreSQL `ON DELETE RESTRICT`). Database-level `CASCADE` is strictly prohibited across all business entities.
-- **Architectural Truth**: Django's `on_delete=models.PROTECT` operates exclusively during physical HARD deletions at the ORM/DB level. It does NOT prevent SOFT deletions (which are SQL `UPDATE` statements).
-- Therefore, the Service layer MUST implement explicit domain guards inspecting active reverse relations (e.g., active tickets or parked vehicles) before setting `deleted_at`.
-- **Database CHECK Guard on Deletion**: Physical database schemas enforce deletion validity constraints where applicable, specifically `CHECK (deleted_at IS NULL OR effective_to <= deleted_at)` on tickets, preventing database-level soft deletion of active tickets prior to expiration (SRS 4.6.4, D6, OQ-64).
+- All `69` foreign keys use `ON DELETE RESTRICT` (`on_delete=models.PROTECT`), with `0` `CASCADE` or `SET NULL` FKs.
+- Plain `DELETE` from normal client sessions is blocked across all `28` base tables (`fn_guard_prevent_plain_delete()` on `16` purgeable tables, `fn_guard_hard_immutable_table()` on `11` immutable/system tables, and `fn_prevent_activity_log_mutation()` on `activity_log`) (`TL-24`).
+- Controlled physical purge of eligible trash rows (`deleted_at < CURRENT_TIMESTAMP - p_retention`) is restricted to `fn_controlled_purge()` (`SECURITY DEFINER`, `SET search_path = public, pg_temp`, `p_dry_run BOOLEAN DEFAULT TRUE`), protected by `PG_CONTEXT` call-stack verification, `pg_proc` anti-spoofing check, and transaction-local nonce (`TL-24`).
+- Because `ON DELETE RESTRICT` only guards physical `DELETE`, `db/01-schema.sql` enforces `DEL-01`–`DEL-06` and parent-active restore checks via `BEFORE UPDATE OF deleted_at` triggers (`fn_guard_soft_delete_and_restore()`) plus `ck_ticket_delete_only_expired` (`TL-25`, `TL-26`).
 
 ### 2.3. Partial Unique Constraints & Concurrency
 
-- Uniqueness constraints use partial indexes (`condition=models.Q(deleted_at__isnull=True)`) so soft-deleted records do not block creating new records with the same code.
-- Deletions use pessimistic locking via `select_for_update()` inside `transaction.atomic()`.
-- Optimistic Concurrency Control (OCC) is maintained via `row_version INTEGER NOT NULL DEFAULT 1` with automated database `BEFORE UPDATE` triggers (`fn_update_row_version_and_timestamp()`), detecting concurrent updates across operators (D6, OQ-64).
+- Uniqueness constraints use partial indexes (`WHERE deleted_at IS NULL`) so soft-deleted records do not block active records, while restoring a record with a conflicting active key fails automatically (`TL-26`).
+- Deletions use pessimistic locking via `select_for_update()` inside `transaction.atomic()` and Optimistic Concurrency Control (OCC) via `row_version INTEGER NOT NULL DEFAULT 1` (`fn_update_row_version_and_timestamp()`).
 
-### 2.4. Immutable Financial Records & Audit Trail
+### 2.4. Immutable Financial Records & Append-Only Audit Trail (`TL-24`, `TL-26`)
 
-- `Ticket` and `VehicleEntryExitLog` records are immutable financial/operational history and must NEVER be physically deleted.
-- Append-only audit history via `django-simple-history` (`HistoricalRecords`) captures actor, timestamp, diffs, and client IP via middleware.
-- Customer Right to Erasure (Nghị định 13/2023/NĐ-CP) anonymizes PII with standardized markers per `docs/requirements/03-delete-rules-catalog.md`.
+- `ticket`, `ticket_renewal`, `payment`, `vehicle_entry_exit_log`, `activity_log`, and `system_alert` can NEVER be physically deleted or purged (`TL-24`).
+- `fn_audit_soft_delete_and_restore()` (`AFTER UPDATE OF deleted_at`) and `fn_controlled_purge()` automatically append `'SOFT_DELETE'`, `'RESTORE'`, and `'PURGE'` rows to the append-only `activity_log` table (`TL-26`).
+- Customer Right to Erasure (Nghị định 13/2023/NĐ-CP) anonymizes PII with standardized markers (`is_anonymized = TRUE`) per `docs/requirements/03-delete-rules-catalog.md` (`OQ-12`, `TL-24`).
 
 ### 2.5. Non-Destructive Schema Governance (No DROP Statements)
 
@@ -42,7 +41,7 @@ Operational parking data (tickets, entry/exit logs, slots, vehicles) governs phy
 
 ## 3. Consequences & References
 
-- **Consequences**: Zero accidental financial data loss, full compliance with Decree 13/2023/ND-CP, preserved revenue metrics, enforced OCC concurrency.
+- **Consequences**: Zero accidental financial data loss, database-enforced `DEL-01`–`DEL-06` and restore guards (`TL-23`–`TL-27`), full compliance with Decree 13/2023/ND-CP, and enforced OCC concurrency.
 - Django on_delete: <https://docs.djangoproject.com/en/6.1/ref/models/fields/#django.db.models.ForeignKey.on_delete>
 - PostgreSQL Partial Indexes: <https://www.postgresql.org/docs/18/indexes-partial.html>
 - django-simple-history: <https://django-simple-history.readthedocs.io/>
