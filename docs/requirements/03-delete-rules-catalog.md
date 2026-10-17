@@ -28,6 +28,7 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 ## 2. Detailed Catalog of Deletion Flows in SRS v4.1
 
 ### 2.1. Flow DEL-01: Employee Deletion (Employee Delete Flow)
+
 - **Stable Source Citations**:
   - SRS Section 4.3.1, Employee Management Table, Action row `Xóa` (Item 12, Action 24).
   - SRS Section 4.3.4, Delete Employee Information Table, Interface row (Row 0), Confirmation row `Xác nhận` (Item 6, Action 10), Cancellation row `Hủy` (Item 7, Action 11).
@@ -52,6 +53,7 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 ---
 
 ### 2.2. Flow DEL-02: Customer Deletion (Customer Delete Flow)
+
 - **Stable Source Citations**:
   - SRS Section 4.4.1, Customer List Table, Action row `xóa` (Item 12, Action 31).
   - SRS Section 4.4.5, Delete Customer Notice Table, Dialog row `Thông báo xóa khách hàng` (Item 5), Confirmation row `Xác nhận` (Item 6), Cancellation row `Hủy` (Item 7).
@@ -74,6 +76,7 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 ---
 
 ### 2.3. Flow DEL-03: Vehicle Row Deletion Inside Customer Form (Vehicle Row Delete Flow)
+
 - **Stable Source Citations**:
   - SRS Section 4.4.3, Add Customer Table, Action row `Xóa` (Item 9, Action 23).
   - SRS Section 4.4.4, Edit Customer Table, Action row `Xóa` (Item 10, Action 26).
@@ -90,11 +93,12 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 ---
 
 ### 2.4. Flow DEL-04: Parking Ticket Deletion (Ticket Delete Flow)
+
 - **Stable Source Citations**:
   - SRS Section 4.6.1, Ticket List Table, Action column `Icon Xóa` (Item 10, Action 30).
   - SRS Section 4.6.4, Confirm Ticket Deletion Table, Dialog title (Row 0), Confirmation button `Yes` (Item 6, Action 12), Cancellation button `No` (Item 7, Action 13).
   - Wireframe: `image18.png` (Modal popup deletion confirmation dialog).
-- **Access Control (RBAC)**: **Manager-only (`MANAGER`)** (Conservative default; see OQ-39). The alternative allowing Employee deletion is an open question proposal `[PROPOSAL]` in OQ-39 awaiting Product Owner decision.
+- **Access Control (RBAC)**: **Manager-only (`MANAGER`)** (Decided in [`01-decision-log.md`](01-decision-log.md) `OQ-39`; `EMPLOYEE` calls receive `HTTP 403 Forbidden`).
 - **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`).
 - **Domain Guard Rules**:
   1. *Expired and Non-Renewed Constraint (Canonical SRS Fact)*: SRS 4.6.4 Row 1 & Row 6 dictate that ticket deletion is permitted **ONLY** for tickets that have expired and have not been renewed.
@@ -117,6 +121,7 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 ---
 
 ### 2.5. Flow DEL-05: Parking Slot Deletion (Parking Slot Delete Flow)
+
 - **Stable Source Citations**:
   - SRS Section 4.8.1, Parking Slot List Table, Action column `Xoá` (Item 9).
   - SRS Section 4.8.5, Delete Parking Slot Confirmation Table, Action button `Xóa` (Item 6, Action 9), Cancellation button `Hủy` (Item 7, Action 10).
@@ -174,14 +179,17 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 ## 4. Legal Compliance Analysis: Decree 13/2023/ND-CP
 
 ### 4.1. Official Legal Foundation
+
 - **Statute**: **Decree No. 13/2023/ND-CP** dated 17/04/2023 of the Government of Vietnam on Personal Data Protection (effective from 01/07/2023).
 - **Verified Official Sources**:
-  * Government Web Portal: https://vanban.chinhphu.vn/?pageid=27160&docid=207705 (Accessed: 2026-10-11).
-  * National Legal Database: https://vbpl.vn/bocongan/Pages/vbpq-van-ban-goc.aspx?ItemID=160246 (Accessed: 2026-10-11).
+  - Government Web Portal: <https://vanban.chinhphu.vn/?pageid=27160&docid=207705> (Accessed: 2026-10-11).
+  - National Legal Database: <https://vbpl.vn/bocongan/Pages/vbpq-van-ban-goc.aspx?ItemID=160246> (Accessed: 2026-10-11).
 - **Associated Statute**: **Accounting Law No. 88/2015/QH13** dated 20/11/2015 (Article 41 regarding statutory retention periods for financial vouchers).
 
 ### 4.2. Personal Data Collected by the Car Parking Lot System
+
 Per canonical SRS v4.1, the system processes:
+
 1. *Basic Personal Data (Article 2 Clause 3)*:
    - Full name (`HoTenNV`, `HoTenKH`).
    - Date of birth (`NgaySinhNV`, `NgaySinhKH`).
@@ -205,8 +213,8 @@ Per canonical SRS v4.1, the system processes:
 
 3. **Statutory Exceptions to Deletion Obligations (Article 16 Clause 2 Points a & d)**:
    - Personal data deletion obligations do not apply where:
-     * *Point a*: Governing law prohibits deletion (Per Accounting Law 2015, accounting vouchers substantiating parking fee revenue must be preserved for 5 to 10 years).
-     * *Point d*: Personal data is processed to serve legal obligations, scientific research, or statutory statistics (substantiating Screen 4.7.1 Revenue Statistics and tax compliance).
+     - *Point a*: Governing law prohibits deletion (Per Accounting Law 2015, accounting vouchers substantiating parking fee revenue must be preserved for 5 to 10 years).
+     - *Point d*: Personal data is processed to serve legal obligations, scientific research, or statutory statistics (substantiating Screen 4.7.1 Revenue Statistics and tax compliance).
 
 4. **Proposed Backend Architecture Solution: Data Anonymization Pattern (`[ASSUMPTION]` & `[PROPOSAL]` OQ-12)**:
    - To reconcile the 72-hour erasure obligation under Decree 13/2023/ND-CP with accounting voucher retention exceptions and revenue statistics preservation (SRS 4.7):
@@ -251,4 +259,5 @@ Per canonical SRS v4.1, the system processes:
         )
         ```
      4. Preserve foreign key references to `Ticket`, `Vehicle`, and `VehicleEntryExitLog` with anonymized technical IDs for financial auditability and occupancy reporting without exposing citizen identity.
-   - Executed via an administrative Django Management Command (`python manage.py purge_anonymize_customers --dry-run`) with strict administrative audit approvals.
+
+- Executed via an administrative Django Management Command (`python manage.py purge_anonymize_customers --dry-run`) with strict administrative audit approvals.

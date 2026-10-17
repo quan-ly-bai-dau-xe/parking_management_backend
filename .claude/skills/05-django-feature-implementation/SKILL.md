@@ -1,14 +1,16 @@
 ---
-name: django-feature-implementation
+name: 05-django-feature-implementation
 description: Guidelines for implementing backend business features in Django adhering to 3-tier architecture, DRF standards, domain services, data locking, and pytest-django test suites.
 ---
 
 # Skill: Django Feature Implementation
 
 ## 1. Objective
+
 Guide the implementation of backend REST API features following clear 3-tier architectural separation (Selectors, Services, ViewSets) with automated tests.
 
 ## 2. 3-Tier Layer Responsibilities
+
 - **`models.py`**: Inherit from `SafeDeleteModel` and `HistoricalRecords`. Foreign keys use `on_delete=models.PROTECT`. Partial unique indexes enforce uniqueness on active rows (`deleted_at__isnull=True`).
 - **`serializers.py`**: Validate payloads, coerce types, trim text whitespace, enforce max lengths, and aggregate validation errors.
 - **`selectors.py`**: Encapsulate read queries. Use `.select_related()` and `.prefetch_related()` to eliminate N+1 hazards.
@@ -17,6 +19,7 @@ Guide the implementation of backend REST API features following clear 3-tier arc
 - **`tests/`**: Automated tests using `pytest-django` covering happy path, validation errors, permission checks (403), and concurrency.
 
 ## 3. 3-Tier Code Skeleton
+
 ```python
 # selectors.py (Read)
 def list_entities(*, filter_val: str | None = None) -> QuerySet[Entity]:
@@ -41,6 +44,7 @@ class EntityViewSet(viewsets.ModelViewSet):
 ```
 
 ## 4. Verification Checklist
+
 - [ ] Views remain thin with zero direct ORM write or business logic.
 - [ ] Mutating operations execute within `@transaction.atomic` with row locking.
 - [ ] Read queries eliminate N+1 hazards via proper prefetching.

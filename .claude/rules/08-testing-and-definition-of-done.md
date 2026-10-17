@@ -8,7 +8,9 @@ paths:
 # 08-testing-and-definition-of-done.md — Testing & Definition of Done
 
 ## 1. Verified Definition of Done (DoD) Catalog
+
 Adapted from `docs/requirements/04-dod-and-quality-check.md` (source: `01-Reference/05. [BM] DoD Template.docx`) with source typos marked [sic]:
+
 1. **Code đã đuợc Review chéo** [sic]: Mandatory. Every PR to `dev` must be reviewed and approved by at least 1 team member.
 2. **Chức năng đã đưọc test chéo** [sic]: Mandatory. Feature tested independently by another developer or QA.
 3. **Test trên nhiều trình duyệt (IE, Chrome , Firefox)** [sic]: *N/A for the backend repo (frontend owner)*.
@@ -21,7 +23,9 @@ Adapted from `docs/requirements/04-dod-and-quality-check.md` (source: `01-Refere
 10. **Giao diện đúng với thiết kế**: *N/A for the backend repo (frontend owner)*. Backend equivalent is 100% compliance with OpenAPI 3.0 contract.
 
 ## 2. Team Lead Backend Engineering Quality Gates
+
 Every PR and release must satisfy all seven technical gates prior to merge:
+
 - **[TL-GATE-01] Automated Testing**: 100% test pass rate using `pytest-django`; line coverage **>= 80%** across views, services, selectors, and models.
 - **[TL-GATE-02] Linting & Formatting**: Clean run with `ruff check .` and `ruff format --check .` (0 warnings, 0 errors).
 - **[TL-GATE-03] Static Type Checking**: Clean run with `mypy .` using `django-stubs` (0 type errors).
