@@ -98,7 +98,7 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
   - SRS Section 4.6.1, Ticket List Table, Action column `Icon Xóa` (Item 10, Action 30).
   - SRS Section 4.6.4, Confirm Ticket Deletion Table, Dialog title (Row 0), Confirmation button `Yes` (Item 6, Action 12), Cancellation button `No` (Item 7, Action 13).
   - Wireframe: `image18.png` (Modal popup deletion confirmation dialog).
-- **Access Control (RBAC)**: **Manager-only (`MANAGER`)** (Conservative default; see OQ-39). The alternative allowing Employee deletion is an open question proposal `[PROPOSAL]` in OQ-39 awaiting Product Owner decision.
+- **Access Control (RBAC)**: **Manager-only (`MANAGER`)** (Decided in [`01-decision-log.md`](01-decision-log.md) `OQ-39`; `EMPLOYEE` calls receive `HTTP 403 Forbidden`).
 - **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`).
 - **Domain Guard Rules**:
   1. *Expired and Non-Renewed Constraint (Canonical SRS Fact)*: SRS 4.6.4 Row 1 & Row 6 dictate that ticket deletion is permitted **ONLY** for tickets that have expired and have not been renewed.

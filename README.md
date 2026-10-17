@@ -9,7 +9,7 @@ Intelligent Parking Lot Management System (`Bãi xe Smart Mobility`) — Backend
 ## 1. Project Overview & Scope
 
 - **Scope**: Backend REST API only (`parking_management_backend`). Client apps integrate via OpenAPI 3.0.
-- **Specification Hierarchy**: The Frontend design (`docs/requirements/06-frontend-srs-db-alignment.md`, `TL-01`–`TL-16`) is the **primary** source of requirements; the SRS v4.1 catalog (`docs/requirements/00-srs-catalog.md`) is **secondary** where the Frontend is silent.
+- **Specification Hierarchy**: The Frontend design (`docs/requirements/06-frontend-srs-db-alignment.md`, `TL-01`–`TL-22`) is the **primary** source of requirements; the SRS v4.1 catalog (`docs/requirements/00-srs-catalog.md`) is **secondary** where the Frontend is silent.
 - **Fixed Tech Stack**: Python `3.14.7` (3.15 forbidden), Django `6.1.2` (LTS roadmap to 6.2 in April 2027), DRF `3.18.3`, PostgreSQL `18.6` via Docker Compose (psycopg `3.3.6`). Details in [ADR-0001](docs/adr/0001-fixed-tech-stack-and-lts-roadmap.md).
 - **Database Schema v2 (`db/`)**: `28` base tables, `8` analytical views, `69` `ON DELETE RESTRICT` foreign keys, and `25` triggers documented in [`db/00-README.md`](db/00-README.md).
 - **Public Repo Security**: Zero secrets, zero production tokens, zero live credentials.
@@ -47,7 +47,7 @@ Intelligent Parking Lot Management System (`Bãi xe Smart Mobility`) — Backend
 
 ## 4. Documentation & AI Operating System
 
-- **Requirements**: [`docs/requirements/`](docs/requirements/) (`06-frontend-srs-db-alignment.md` primary FE-first decisions, `00-srs-catalog.md` secondary SRS catalog, open questions, DoD).
+- **Requirements**: [`docs/requirements/`](docs/requirements/) (`06-frontend-srs-db-alignment.md` primary FE-first decisions, `00-srs-catalog.md` secondary SRS catalog, `01-decision-log.md` decision log, DoD).
 - **Database**: [`db/00-README.md`](db/00-README.md), [`db/01-schema.sql`](db/01-schema.sql), [`db/02-seed.sql`](db/02-seed.sql).
 - **Architecture Decision Records**: [`docs/adr/`](docs/adr/) (0001 to 0005).
 - **Claude Code AI Rules**: [`.claude/rules/`](.claude/rules/) (01 to 09) and [`CLAUDE.md`](CLAUDE.md).

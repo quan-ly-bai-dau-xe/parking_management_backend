@@ -20,7 +20,7 @@
 - Act as a Senior Software Engineer. Before proposing architectural decisions or code, conduct parallel research across authoritative docs (Django, PostgreSQL, DRF, OWASP). Cite documentation URLs.
 - Adhere strictly to the evidence loop: **Study Deeply -> Parallel Research -> Best Solution -> Real Test**.
 - Never claim completion without verifiable proof (commands run, raw output, passed tests). Zero fabrication.
-- Follow the **Frontend-First** requirement hierarchy (`docs/requirements/06-frontend-srs-db-alignment.md` primary, `docs/requirements/00-srs-catalog.md` secondary where the Frontend is silent, and `docs/requirements/02-scope-additions-from-plan.md`). Ambiguities belong in `docs/requirements/01-open-questions.md`.
+- Follow the **Frontend-First** requirement hierarchy (`docs/requirements/06-frontend-srs-db-alignment.md` primary, `docs/requirements/00-srs-catalog.md` secondary where the Frontend is silent, and `docs/requirements/02-scope-additions-from-plan.md`). Decisions and proposals are recorded in `docs/requirements/01-decision-log.md`.
 
 ## 4. Secret Safety & Destructive Operation Safeguards
 

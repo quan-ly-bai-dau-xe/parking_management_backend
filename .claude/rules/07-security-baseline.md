@@ -38,8 +38,8 @@
 ## 4. RBAC & Endpoint Permissions
 
 - Every DRF viewset/view must declare explicit `permission_classes`:
-  - `IsManager`: Grants access to Employee management (4.3), Financial Statistics (4.7), Slot Configuration (4.8), and Ticket Deletion (`DELETE /api/v1/tickets/{id}/`, DEL-04; conservative default per OQ-39).
-  - `IsEmployeeOrManager`: Grants access to Customer management (4.4), Vehicle entry/exit (4.5), and Ticket create/view/renewal operations (4.6.1-4.6.3). (Note: Ticket deletion is restricted to `IsManager` by default; Employee deletion access is an open question proposal `[PROPOSAL]` under OQ-39).
+  - `IsManager`: Grants access to Employee management (4.3), Financial Statistics (4.7), Slot Configuration (4.8), and Ticket Deletion (`DELETE /api/v1/tickets/{id}/`, DEL-04; decided per `OQ-39` in `docs/requirements/01-decision-log.md`).
+  - `IsEmployeeOrManager`: Grants access to Customer management (4.4), Vehicle entry/exit (4.5), and Ticket create/view/renewal operations (4.6.1-4.6.3). (Note: Ticket deletion is restricted to `IsManager` per `OQ-39` in `docs/requirements/01-decision-log.md`).
 - Never rely on default `AllowAny` except for public login, CSRF cookie endpoint, and health check.
 
 ## 5. Privacy & Vietnam Personal Data Protection (Nghị định 13/2023/NĐ-CP)

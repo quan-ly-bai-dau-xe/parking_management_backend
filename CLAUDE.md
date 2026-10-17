@@ -7,7 +7,7 @@ Project guidance and architectural pointers for AI assistants in `parking_manage
 - **Scope**: Backend REST API only (Django 6.1.2 + PostgreSQL 18.6 + DRF 3.18.3). Frontend is out of scope.
 - **Contract Interface**: OpenAPI 3.0 specification (`drf-spectacular`).
 - **Public Repo Discipline**: Zero secrets, zero live credentials. Verify exclusions with `git check-ignore -v`.
-- **Source of Truth Hierarchy**: The Frontend design (`docs/requirements/06-frontend-srs-db-alignment.md`, `TL-01`–`TL-16`) is the **primary** source of requirements; the SRS catalog (`docs/requirements/00-srs-catalog.md`) is **secondary** where the Frontend is silent.
+- **Source of Truth Hierarchy**: The Frontend design (`docs/requirements/06-frontend-srs-db-alignment.md`, `TL-01`–`TL-22`) is the **primary** source of requirements; the SRS catalog (`docs/requirements/00-srs-catalog.md`) is **secondary** where the Frontend is silent.
 
 ## 2. Technology Stack & Planned Commands
 
@@ -28,8 +28,8 @@ Project guidance and architectural pointers for AI assistants in `parking_manage
 
 ## 4. Documentation Index
 
-- **Requirements (`docs/requirements/`)**: `06-frontend-srs-db-alignment.md` (primary FE-first decision record), `00-srs-catalog.md` (secondary SRS catalog), `01-open-questions.md`, `02-scope-additions-from-plan.md`, `03-delete-rules-catalog.md`, `04-dod-and-quality-check.md`, `05-proposed-messages.md`.
-- **Database (`db/`)**: `00-README.md`, `01-schema.sql`, `02-seed.sql` (ERD files `03-erd.asta` and `04`–`09` PNGs scheduled for regeneration in Round 24).
+- **Requirements (`docs/requirements/`)**: `06-frontend-srs-db-alignment.md` (primary FE-first decision record), `00-srs-catalog.md` (secondary SRS catalog), `01-decision-log.md`, `02-scope-additions-from-plan.md`, `03-delete-rules-catalog.md`, `04-dod-and-quality-check.md`, `05-proposed-messages.md`.
+- **Database (`db/`)**: `00-README.md`, `01-schema.sql`, `02-seed.sql`, `03-erd.asta`, and `04`–`09` ERD PNGs.
 - **ADRs (`docs/adr/`)**: `0001-fixed-tech-stack-and-lts-roadmap.md`, `0002-git-branching-and-collaboration-workflow.md`, `0003-data-deletion-soft-delete-protect-and-audit.md`, `0004-authentication-session-and-remember-token.md`, `0005-local-docker-compose-for-postgresql.md`.
 - **AI Rules (`.claude/rules/`)**: `01` to `09` (Numbered, imperative, testable).
 
