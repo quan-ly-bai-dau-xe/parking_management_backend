@@ -1,6 +1,6 @@
 # Verified SRS Requirements Catalog
 
-This catalog serves as the authoritative single source of truth for all functional requirements, data fields, validation rules, user actions, and verbatim dialogue messages extracted directly from `Quan ly bai dau xe oto_SRS_v4.1.docx` and the 25 embedded wireframe diagrams (`image1.png` through `image25.png`).
+This catalog is authoritative for the SRS content — all functional requirements, data fields, validation rules, user actions, and verbatim dialogue messages extracted directly from `Quan ly bai dau xe oto_SRS_v4.1.docx` and the 25 embedded wireframe diagrams (`image1.png` through `image25.png`) — and serves as the secondary source of truth to the Frontend design ([`06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md), `TL-19`).
 
 Every requirement is assigned a stable identifier (Stable ID) and a stable citation (Section + Table Name + Row/Item Label, or `image N: element`). File line numbers are strictly prohibited as citations.
 

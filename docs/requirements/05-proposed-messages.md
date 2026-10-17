@@ -1,19 +1,19 @@
-# Proposed Backend Messages Catalog Awaiting Approval
+# Proposed Backend Messages Catalog (`[PROPOSAL]`)
 
-This document registers all proposed user messages (**[PROPOSAL]**) for backend API interaction points where the canonical specification `Quan ly bai dau xe oto_SRS_v4.1.docx` **does not define a specific verbatim dialogue string** (where the SRS only describes mutation side-effects or records test scenario descriptions).
+This document registers all proposed user messages (**[PROPOSAL]**) for backend API interaction points where the Frontend export (`Parking Project`) and the secondary SRS specification `Quan ly bai dau xe oto_SRS_v4.1.docx` **do not define a specific verbatim dialogue string** (where the SRS only describes mutation side-effects or records test scenario descriptions).
 
-All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and require formal approval from the Product Owner (PO) prior to production release. Note on Check_Quality Item 6 (Punctuation): Check_Quality Item 6 specifies terminating punctuation (`.`), whereas verbatim SRS v4.1 messages end without punctuation. By default, SRS messages remain unpunctuated verbatim, while proposed messages here include terminating punctuation (`.`) pending formal PO decision on unified punctuation policy (**OQ-46**).
+All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are decided by the Team Lead (`TL-19`, `TL-22`). Note on Check_Quality Item 6 (Punctuation, **OQ-46**): Verbatim SRS v4.1 messages without final punctuation stay exact as SRS text, whereas new proposed messages (`PROP-*`) follow the Frontend and ordinary Vietnamese style with terminating punctuation (`.`).
 
 ---
 
 ## 1. Principles Distinguishing SRS Verbatim Messages from Proposals
 
-1. **Single Source of Truth**:
-   - `docs/requirements/00-srs-catalog.md` contains ONLY messages with verbatim text in SRS v4.1 (identified as `MSG-<Screen>-M<Number>`).
+1. **Source Hierarchy (`FE-First` & Authoritative SRS Content)**:
+   - Under `TL-19` and `TL-22`, [`docs/requirements/06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-01`–`TL-22`) is the primary source of truth from the Frontend design, while [`docs/requirements/00-srs-catalog.md`](00-srs-catalog.md) is authoritative for the SRS v4.1 content (containing ONLY messages with verbatim text in SRS v4.1, identified as `MSG-<Screen>-M<Number>`) and secondary to the Frontend design.
    - Test conditions in the SRS Failure column without verbatim text are cataloged as **Scenario Descriptions** (`CASE-<Screen>-TH<Number>`).
 2. **Standardization of Proposals ([PROPOSAL])**:
-   - When a backend API must return an error or success message where the SRS provides no text, assign a proposal code: `PROP-<Screen>-P<Number>`.
-   - Each `PROP-` entry links directly to an open question in `docs/requirements/01-open-questions.md` (`OQ-13` through `OQ-38`, `OQ-63`, `OQ-67`, `OQ-81`).
+   - When a backend API must return an error or success message where the Frontend and SRS provide no text, assign a proposal code: `PROP-<Screen>-P<Number>`.
+   - Each `PROP-` entry links directly to its decision entry in [`docs/requirements/01-decision-log.md`](01-decision-log.md) (`OQ-13` through `OQ-38`, `OQ-63`, `OQ-67`, `OQ-81`).
    - Strictly prohibit claiming these proposals as "verbatim SRS messages" in rules, skills, or agent prompts.
 
 ---
@@ -22,7 +22,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ### 2.1. Employee Management Module (SRS 4.3)
 
-| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-4.3.3-P01** | 4.3.3 Edit Employee (Update) | Successful employee update | SRS describes: "Dữ liệu được cập nhật vào bảng Nhân viên..." | `Cập nhật thông tin nhân viên thành công.` | 200 OK | **OQ-13** |
 | **PROP-4.3.3-P02** | 4.3.3 Edit Employee (Update) | Employee record not found during update | SRS does not define not-found message | `Nhân viên không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-13** |
@@ -32,7 +32,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ### 2.2. Customer Management Module (SRS 4.4)
 
-| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-4.4.3-P01** | 4.4.3 Add Customer (Save) | Customer and vehicle saved successfully | SRS describes: "Dữ liệu sẽ được lưu vào cơ sở dữ liệu..." | `Thêm mới thông tin khách hàng thành công.` | 201 Created | **OQ-14** |
 | **PROP-4.4.4-P01** | 4.4.4 Edit Customer (Update) | Customer updated successfully | SRS describes: "Dữ liệu sẽ được cập nhật vào database..." | `Cập nhật thông tin khách hàng thành công.` | 200 OK | **OQ-15** |
@@ -45,7 +45,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ### 2.3. Vehicle In/Out & Parking Map Module (SRS 4.5 & FE `Sơ đồ bãi đậu xe`)
 
-| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-4.5.2-P01** | 4.5.2 Parking Map / 4.5.1 Vehicle In/Out | Attempting to occupy or select a slot currently under maintenance | SRS does not define error dialogue string for maintenance slots | `Vị trí này đang bảo trì.` | 400 Bad Request | **OQ-63**, **OQ-67** |
 | **PROP-4.5.2-P02** | `Sơ đồ bãi đậu xe` (`TL-03`) | Changing slot status away from `OCCUPIED` while an open session exists | FE & SRS do not define guard message | `Không thể chuyển trạng thái vị trí khi đang có xe đỗ trong ô.` | 400 Bad Request | **OQ-81** |
@@ -58,7 +58,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ### 2.4. Ticket Management Module (SRS 4.6)
 
-| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-4.6.2-P01** | 4.6.2 Add Ticket (Save) | Ticket created successfully | SRS describes: "Một vé đã được thêm mới vào database..." | `Thêm mới vé đỗ xe thành công.` | 201 Created | **OQ-16** |
 | **PROP-4.6.3-P01** | 4.6.3 Edit Ticket (Renew) | Ticket renewed successfully | SRS describes: "Dữ liệu được cập nhật vào bảng Vé..." | `Gia hạn vé đỗ xe thành công.` | 200 OK | **OQ-17** |
@@ -72,7 +72,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ### 2.5. Statistics Module (SRS 4.7)
 
-| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-4.7.1-P01** | 4.7.1 Aggregate Stats (Chart) | `CASE-4.7.1-TH2`: Invalid selection criteria | SRS states: "Không thống kê được do lỗi dữ liệu chọn không hợp lệ" | `Dữ liệu điều kiện thống kê không hợp lệ.` | 400 Bad Request | **OQ-34** |
 | **PROP-4.7.1-P02** | 4.7.1 Aggregate Stats (Chart) | `CASE-4.7.1-TH3`: Connection error | SRS states: "Không thống kê được do lỗi kết nối" | `Lỗi kết nối hệ thống khi tạo biểu đồ thống kê.` | 500 Internal Error | **OQ-35** |
@@ -84,7 +84,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ### 2.6. Parking Lot & Slot Management Module (SRS 4.8)
 
-| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-4.8.2-P01** | 4.8.2 Add Slot (Add) | Parking slot created successfully | SRS describes: "màn hình sẽ chuyển đến trang danh sách vị trí" | `Thêm mới vị trí đỗ xe thành công.` | 201 Created | **OQ-22** |
 | **PROP-4.8.2-P02** | 4.8.2 Add Slot (Add) | `CASE-4.8.2-TH1`: Invalid slot data | SRS states: "TH: Dữ liệu thêm không hợp lệ" | `Dữ liệu vị trí đỗ xe không hợp lệ, xin mời nhập lại.` | 400 Bad Request | **OQ-23** |
@@ -104,14 +104,14 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and requi
 
 ### 2.7. Standard Generic API Error Envelope
 
-| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Open Question |
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :--- | :---: |
 | **PROP-GEN-P01** | Generic Error Envelope | General validation error envelope | SRS defines no generic 400 error string | `Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu` | 400 Bad Request | **OQ-13** |
 
 ---
 
-## 3. Approval and Implementation Protocol
+## 3. Governance and Implementation Protocol
 
 1. Backend developers and AI coding agents **MUST NOT** modify the strings above without authorization.
 2. In API serializers and exception handlers, reference centralized constants (e.g. `apps.common.messages.PROPOSAL_MESSAGES`), explicitly marking `[PROPOSAL]` and referencing `PROP-` IDs.
-3. When the Product Owner formally approves any proposed message string, it transitions to formal specification status and is integrated into the core product catalog.
+3. All proposed message strings in this catalog are decided by the Team Lead (`TL-19`, `TL-22`) and linked to [`docs/requirements/01-decision-log.md`](01-decision-log.md).
