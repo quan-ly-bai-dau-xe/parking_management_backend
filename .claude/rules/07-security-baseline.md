@@ -14,7 +14,9 @@
   - `SESSION_COOKIE_SAMESITE = 'Lax'`
   - `CSRF_COOKIE_SECURE = True`
   - `CSRF_COOKIE_HTTPONLY = False` (enabling SPA to transmit `X-CSRFToken` header).
-- **Remember Password**: Under no circumstances may plaintext or hashed passwords be stored in client cookies. Use cryptographically random persistent login tokens hashed via SHA-256 with rotation on use (ADR-0004).
+- **Remember Password & Token Lifecycle (ADR-0004, TL-36)**:
+  - Under no circumstances may plaintext or hashed passwords be stored in client cookies. Use cryptographically random persistent login tokens hashed via SHA-256 with rotation on use.
+  - *Plain DELETE Exemption (TL-36)*: Tables `persistent_login_token` and `password_reset_token` are explicitly exempted from database immutable guards to allow physical `DELETE` operations for token rotation on re-auth, user logout, and security revocation upon suspicious reuse.
 - **CORS Whitelist**: Configure `django-cors-headers` with explicit allowed origins (`CORS_ALLOWED_ORIGINS`). Never use `CORS_ALLOW_ALL_ORIGINS = True`.
 
 ## 3. Password Policy & Hashing

@@ -2,18 +2,18 @@
 
 This document registers all proposed user messages (**[PROPOSAL]**) for backend API interaction points where the Frontend export (`Parking Project`) and the secondary SRS specification `Quan ly bai dau xe oto_SRS_v4.1.docx` **do not define a specific verbatim dialogue string** (where the SRS only describes mutation side-effects or records test scenario descriptions).
 
-All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are decided by the Team Lead (`TL-19`, `TL-22`). Note on Check_Quality Item 6 (Punctuation, **OQ-46**): Verbatim SRS v4.1 messages without final punctuation stay exact as SRS text, whereas new proposed messages (`PROP-*`) follow the Frontend and ordinary Vietnamese style with terminating punctuation (`.`).
+All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are decided by the Team Lead (`TL-19`, `TL-22`, `TL-25`). Note on Check_Quality Item 6 (Punctuation, **OQ-46**): Verbatim SRS v4.1 messages without final punctuation stay exact as SRS text, whereas new proposed messages (`PROP-*`) follow the Frontend and ordinary Vietnamese style with terminating punctuation (`.`).
 
 ---
 
 ## 1. Principles Distinguishing SRS Verbatim Messages from Proposals
 
 1. **Source Hierarchy (`FE-First` & Authoritative SRS Content)**:
-   - Under `TL-19` and `TL-22`, [`docs/requirements/06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-01`–`TL-22`) is the primary source of truth from the Frontend design, while [`docs/requirements/00-srs-catalog.md`](00-srs-catalog.md) is authoritative for the SRS v4.1 content (containing ONLY messages with verbatim text in SRS v4.1, identified as `MSG-<Screen>-M<Number>`) and secondary to the Frontend design.
+   - Under `TL-19`, `TL-22`, and `TL-25`, [`docs/requirements/06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-01`–`TL-35`) is the primary source of truth from the Frontend design, while [`docs/requirements/00-srs-catalog.md`](00-srs-catalog.md) is authoritative for the SRS v4.1 content (containing ONLY messages with verbatim text in SRS v4.1, identified as `MSG-<Screen>-M<Number>`) and secondary to the Frontend design.
    - Test conditions in the SRS Failure column without verbatim text are cataloged as **Scenario Descriptions** (`CASE-<Screen>-TH<Number>`).
 2. **Standardization of Proposals ([PROPOSAL])**:
-   - When a backend API must return an error or success message where the Frontend and SRS provide no text, assign a proposal code: `PROP-<Screen>-P<Number>`.
-   - Each `PROP-` entry links directly to its decision entry in [`docs/requirements/01-decision-log.md`](01-decision-log.md) (`OQ-13` through `OQ-38`, `OQ-63`, `OQ-67`, `OQ-81`).
+   - When a backend API or database trigger must return an error or success message where the Frontend and SRS provide no text, assign a proposal code: `PROP-<Screen>-P<Number>` or `PROP-DEL-<Code>`.
+   - Each `PROP-` entry links directly to its decision entry in [`docs/requirements/01-decision-log.md`](01-decision-log.md) (`OQ-10`, `OQ-13` through `OQ-43`, `OQ-63`, `OQ-67`, `OQ-81`) and [`docs/requirements/06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md) (`TL-25`).
    - Strictly prohibit claiming these proposals as "verbatim SRS messages" in rules, skills, or agent prompts.
 
 ---
@@ -38,8 +38,8 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-4.4.4-P01** | 4.4.4 Edit Customer (Update) | Customer updated successfully | SRS describes: "Dữ liệu sẽ được cập nhật vào database..." | `Cập nhật thông tin khách hàng thành công.` | 200 OK | **OQ-15** |
 | **PROP-4.4.4-P02** | 4.4.4 Edit Customer (Update) | Customer record not found on update | SRS does not define 404 message | `Khách hàng không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-15** |
 | **PROP-4.4.5-P01** | 4.4.5 Delete Customer (Confirm) | Customer record not found on delete | SRS does not define 404 message | `Khách hàng không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-15** |
-| **PROP-4.4.5-P02** | 4.4.5 Delete Customer (Confirm) | Customer has vehicles parked in lot | SRS does not define guard rule (DEL-02) | `Khách hàng đang có phương tiện trong bãi, không được phép xóa.` | 400 Bad Request | **OQ-15** |
-| **PROP-4.4.5-P03** | 4.4.5 Delete Customer (Confirm) | Customer has active tickets | SRS does not define guard rule (DEL-02) | `Khách hàng đang có vé xe còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-15** |
+| **PROP-4.4.5-P02** | 4.4.5 Delete Customer (Confirm) | Customer has vehicles parked in lot | SRS does not define guard rule (DEL-02) | `Khách hàng đang có phương tiện trong bãi, không được phép xóa.` | 400 Bad Request | **OQ-15**, **OQ-40** |
+| **PROP-4.4.5-P03** | 4.4.5 Delete Customer (Confirm) | Customer has active tickets | SRS does not define guard rule (DEL-02) | `Khách hàng đang có vé xe còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-15**, **OQ-40** |
 
 ---
 
@@ -62,7 +62,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-4.6.2-P01** | 4.6.2 Add Ticket (Save) | Ticket created successfully | SRS describes: "Một vé đã được thêm mới vào database..." | `Thêm mới vé đỗ xe thành công.` | 201 Created | **OQ-16** |
 | **PROP-4.6.3-P01** | 4.6.3 Edit Ticket (Renew) | Ticket renewed successfully | SRS describes: "Dữ liệu được cập nhật vào bảng Vé..." | `Gia hạn vé đỗ xe thành công.` | 200 OK | **OQ-17** |
-| **PROP-4.6.4-P01** | 4.6.4 Delete Ticket (Yes) | `CASE-4.6.4-TH1`: Ticket is active / not expired | SRS describes case: "vé được xóa là vé chưa hết hạn thì không được xóa" | `Vé chưa hết hạn sử dụng, không được phép xóa.` | 400 Bad Request | **OQ-18** |
+| **PROP-4.6.4-P01** | 4.6.4 Delete Ticket (Yes) | `CASE-4.6.4-TH1`: Ticket is active / not expired | SRS describes case: "vé được xóa là vé chưa hết hạn thì không được xóa" | `Vé chưa hết hạn, không được phép xóa.` | 400 Bad Request | **OQ-18** |
 | **PROP-4.6.4-P02** | 4.6.4 Delete Ticket (Yes) | `CASE-4.6.4-TH1`: Ticket already renewed | Decomposed from TH1: "không cho phép xóa vé đã gia hạn" | `Vé đã được gia hạn, không được phép xóa.` | 400 Bad Request | **OQ-18** |
 | **PROP-4.6.4-P03** | 4.6.4 Delete Ticket (Yes) | `CASE-4.6.4-TH2`: Concurrent deletion contention | SRS describes case: "vé được xóa đang được xóa bởi 1 người dùng khác thì không được xóa" | `Vé đang được xử lý bởi người dùng khác, vui lòng thử lại sau.` | 409 Conflict | **OQ-19** |
 | **PROP-4.6.4-P04** | 4.6.4 Delete Ticket (Yes) | `CASE-4.6.4-TH3`: Connection error on delete | SRS describes case: "Vé được xóa không kết nối được" | `Lỗi kết nối cơ sở dữ liệu khi thực hiện xóa vé.` | 500 Internal Error | **OQ-20** |
@@ -73,7 +73,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 ### 2.5. Statistics Module (SRS 4.7)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
-| :---: | :--- | :--- | :--- | :--- | :---: | :---: |
+| :---: | :--- | :--- | :--- | :--- | :--- | :---: |
 | **PROP-4.7.1-P01** | 4.7.1 Aggregate Stats (Chart) | `CASE-4.7.1-TH2`: Invalid selection criteria | SRS states: "Không thống kê được do lỗi dữ liệu chọn không hợp lệ" | `Dữ liệu điều kiện thống kê không hợp lệ.` | 400 Bad Request | **OQ-34** |
 | **PROP-4.7.1-P02** | 4.7.1 Aggregate Stats (Chart) | `CASE-4.7.1-TH3`: Connection error | SRS states: "Không thống kê được do lỗi kết nối" | `Lỗi kết nối hệ thống khi tạo biểu đồ thống kê.` | 500 Internal Error | **OQ-35** |
 | **PROP-4.7.2-P01** | 4.7.2 Conditional Stats | `CASE-4.7.2-TH1`: No matching data | SRS states: "TH: Không có dữ liệu để thống kê" | `Không có dữ liệu phù hợp để thống kê.` | 200 OK (Empty) | **OQ-36** |
@@ -95,23 +95,53 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-4.8.3-P03** | 4.8.3 Edit Slot (Save) | `CASE-4.8.3-TH2`: Concurrent slot update | SRS states: "TH: Lỗi do dữ liệu đang được update bởi 1 user khác" | `Vị trí đỗ xe đang được cập nhật bởi người dùng khác.` | 409 Conflict | **OQ-28** |
 | **PROP-4.8.3-P04** | 4.8.3 Edit Slot (Save) | `CASE-4.8.3-TH3`: Connection error | SRS states: "TH: Lỗi do kết nối" | `Lỗi kết nối máy chủ khi cập nhật vị trí đỗ xe.` | 500 Internal Error | **OQ-29** |
 | **PROP-4.8.5-P01** | 4.8.5 Delete Slot (Delete) | Parking slot deleted successfully | SRS describes: "Vị trí đỗ được xóa và quay lại..." | `Xóa vị trí đỗ xe thành công.` | 200 OK | **OQ-30** |
-| **PROP-4.8.5-P02** | 4.8.5 Delete Slot (Delete) | `CASE-4.8.5-TH1`: Slot has active parking vehicle | SRS states: "TH: Xóa vị trí đang được xe đk vé đỗ" | `Vị trí đỗ xe đang có phương tiện đăng ký vé, không được phép xóa.` | 400 Bad Request | **OQ-31** |
-| **PROP-4.8.5-P03** | 4.8.5 Delete Slot (Delete) | `CASE-4.8.5-TH2`: Slot deletion contention | SRS states: "TH: Xoa vị trí đang được xóa bởi người khác" | `Vị trí đỗ xe đang được xóa bởi người dùng khác.` | 409 Conflict | **OQ-32** |
+| **PROP-4.8.5-P02** | 4.8.5 Delete Slot (Delete) | `CASE-4.8.5-TH1`: Slot has active parking vehicle / ticket | SRS states: "TH: Xóa vị trí đang được xe đk vé đỗ" | `Vị trí đỗ xe đang có phương tiện đăng ký vé, không được phép xóa.` | 400 Bad Request | **OQ-31**, **OQ-32** |
+| **PROP-4.8.5-P03** | 4.8.5 Delete Slot (Delete) | `CASE-4.8.5-TH2`: Slot deletion contention | SRS states: "TH: Xoa vị trí đang được xóa bởi người khác" | `Vị trí đỗ xe đang được xóa bởi người dùng khác.` | 409 Conflict | **OQ-32**, **OQ-33** |
 | **PROP-4.8.5-P04** | 4.8.5 Delete Slot (Delete) | `CASE-4.8.5-TH3`: Connection error | SRS states: "TH: xóa nhưng không kết nối được" | `Lỗi kết nối máy chủ khi xóa vị trí đỗ xe.` | 500 Internal Error | **OQ-33** |
-| **PROP-4.8.5-P05** | 4.8.5 Delete Slot (Delete) | Slot not found on delete request | SRS does not define 404 message | `Vị trí đỗ xe không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-30** |
+| **PROP-4.8.5-P05** | 4.8.5 Delete Slot (Delete) | Slot not found on delete request | SRS does not define 404 message | `Vị trí đỗ xe không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-30**, **OQ-33** |
 
 ---
 
 ### 2.7. Standard Generic API Error Envelope
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
-| :---: | :--- | :--- | :--- | :--- | :--- | :---: |
+| :---: | :--- | :--- | :--- | :--- | :---: | :---: |
 | **PROP-GEN-P01** | Generic Error Envelope | General validation error envelope | SRS defines no generic 400 error string | `Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu` | 400 Bad Request | **OQ-13** |
+
+---
+
+### 2.8. Database Soft-Delete Guard Messages (`fn_guard_soft_delete_and_restore`, `TL-25`)
+
+| Proposal ID | Target Table & Flow | Guard Condition (`BEFORE UPDATE OF deleted_at`) | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
+| :---: | :--- | :--- | :--- | :---: | :---: |
+| **PROP-DEL-01-SELF** | `account` (`DEL-01`) | Self-deletion of authenticated account (`NEW.deleted_by = OLD.id`) | `Tài khoản đang đăng nhập không được phép tự xóa chính mình.` | 400 Bad Request | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-LAST-MGR** | `account` (`DEL-01`) | Deleting the last active `MANAGER` account | `Không thể xóa tài khoản Quản lý hoạt động cuối cùng trong hệ thống.` | 400 Bad Request | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-SELF-EMP** | `employee` (`DEL-01`) | Self-deletion of authenticated employee profile (`NEW.deleted_by = OLD.account_id`) | `Nhân viên đang đăng nhập không được phép tự xóa hồ sơ của chính mình.` | 400 Bad Request | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-LAST-MGR-EMP** | `employee` (`DEL-01`) | Deleting employee linked to the last active `MANAGER` account | `Không thể xóa nhân viên gắn với tài khoản Quản lý hoạt động cuối cùng.` | 400 Bad Request | **OQ-10**, **TL-25** |
+| **PROP-DEL-02-ACTIVE-VEH** | `customer` (`DEL-02`) | Customer still owns active (`deleted_at IS NULL`) vehicles | `Khách hàng đang có phương tiện hoạt động trong hệ thống, không được phép xóa.` | 400 Bad Request | **OQ-40**, **TL-25** |
+| **PROP-DEL-03-OPEN-SES** | `vehicle` (`DEL-03`) | Vehicle has an open parking session (`exit_time IS NULL`) | `Phương tiện đang đỗ trong bãi xe (có phiên đỗ đang mở), không được phép xóa.` | 400 Bad Request | **OQ-41**, **TL-25** |
+| **PROP-DEL-03-ACTIVE-TKT** | `vehicle` (`DEL-03`) | Vehicle holds an active unexpired ticket | `Phương tiện đang có vé đỗ xe còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-41**, **TL-25** |
+| **PROP-DEL-03-ACTIVE-RSV** | `vehicle` (`DEL-03`) | Vehicle holds an active advance slot reservation | `Phương tiện đang có đặt trước vị trí đỗ xe còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-41**, **TL-25** |
+| **PROP-DEL-04-OPEN-SES** | `ticket` (`DEL-04`) | Linked vehicle currently has an open parking session (`exit_time IS NULL`) | `Phương tiện liên kết với vé đang đỗ trong bãi xe, không được phép xóa vé.` | 400 Bad Request | **OQ-42**, **TL-25** |
+| **PROP-DEL-05-OCCUPIED** | `parking_slot` (`DEL-05`) | Slot status is `'OCCUPIED'`/`'CHARGING'` or has an open parking session | `Không thể xóa vị trí đỗ xe đang có phương tiện đỗ (trạng thái OCCUPIED).` | 400 Bad Request | **OQ-31**, **OQ-43**, **TL-25** |
+| **PROP-DEL-05-RESERVED** | `parking_slot` (`DEL-05`) | Slot has an active reservation (`slot_reservation`) or status `'RESERVED'` | `Vị trí đỗ xe đang được đặt trước còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-43**, **TL-25** |
+| **PROP-DEL-06-LOT** | `parking_lot` (`DEL-06`) | Parking lot still has active (`deleted_at IS NULL`) floors | `Bãi đỗ xe còn tầng đang hoạt động, không được phép xóa.` | 400 Bad Request | **TL-25** |
+| **PROP-DEL-06-FLOOR** | `parking_floor` (`DEL-06`) | Parking floor still has active (`deleted_at IS NULL`) zones | `Tầng bãi xe còn khu vực (zone) đang hoạt động, không được phép xóa.` | 400 Bad Request | **TL-25** |
+| **PROP-DEL-06-ZONE** | `parking_zone` (`DEL-06`) | Parking zone still has active (`deleted_at IS NULL`) slots | `Khu vực đỗ xe còn vị trí (slot) đang hoạt động, không được phép xóa.` | 400 Bad Request | **TL-25** |
+| **PROP-DEL-06-TICKET-TYPE** | `ticket_type` (`DEL-06`) | Ticket type is referenced by active unexpired tickets | `Loại vé đang được sử dụng bởi các vé còn hiệu lực, không được phép xóa.` | 400 Bad Request | **TL-25** |
+| **PROP-DEL-06-POSITION** | `position` (`DEL-06`) | Position is assigned to active (`deleted_at IS NULL`) employees | `Chức vụ đang được phân công cho nhân viên đang hoạt động, không được phép xóa.` | 400 Bad Request | **TL-25** |
+| **PROP-DEL-06-VEHICLE-TYPE** | `vehicle_type` (`DEL-06`) | Vehicle type is linked to active (`deleted_at IS NULL`) vehicles | `Loại xe đang được liên kết với phương tiện đang hoạt động, không được phép xóa.` | 400 Bad Request | **TL-25** |
+| **PROP-DEL-06-GATE** | `parking_gate` (`DEL-06`) | Gate is handling an open parking session (`exit_time IS NULL`) | `Cổng kiểm soát đang xử lý phiên đỗ xe chưa hoàn thành, không được phép xóa.` | 400 Bad Request | **TL-25** |
+| **PROP-DEL-SAVT-IN-USE** | `slot_allowed_vehicle_type` | Deleting type from slot currently referenced by active tickets, open sessions, or reservations (`trg_guard_slot_allowed_vehicle_type_delete`) | `Không thể xóa loại xe khỏi vị trí đỗ khi đang có vé, phiên đỗ hoặc đặt chỗ hiệu lực của loại xe này.` | 400 Bad Request | **TL-37** |
+| **PROP-SLOT-VEHICLE-TYPE-MISMATCH** | `ticket`, `slot_reservation`, `log` | Assigning/parking vehicle into slot not allowing vehicle's type | `Loại phương tiện không tương thích với danh sách loại xe cho phép của vị trí đỗ này.` | 400 Bad Request | **TL-38** |
+| **PROP-DEL-PAYMENT-SETTLED** | `payment` | Soft-deleting payment with `status IN ('PAID', 'REFUNDED')` | `Không thể xóa giao dịch thanh toán đã hoàn thành (PAID) hoặc đã hoàn tiền (REFUNDED).` | 400 Bad Request | **TL-39** |
+| **PROP-PAY-STATUS-TRANSITION** | `payment` (`trg_guard_payment_update`) | Invalid status transition (`UNPAID -> PAID/CANCELLED`, `PAID -> REFUNDED` only; terminal statuses) | `Chuyển đổi trạng thái thanh toán không hợp lệ.` | 400 Bad Request | **TL-42** |
+| **PROP-PAY-SETTLED-IMMUTABLE** | `payment` (`trg_guard_payment_update`) | Modifying financial or link columns on settled/refunded payments (`status IN ('PAID', 'REFUNDED')`) | `Không thể chỉnh sửa thông tin tài chính hoặc liên kết của chứng từ thanh toán đã hoàn thành (PAID) hoặc đã hoàn tiền (REFUNDED).` | 400 Bad Request | **TL-42** |
 
 ---
 
 ## 3. Governance and Implementation Protocol
 
 1. Backend developers and AI coding agents **MUST NOT** modify the strings above without authorization.
-2. In API serializers and exception handlers, reference centralized constants (e.g. `apps.common.messages.PROPOSAL_MESSAGES`), explicitly marking `[PROPOSAL]` and referencing `PROP-` IDs.
-3. All proposed message strings in this catalog are decided by the Team Lead (`TL-19`, `TL-22`) and linked to [`docs/requirements/01-decision-log.md`](01-decision-log.md).
+2. In API serializers, exception handlers, and PostgreSQL triggers (`fn_guard_soft_delete_and_restore`), reference centralized constants (e.g. `apps.common.messages.PROPOSAL_MESSAGES`), explicitly marking `[PROPOSAL]` and referencing `PROP-` IDs.
+3. All proposed message strings in this catalog are decided by the Team Lead (`TL-19`, `TL-22`, `TL-25`) and linked to [`docs/requirements/01-decision-log.md`](01-decision-log.md) and [`docs/requirements/06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md).
