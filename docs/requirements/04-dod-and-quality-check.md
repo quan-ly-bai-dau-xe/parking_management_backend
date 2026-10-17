@@ -7,6 +7,7 @@ Tài liệu này đặc tả chính xác nguyên văn (copy-exact) các tiêu ch
 ## 1. Danh Mục 10 Tiêu Chí Definition of Done (DoD)
 
 ### 1.1. Bảng Trích Dẫn Nguyên Văn (Copy-Exact)
+
 - **Nguồn tài liệu gốc**: `01-Reference/05. [BM] DoD Template.docx` (và được dẫn chiếu trong `01-Reference/04. [BM] Team Charter.docx`).
 - **Phần trích xuất**: Đoạn văn bản (Paragraphs) 4 đến 13 dưới tiêu đề `ĐỊNH NGHĨA HOÀN THÀNH CỦA NHÓM`.
 
@@ -26,6 +27,7 @@ Tài liệu này đặc tả chính xác nguyên văn (copy-exact) các tiêu ch
 ---
 
 ### 1.2. Các Cổng Kỹ Thuật Bổ Sung Cho Backend (TEAM LEAD DECISION)
+
 Để đảm bảo chất lượng kỹ thuật cao cấp (enterprise-grade) cho dự án Backend công khai (`parking_management_backend`), Team Lead quy định các cổng kiểm soát kỹ thuật bắt buộc sau đây (áp dụng cho mọi Pull Request):
 
 1. **[TL-GATE-01] Kiểm thử tự động (Automated Test Suite)**:
@@ -52,6 +54,7 @@ Tài liệu này đặc tả chính xác nguyên văn (copy-exact) các tiêu ch
 ## 2. Danh Mục 20 Tiêu Chí Check_Quality (Copy-Exact & Ánh Xạ Backend)
 
 ### 2.1. Nguồn Dữ Liệu Gốc
+
 - **File**: `00-Product/10-Check_Quality/Sprint_2/[CGDN]_Check_Quality.xlsx`
 - **Sheet**: `Account`
 - **Dòng**: `Row 5 (A5:E5)` đến `Row 24 (A24:E24)`.
@@ -87,6 +90,7 @@ Tài liệu này đặc tả chính xác nguyên văn (copy-exact) các tiêu ch
 ## 3. Danh Mục 12 Tiêu Chí Check_Quality Sprint 1 (Copy-Exact)
 
 ### 3.1. Nguồn Dữ Liệu Gốc
+
 - **File**: `00-Product/10-Check_Quality/Sprint_1/[CGDN]_Check_Quality.xlsx`
 - **Sheet**: `Account`
 - **Dòng**: `Row 4 (A4:F4)` đến `Row 15 (A15:F15)`.

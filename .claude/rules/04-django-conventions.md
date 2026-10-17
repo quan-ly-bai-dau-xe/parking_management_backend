@@ -8,6 +8,7 @@ paths:
 # 04-django-conventions.md — Django & DRF Architectural Conventions
 
 ## 1. Project Layout & App Boundaries
+
 - All functional modules reside in `apps/<module>/`:
   - `apps/accounts/`: Authentication, users, roles, password policies.
   - `apps/employees/`: Employee management (4.3).
@@ -23,13 +24,14 @@ paths:
   - `config/settings/production.py`: Hardened production settings (DEBUG=False, strict cookie security).
 
 ## 2. Three-Tier Architectural Pattern
+
 1. **Views / ViewSets (`apps/<module>/views/`)**:
    - Strictly thin. Responsible only for HTTP protocol negotiation, permission checks, calling serializers, invoking services/selectors, and returning HTTP responses.
    - Never write business rules or direct ORM write queries in views.
 2. **Services (`apps/<module>/services/`)**:
    - Contain all write business logic, multi-table transactions (`transaction.atomic`), referential guards, and safe-delete operations.
 3. **Selectors (`apps/<module>/selectors/`)**:
-   - Encapsulate read queries. Always use `select_related()` and `prefetch_related()` to eliminate N+1 query antipatterns.
+   - Encapsulate read queries. Always use `select_related()` and `prefetch_related()` to eliminate N+1 query anti-patterns.
 4. **Serializers (`apps/<module>/serializers/`)**:
    - Validate request inputs thoroughly and return all validation errors simultaneously (Check_Quality item 8: "Các message check validate có xuất hiện cùng lúc chưa?").
    - Automatically trim leading/trailing whitespace on all string inputs before validation and storage (Check_Quality item 11: "Đã thực hiện Trim character khi input space chưa?").
@@ -37,7 +39,9 @@ paths:
    - Enforce `max_length` strictly at serializer and database levels to prevent truncation or obscuring of data (Check_Quality item 12: "Tất cả các item load data hiển thị trên màn hình đã test trường hợp data max length chưa?").
 
 ## 3. Standardized Error Response Format
+
 All non-2xx responses must return a uniform JSON envelope:
+
 ```json
 {
   "success": false,
@@ -55,5 +59,6 @@ All non-2xx responses must return a uniform JSON envelope:
 ```
 
 ## 4. Logging & Privacy
+
 - Use Python's standard `logging` configured in `settings/base.py`.
 - **PII & Secret Filter**: NEVER log plaintext passwords, bearer tokens, full identity card numbers (CMND/CCCD), or raw customer phone numbers.
