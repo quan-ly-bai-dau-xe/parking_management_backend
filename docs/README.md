@@ -12,7 +12,8 @@ Requirements specifications under the Frontend-First (`FE-First`) hierarchy, whe
 - [`03-delete-rules-catalog.md`](requirements/03-delete-rules-catalog.md): Complete entity deletion governance, immutability, and dependency guard matrix.
 - [`04-dod-and-quality-check.md`](requirements/04-dod-and-quality-check.md): Definition of Done (DoD) criteria and quality verification gates.
 - [`05-proposed-messages.md`](requirements/05-proposed-messages.md): Canonical error, warning, and confirmation message inventory.
-- [`06-frontend-srs-db-alignment.md`](requirements/06-frontend-srs-db-alignment.md): Frontend-first specification, Team Lead decisions (`TL-01`–`TL-22`), and Schema v2 alignment record.
+- [`06-frontend-srs-db-alignment.md`](requirements/06-frontend-srs-db-alignment.md): Frontend-first specification, Team Lead decisions (`TL-01`–`TL-47`), and Schema v2 alignment record.
+- [`07-fe-srs-traceability.md`](requirements/07-fe-srs-traceability.md): Bidirectional Frontend (11 UI screens) and SRS v4.1 requirements traceability matrix and `TL-28` SQL proof queries.
 
 ## 2. Architecture Decision Records (`docs/adr/`)
 
@@ -23,6 +24,7 @@ Formal architectural decisions governing backend technology, security, and data 
 - [`0003-data-deletion-soft-delete-protect-and-audit.md`](adr/0003-data-deletion-soft-delete-protect-and-audit.md): Soft delete architecture, `models.PROTECT`, service-layer guards, and audit trail.
 - [`0004-authentication-session-and-remember-token.md`](adr/0004-authentication-session-and-remember-token.md): Session authentication with CSRF for SPA and persistent remember token design.
 - [`0005-local-docker-compose-for-postgresql.md`](adr/0005-local-docker-compose-for-postgresql.md): Local PostgreSQL 18.6 container environment and volume mount specification (`/var/lib/postgresql`).
+- [`0006-django-skeleton-v2-schema-authority.md`](adr/0006-django-skeleton-v2-schema-authority.md): PostgreSQL Schema v2 authority, unmanaged Django models (`managed = False`), `RunSQL` initial migration, and 3-tier API foundation.
 
 ## 3. Database Catalog & Physical Schema (`db/`)
 

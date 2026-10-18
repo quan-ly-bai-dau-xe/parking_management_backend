@@ -1,0 +1,9 @@
+Django==6.1.2
+djangorestframework==3.18.3
+psycopg[binary,pool]==3.3.6
+django-cors-headers==4.9.0
+drf-spectacular==0.30.0
+drf-spectacular-sidecar==2026.10.1
+django-filter==26.2
+django-environ==0.14.0
+argon2-cffi==25.1.0

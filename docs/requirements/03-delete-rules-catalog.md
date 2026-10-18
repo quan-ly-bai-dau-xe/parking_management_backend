@@ -6,145 +6,145 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 
 ---
 
-## 1. Core Principles Governing Data Deletion (Team Lead Mandatory Decisions)
+## 1. Core Principles Governing Data Deletion (`TL-23`–`TL-27`)
 
-1. **Soft Delete by Default**:
-   - 100% of core domain business entities (`Employee`, `Customer`, `Vehicle`, `Ticket`, `ParkingSlot`, `News`) enforce soft deletion.
-   - Deletion mutates `deleted_at = timezone.now()` and `deleted_by = request.user`. Never execute raw SQL `DELETE FROM table WHERE id = ...`.
-   - Default querysets (`models.Manager` / `models.QuerySet`) automatically exclude soft-deleted records (`WHERE deleted_at IS NULL`). Explicit query methods (`all_with_deleted()` or `only_deleted()`) are provided for administration and compliance audits.
-2. **Strict Prohibition of Hard Deletes in Application Code**:
-   - Application code (Views, Services, Serializers) is strictly prohibited from invoking physical hard deletes.
-   - Permanent purging is restricted to dedicated management commands (`python manage.py purge_*`) requiring pre-execution database backups, `--dry-run` simulation flags, and formal ADR approvals.
-3. **Data Classes That Must Never Be Hard-Deleted**:
-   - **Parking Tickets (`Ticket`)**: Fiscal accounting vouchers substantiating parking fee revenue.
-   - **Vehicle Entry/Exit Movement Logs (`VehicleEntryExitLog`)**: Physical security access records.
-   - **Audit Logs (`AuditLog` / `HistoricalRecords`)**: Immutable append-only inspection records.
-4. **Foreign Key Integrity (`on_delete=models.PROTECT`)**:
-   - All foreign keys referencing business entities, tickets, and movement logs must configure `on_delete=models.PROTECT`.
-   - Cascading database deletions (`CASCADE`) are strictly prohibited across domain entities (with the sole exception permitted under ADR-0004 for temporary `PersistentLoginToken` authentication tokens).
+1. **Soft Delete by Default (`TL-23`)**:
+   - All `18` soft-deletable domain tables (`account`, `position`, `employee`, `customer`, `plate_blacklist`, `vehicle_type`, `ticket_type`, `vehicle`, `parking_lot`, `parking_floor`, `parking_zone`, `parking_slot`, `slot_reservation`, `ticket`, `payment`, `news`, `notification`, `parking_gate`) enforce soft deletion via `deleted_at TIMESTAMPTZ NULL` and `deleted_by BIGINT NULL` with `ck_<table_short>_soft_delete_pair CHECK (deleted_by IS NULL OR deleted_at IS NOT NULL)`.
+   - The 16/10/2026 team meeting's `isDeleted` flag is exposed at the API/serializer layer (`deleted_at is not None`); no redundant boolean column is stored in PostgreSQL (`TL-23`).
+   - Restoring a row sets `deleted_at = NULL`, and the `BEFORE UPDATE OF deleted_at` trigger `fn_guard_soft_delete_and_restore()` automatically clears `NEW.deleted_by := NULL` while verifying all parent FKs are active (`TL-23`, `TL-26`).
+   - Default querysets (`models.Manager` / `models.QuerySet`) and every list, detail, create, and update endpoint always filter `WHERE deleted_at IS NULL` (`TL-27`). Explicit query methods (`all_with_deleted()`, `only_deleted()`) are provided for Trash (`Thùng rác`) and compliance audits.
+2. **Prohibition of Plain `DELETE` & Hardened Controlled Purge (`TL-24`, `TL-36`, `TL-37`, `TL-40`)**:
+   - Plain `DELETE` is blocked on 25 base tables in `db/01-schema.sql`: 16 purgeable tables use `fn_guard_prevent_plain_delete()`, 8 immutable/financial tables use `fn_guard_hard_immutable_table()`, and `activity_log` uses `fn_prevent_activity_log_mutation()`.
+   - *Plain DELETE Exceptions (TL-36, TL-37)*: Exactly 3 tables permit plain `DELETE`: `persistent_login_token` and `password_reset_token` (for token rotation, logout, and credential revocation per TL-36), and junction table `slot_allowed_vehicle_type` (for dynamic slot vehicle-type reconfiguration per TL-37, guarded by `trg_guard_slot_allowed_vehicle_type_delete` which blocks removing a type currently used by active tickets, open sessions, or active reservations with error `PROP-DEL-SAVT-IN-USE`).
+   - Permanent trash cleanup is restricted exclusively to `fn_controlled_purge(p_table_name varchar, p_retention interval, p_dry_run boolean, p_purged_by bigint, p_target_id bigint)` (`SECURITY DEFINER`, `SET search_path = public, pg_temp`, `p_dry_run BOOLEAN DEFAULT TRUE`), returning `TABLE(table_name varchar, eligible_count bigint, purged_count bigint, status varchar, details text)`.
+   - *30-Day Retention Floor & Batch FK Skip (TL-40)*: Enforces `p_retention >= INTERVAL '30 days'` (lower intervals rejected with SQLSTATE `22023`). In batch mode (`p_target_id IS NULL`), catches referential integrity exceptions (`foreign_key_violation` 23503, `restrict_violation` 23001) per row to skip referenced trash records and purge eligible rows. When purging an `account`, linked tokens are cleaned in the same subtransaction before deleting the account (TL-36).
+3. **Data Classes That Must Never Be Hard-Deleted or Purged (`TL-24`, `TL-39`, `TL-42`)**:
+   - **Fiscal Vouchers & Renewals (`ticket`, `ticket_renewal`, `payment`)**: Accounting vouchers substantiating parking revenue under Accounting Law No. 88/2015/QH13.
+   - *Payment Soft-Delete Guard (TL-39)*: Soft-delete is strictly blocked for any `payment` record with `status IN ('PAID', 'REFUNDED')` with exception `PROP-DEL-PAYMENT-SETTLED`. Soft-delete is only allowed on `UNPAID` or `CANCELLED` payments to safeguard financial revenue reporting.
+   - *Payment Status Transition & Immutability Guard (TL-42)*: Enforces valid status transitions on `payment` (`UNPAID -> PAID | CANCELLED`; `PAID -> REFUNDED` only; `REFUNDED` and `CANCELLED` are terminal; no transition back to `UNPAID`; `PROP-PAY-STATUS-TRANSITION`). When a payment is settled (`PAID`, `REFUNDED`), financial and relational link columns (`amount`, `method`, `paid_at`, `session_id`, `ticket_id`, `renewal_id`, `code`) are strictly immutable (`PROP-PAY-SETTLED-IMMUTABLE`), preventing any backdoor modification of revenue or links. Only harmless metadata edits (`notes`) are permitted.
+   - **Movement & Security Logs (`vehicle_entry_exit_log`, `activity_log`, `system_alert`)**: Physical gate access records and append-only audit trails (`SOFT_DELETE`, `RESTORE`, `PURGE` logged by `fn_audit_soft_delete_and_restore()` and `fn_controlled_purge()`).
+   - **System Lookup Tables (`administrative_province`, `administrative_district`, `administrative_ward`)**.
+4. **Foreign Key Integrity (`ON DELETE RESTRICT` / `on_delete=models.PROTECT`) & Database Soft-Delete Guards (`TL-25`)**:
+   - All `69` foreign keys in `db/01-schema.sql` enforce `ON DELETE RESTRICT` (`0` `CASCADE` / `SET NULL`).
+   - Because `ON DELETE RESTRICT` only guards physical `DELETE`, `db/01-schema.sql` enforces `DEL-01`–`DEL-06` directly in the database via `BEFORE UPDATE OF deleted_at` triggers calling `fn_guard_soft_delete_and_restore()` (`TL-25`).
 
 ---
 
 ## 2. Detailed Catalog of Deletion Flows in SRS v4.1
 
-### 2.1. Flow DEL-01: Employee Deletion (Employee Delete Flow)
+### 2.1. Flow DEL-01: Employee & Account Deletion (`employee`, `account`)
 
 - **Stable Source Citations**:
   - SRS Section 4.3.1, Employee Management Table, Action row `Xóa` (Item 12, Action 24).
-  - SRS Section 4.3.4, Delete Employee Information Table, Interface row (Row 0), Confirmation row `Xác nhận` (Item 6, Action 10), Cancellation row `Hủy` (Item 7, Action 11).
-  - Wireframes: `image4.png` (Delete icon in list), `image7.png` (Delete confirmation modal).
-- **Access Control (RBAC)**: Restricted strictly to **Manager (`MANAGER`)** (SRS 4.2 Row 7: "Chỉ có Quản lý mới có thể sử dụng Tab này để quản lý"; SRS 4.3.1 Row 1).
-- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`).
-- **Domain Guard Rules**:
-  1. `[PROPOSAL]` *Self-Deletion Guard* (OQ-10): Authenticated users cannot delete their own employee profile (`request.user.employee_id != target.id`).
-  2. `[PROPOSAL]` *Last Manager Safeguard* (OQ-10): Prevent deletion if only 1 active Manager account remains in the system (`active=True, role='MANAGER'`).
-  3. `[PROPOSAL]` *Referential Integrity Guard (`PROTECT`)* (OQ-10): Physical deletion blocked when linked to historical records (`Ticket.created_by`, `News.author`); soft deletion preserves foreign key relationships cleanly.
-- **Concurrency Control**:
-  - Pessimistic locking via `select_for_update()` inside `transaction.atomic()`.
-  - If record was soft-deleted by another actor or does not exist: Return HTTP 404 with verbatim SRS message:
-    > `Dữ liệu không tồn tại` (SRS 4.3.4 Row 10) or `Kết nối cơ sở dữ liệu hoặc thông tin không tồn tại` (SRS 4.3.1 Row 24).
-  - On database connectivity failure: Return HTTP 500 with verbatim message:
-    > `Lỗi kết nối server` (SRS 4.3.4 Row 10).
-- **Verbatim Success Message**:
-  > `Xóa thành công` (SRS 4.3.4 Row 10 and SRS 4.3.1 Row 24).
-- **Audit Trail**: Record `action='SOFT_DELETE'`, `actor_id`, `target_employee_id`, `timestamp`, `ip_address` via middleware.
-- **Impact on Statistics (SRS 4.7)**: Zero impact on historical operational reporting.
+  - SRS Section 4.3.4, Delete Employee Information Table, Confirmation row `Xác nhận` (Item 6, Action 10), Cancellation row `Hủy` (Item 7, Action 11).
+  - Wireframes: `image4.png`, `image7.png`; Frontend: `Danh sách nhân viên.png`.
+- **Access Control (RBAC)**: Restricted strictly to **Manager (`MANAGER`)** (SRS 4.2 Row 7; SRS 4.3.1 Row 1).
+- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`) guarded by `trg_guard_soft_delete_and_restore_employee` and `trg_guard_soft_delete_and_restore_account`.
+- **Domain & Database Guard Rules (`fn_guard_soft_delete_and_restore`, `TL-25`)**:
+  1. `[PROPOSAL]` *Self-Deletion Guard* (`OQ-10`, `PROP-DEL-01-SELF`, `PROP-DEL-01-SELF-EMP`): Rejects soft delete when `NEW.deleted_by = OLD.id` on `account` or `NEW.deleted_by = OLD.account_id` on `employee`.
+  2. `[PROPOSAL]` *Last Active Manager Safeguard* (`OQ-10`, `PROP-DEL-01-LAST-MGR`, `PROP-DEL-01-LAST-MGR-EMP`): Rejects soft delete if the target `account` (or the `account` linked to `employee`) is the last active `MANAGER` (`role = 'MANAGER' AND is_active = TRUE AND deleted_at IS NULL`).
+  3. `[PROPOSAL]` *Referential Integrity Guard (`ON DELETE RESTRICT`)* (`OQ-10`): Physical purge blocked when linked to historical records (`ticket.created_by_id`, `news.author_id`); soft deletion preserves foreign key relationships cleanly.
+- **Concurrency & Error Messages**:
+  - Pessimistic locking via `select_for_update()` inside `transaction.atomic()` and OCC via `row_version`.
+  - Not found / already deleted (HTTP 404): `Dữ liệu không tồn tại` (`MSG-4.3.4-M02`) or `Kết nối cơ sở dữ liệu hoặc thông tin không tồn tại` (`MSG-4.3.1-M02`).
+  - Connectivity failure (HTTP 500): `Lỗi kết nối server` (`MSG-4.3.4-M03`).
+- **Verbatim Success Message**: `Xóa thành công` (`MSG-4.3.1-M01`, `MSG-4.3.4-M01`).
+- **Audit Trail**: `trg_audit_soft_delete_and_restore_employee` and `trg_audit_soft_delete_and_restore_account` append `action = 'SOFT_DELETE'` / `'RESTORE'` to `activity_log` (`TL-26`).
 
 ---
 
-### 2.2. Flow DEL-02: Customer Deletion (Customer Delete Flow)
+### 2.2. Flow DEL-02: Customer Deletion (`customer`)
 
 - **Stable Source Citations**:
   - SRS Section 4.4.1, Customer List Table, Action row `xóa` (Item 12, Action 31).
   - SRS Section 4.4.5, Delete Customer Notice Table, Dialog row `Thông báo xóa khách hàng` (Item 5), Confirmation row `Xác nhận` (Item 6), Cancellation row `Hủy` (Item 7).
-  - Wireframes: `image8.png` (Delete button), `image12.png` (Delete confirmation modal showing customer name and ID).
-- **Access Control (RBAC)**: **Manager (`MANAGER`)** and **Employee (`EMPLOYEE`)** (SRS Section 3: Employees authorized to execute Customer Management).
-- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`).
-- **Domain Guard Rules**:
-  1. `[PROPOSAL]` *Parked Vehicle Guard* (OQ-40): If customer owns vehicles with active uncompleted parking sessions (`VehicleEntryExitLog.exit_time IS NULL`), reject deletion.
-  2. `[PROPOSAL]` *Active Ticket Guard* (OQ-40): If customer holds unexpired parking tickets (`Ticket.end_date >= current_time`), reject deletion (`PROTECT`).
-- **Concurrency Control**:
-  - Row locking via `select_for_update()`.
-  - If record is concurrently being deleted: Return HTTP 409/404 with verbatim message:
-    > `Dữ liệu đang được xóa bởi người dùng khác` (SRS 4.4.5 Row 6).
-  - On server error: Return HTTP 500 with verbatim message:
-    > `Lỗi server` (SRS 4.4.5 Row 6).
-- **Verbatim Success Status**:
-  > SRS 4.4.5 describes transition back to customer list upon deletion. Proposed message: see 05-proposed-messages.md.
-- **Audit Trail & PII Handling**: Customer soft deletion triggers anonymization review under Decree 13/2023/ND-CP.
+  - Wireframes: `image8.png`, `image12.png`; Frontend: `Danh sách khách hàng.png`.
+- **Access Control (RBAC)**: **Manager (`MANAGER`)** and **Employee (`EMPLOYEE`)**.
+- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`) guarded by `trg_guard_soft_delete_and_restore_customer`.
+- **Domain & Database Guard Rules (`fn_guard_soft_delete_and_restore`, `TL-25`)**:
+  1. `[PROPOSAL]` *Parked Vehicle Guard* (`OQ-15`, `OQ-40`, `PROP-4.4.5-P02`): Rejects soft delete if the customer owns any vehicle with an open parking session (`vehicle_entry_exit_log.exit_time IS NULL`).
+  2. `[PROPOSAL]` *Active Ticket Guard* (`OQ-15`, `OQ-40`, `PROP-4.4.5-P03`): Rejects soft delete if the customer holds any active unexpired ticket (`deleted_at IS NULL AND status IN ('ACTIVE', 'RENEWING') AND effective_to > CURRENT_TIMESTAMP`).
+  3. `[PROPOSAL]` *Active Registered Vehicle Guard* (`OQ-40`, `TL-25`, `PROP-DEL-02-ACTIVE-VEH`): Rejects soft delete if the customer still has active vehicles (`vehicle.deleted_at IS NULL`).
+- **Concurrency & Error Messages**:
+  - Verbatim success message: `Xóa thành công` (`MSG-4.4.5-M01`).
+  - Concurrent deletion (HTTP 409): `Dữ liệu đang được xóa bởi người dùng khác` (`MSG-4.4.5-M02`).
+  - Server error (HTTP 500): `Lỗi server` (`MSG-4.4.5-M03`).
+  - Not found (HTTP 404): `Khách hàng không tồn tại hoặc đã bị xóa.` (`PROP-4.4.5-P01`).
+- **Audit Trail & PII Handling**: Appends `SOFT_DELETE` to `activity_log` (`TL-26`); physical purge via `fn_controlled_purge()` additionally requires `is_anonymized = TRUE` per Decree 13/2023/ND-CP (`TL-24`).
 
 ---
 
-### 2.3. Flow DEL-03: Vehicle Row Deletion Inside Customer Form (Vehicle Row Delete Flow)
+### 2.3. Flow DEL-03: Vehicle Deletion (`vehicle`)
 
 - **Stable Source Citations**:
   - SRS Section 4.4.3, Add Customer Table, Action row `Xóa` (Item 9, Action 23).
   - SRS Section 4.4.4, Edit Customer Table, Action row `Xóa` (Item 10, Action 26).
-  - Wireframes: `image10.png` (Delete link on vehicle row), `image11.png` (Vehicle list table inside edit form).
+  - Wireframes: `image10.png`, `image11.png`; Frontend: `Quản lý phương tiện.png`.
 - **Access Control (RBAC)**: **Manager (`MANAGER`)** and **Employee (`EMPLOYEE`)**.
-- **Operation Type**: Form-level row removal / Soft Delete (`deleted_at`).
-- **Domain Guard Rules**:
-  1. `[PROPOSAL]` *Active Parking Guard* (OQ-41): Cannot delete vehicle row if vehicle is currently inside lot (`is_parked=True`).
-  2. `[PROPOSAL]` *Active Ticket Guard* (OQ-41): Cannot delete vehicle row if associated with an active unexpired ticket (`Ticket.end_date >= current_time`).
-- **Concurrency & Error Responses**:
-  - On system failure: Return HTTP 500 with verbatim SRS message:
-    > `Lỗi hệ thống` (SRS 4.4.4 Row 26).
+- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`) guarded by `trg_guard_soft_delete_and_restore_vehicle`.
+- **Domain & Database Guard Rules (`fn_guard_soft_delete_and_restore`, `TL-25`)**:
+  1. `[PROPOSAL]` *Open Parking Session Guard* (`OQ-41`, `PROP-DEL-03-OPEN-SES`): Rejects soft delete if the vehicle has an open parking session (`vehicle_entry_exit_log.exit_time IS NULL`).
+  2. `[PROPOSAL]` *Active Ticket Guard* (`OQ-41`, `PROP-DEL-03-ACTIVE-TKT`): Rejects soft delete if the vehicle holds an active unexpired ticket (`status IN ('ACTIVE', 'RENEWING') AND effective_to > CURRENT_TIMESTAMP`).
+  3. `[PROPOSAL]` *Active Slot Reservation Guard* (`TL-25`, `PROP-DEL-03-ACTIVE-RSV`): Rejects soft delete if the vehicle has an active advance reservation (`slot_reservation.status = 'ACTIVE' AND reserved_until > CURRENT_TIMESTAMP`).
+- **Error Responses**: On system failure, returns HTTP 500 with verbatim SRS message `Lỗi hệ thống` (`MSG-4.4.4-M03`).
 
 ---
 
-### 2.4. Flow DEL-04: Parking Ticket Deletion (Ticket Delete Flow)
+### 2.4. Flow DEL-04: Parking Ticket Deletion (`ticket`)
 
 - **Stable Source Citations**:
   - SRS Section 4.6.1, Ticket List Table, Action column `Icon Xóa` (Item 10, Action 30).
-  - SRS Section 4.6.4, Confirm Ticket Deletion Table, Dialog title (Row 0), Confirmation button `Yes` (Item 6, Action 12), Cancellation button `No` (Item 7, Action 13).
-  - Wireframe: `image18.png` (Modal popup deletion confirmation dialog).
-- **Access Control (RBAC)**: **Manager-only (`MANAGER`)** (Decided in [`01-decision-log.md`](01-decision-log.md) `OQ-39`; `EMPLOYEE` calls receive `HTTP 403 Forbidden`).
-- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`).
-- **Domain Guard Rules**:
-  1. *Expired and Non-Renewed Constraint (Canonical SRS Fact)*: SRS 4.6.4 Row 1 & Row 6 dictate that ticket deletion is permitted **ONLY** for tickets that have expired and have not been renewed.
-  2. *Active Unexpired Guard*: SRS 4.6.4 Row 6 defines case `TH1: vé được xóa là vé chưa hết hạn thì không được xóa`. Proposed error dialogue: `[PROPOSAL]` "Vé chưa hết hạn sử dụng, không được phép xóa." (`PROP-4.6.4-P01`).
-  3. *Renewed Guard*: If ticket was renewed, deletion blocked. Proposed error dialogue: `[PROPOSAL]` "Vé đã được gia hạn, không được phép xóa." (`PROP-4.6.4-P02`).
-  4. `[PROPOSAL]` *Parked Vehicle Guard* (OQ-42): Deletion rejected if associated vehicle has not completed physical exit (`exit_time IS NULL`).
-- **Concurrency Control**:
-  - Pessimistic locking via `select_for_update()`.
-  - If ticket is concurrently being deleted: SRS 4.6.4 Row 6 defines case `TH2: vé được xóa đang được xóa bởi 1 người dùng khác thì không được xóa`. Proposed dialogue: `[PROPOSAL]` "Vé đang được xử lý bởi người dùng khác, vui lòng thử lại sau." (`PROP-4.6.4-P03`).
-  - On connectivity failure: SRS 4.6.4 Row 6 defines case `TH3: Vé được xóa không kết nối được`. Proposed dialogue: `[PROPOSAL]` "Lỗi kết nối cơ sở dữ liệu khi thực hiện xóa vé." (`PROP-4.6.4-P04`).
-  - If ticket is not found: Proposed dialogue `[PROPOSAL]` "Vé không tồn tại hoặc đã bị xóa." (`PROP-4.6.4-P05`).
-- **Verbatim Success Message**:
-  > `Xóa thành công` (SRS 4.6.4 Row 6: MSG-4.6.4-M01).
-- **Preservation of Revenue Statistics (SRS 4.7)**:
-  - Parking tickets form legal substantiation for revenue calculations in **4.7.1 Aggregate Statistics** (by Month, Quarter, Year).
-  - Soft-delete policy ensures ticket records remain preserved in physical table `Ticket`.
-  - Revenue computation service (`RevenueStatisticsService`) queries all issued tickets with valid payment status (including records where `deleted_at IS NOT NULL`).
-  - **Inviolable Principle**: Deleting expired tickets removes them from current management views (4.6.1) while **PRESERVING 100% OF HISTORICAL REVENUE AUDIT ACCURACY**.
+  - SRS Section 4.6.4, Confirm Ticket Deletion Table, Confirmation button `Yes` (Item 6, Action 12), Cancellation button `No` (Item 7, Action 13).
+  - Wireframe: `image18.png`; Frontend: `Quản lý thông tin vé - Danh sách vé.png`.
+- **Access Control (RBAC)**: **Manager-only (`MANAGER`)** (`OQ-39`).
+- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`) guarded by `trg_guard_soft_delete_and_restore_ticket` and `ck_ticket_delete_only_expired`.
+- **Domain & Database Guard Rules (`fn_guard_soft_delete_and_restore`, `TL-25`)**:
+  1. *Active Unexpired Guard* (`CASE-4.6.4-TH1`, `OQ-18`, `PROP-4.6.4-P01`, `ck_ticket_delete_only_expired`): Rejects soft delete when `effective_to > CURRENT_TIMESTAMP` and `status IN ('ACTIVE', 'RENEWING')` (`Vé chưa hết hạn, không được phép xóa.`).
+  2. *Renewed Ticket Guard* (`CASE-4.6.4-TH1`, `OQ-18`, `PROP-4.6.4-P02`): Rejects soft delete when `status = 'RENEWED'` or rows exist in `ticket_renewal` (`Vé đã được gia hạn, không được phép xóa.`).
+  3. `[PROPOSAL]` *Parked Vehicle Guard* (`OQ-42`, `PROP-DEL-04-OPEN-SES`): Rejects soft delete while the linked vehicle or ticket has an open parking session (`exit_time IS NULL`).
+- **Concurrency & Error Messages**:
+  - Concurrent deletion (`CASE-4.6.4-TH2`, `PROP-4.6.4-P03`): `Vé đang được xử lý bởi người dùng khác, vui lòng thử lại sau.`
+  - Connectivity failure (`CASE-4.6.4-TH3`, `PROP-4.6.4-P04`): `Lỗi kết nối cơ sở dữ liệu khi thực hiện xóa vé.`
+  - Not found (`PROP-4.6.4-P05`): `Vé không tồn tại hoặc đã bị xóa.`
+- **Verbatim Success Message**: `Xóa thành công` (`MSG-4.6.4-M01`).
+- **Fiscal Voucher Immutability vs Operational Revenue Statistics (`OQ-11`, `TL-24`, `TL-27`)**:
+  - `ticket`, `ticket_renewal`, and `payment` rows are protected by `fn_guard_hard_immutable_table()` and can NEVER be hard-deleted or purged (`TL-24`), preserving 100% of statutory accounting records for audit queries (`all_with_deleted()`).
+  - Per `TL-27`, operational statistic views (`v_revenue_statistics`, `v_revenue_today_by_method`) and `fn_stat_revenue_by_period()` consistently filter `WHERE p.deleted_at IS NULL AND (p.ticket_id IS NULL OR t.deleted_at IS NULL)` so soft-deleted rows are excluded from active dashboard statistics.
 
 ---
 
-### 2.5. Flow DEL-05: Parking Slot Deletion (Parking Slot Delete Flow)
+### 2.5. Flow DEL-05: Parking Slot Deletion (`parking_slot`)
 
 - **Stable Source Citations**:
   - SRS Section 4.8.1, Parking Slot List Table, Action column `Xoá` (Item 9).
   - SRS Section 4.8.5, Delete Parking Slot Confirmation Table, Action button `Xóa` (Item 6, Action 9), Cancellation button `Hủy` (Item 7, Action 10).
-  - Wireframe: `image21.png` (Delete link in table), `image25.png` (Delete confirmation modal).
-- **Access Control (RBAC)**: `[PROPOSAL]` Manager role (`MANAGER`): Module 4.8 is parking lot administrative infrastructure (OQ-03, OQ-30).
-- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`).
-- **Domain Guard Rules**:
-  1. *Slot Bound to Active Ticket Guard (Canonical SRS Fact)*: SRS 4.8.5 Row 9 mandates case: `TH: Xóa vị trí đang được xe đk vé đỗ` -> System must reject deletion if an active ticket reserves this slot (`Ticket.slot_id == target.id AND Ticket.end_date >= current_time`).
-  2. `[PROPOSAL]` *Physically Occupied Guard* (OQ-43): If sensors or entry logs indicate physical occupancy (`is_occupied=True`), deletion is blocked.
-- **Concurrency Control**:
-  - Pessimistic locking via `select_for_update()`.
-  - If slot is concurrently being deleted: SRS 4.8.5 Row 9 TH2 defines case `Xoa vị trí đang được xóa bởi người khác`: Reject and return conflict envelope.
-  - On server error: SRS 4.8.5 Row 9 TH3 defines case `xóa nhưng không kết nối được`: Return server connectivity error.
-- **Verbatim Success Behavior**:
-  > SRS 4.8.5 Row 9 describes: Vị trí đỗ được xóa và quay lại màn hình danh sách vị trí đỗ.
-- **Impact on Statistics and Parking Map (4.5.2 & 4.7)**:
-  - When slot is soft-deleted, total capacity decreases by 1, and available slots recalculate automatically (`available_slots`).
-  - Parking map (4.5.2) hides or disables the slot.
-  - Historical movement records linked to slot remain intact via `PROTECT` foreign keys.
+  - Wireframes: `image21.png`, `image25.png`; Frontend: `Sơ đồ bãi đậu xe.png`.
+- **Access Control (RBAC)**: **Manager (`MANAGER`)** (`OQ-03`, `OQ-30`, `OQ-45`).
+- **Operation Type**: **Soft Delete** (`deleted_at`, `deleted_by`) guarded by `trg_guard_soft_delete_and_restore_parking_slot`.
+- **Domain & Database Guard Rules (`fn_guard_soft_delete_and_restore`, `TL-25`)**:
+  1. `[PROPOSAL]` *Occupied / Open Session Guard* (`OQ-31`, `OQ-43`, `PROP-DEL-05-OCCUPIED`): Rejects soft delete when `status IN ('OCCUPIED', 'CHARGING')` or an open session (`exit_time IS NULL`) references `slot_id`.
+  2. *Slot Bound to Active Ticket Guard* (`CASE-4.8.5-TH1`, `OQ-31`, `PROP-4.8.5-P02`): Rejects soft delete when an active unexpired ticket references `slot_id` (`Vị trí đỗ xe đang có phương tiện đăng ký vé, không được phép xóa.`).
+  3. `[PROPOSAL]` *Active Reservation Guard* (`OQ-43`, `PROP-DEL-05-RESERVED`): Rejects soft delete when an active `slot_reservation` exists or `status = 'RESERVED'`.
+- **Impact on Statistics and Parking Map (`TL-27`)**:
+  - `v_slot_occupancy_by_floor` and `fn_stat_vehicles_by_floor()` exclude `ps.deleted_at IS NOT NULL`, automatically recalculating active capacity and available slots.
 
 ---
 
-### 2.6. Flow DEL-06: Cancellation and Rollback Actions (Cancel / Reset / Back)
+### 2.6. Flow DEL-06: Hierarchy & Reference Soft-Delete Guards (`TL-25`) and UI Cancel/Reset Actions (`CAN-01`–`CAN-13`)
+
+#### 2.6.1. Hierarchy & Reference Table Soft-Delete Guards (`fn_guard_soft_delete_and_restore`, `TL-25`)
+
+| Target Table | Guard Trigger | Active Child / Dependency Condition (`BEFORE UPDATE OF deleted_at`) | Proposal ID |
+| :--- | :--- | :--- | :---: |
+| `parking_lot` | `trg_guard_soft_delete_and_restore_parking_lot` | Rejects soft delete while active `parking_floor` rows (`deleted_at IS NULL`) exist under `lot_id` | **PROP-DEL-06-LOT** |
+| `parking_floor` | `trg_guard_soft_delete_and_restore_parking_floor` | Rejects soft delete while active `parking_zone` rows (`deleted_at IS NULL`) exist under `floor_id` | **PROP-DEL-06-FLOOR** |
+| `parking_zone` | `trg_guard_soft_delete_and_restore_parking_zone` | Rejects soft delete while active `parking_slot` rows (`deleted_at IS NULL`) exist under `zone_id` | **PROP-DEL-06-ZONE** |
+| `ticket_type` | `trg_guard_soft_delete_and_restore_ticket_type` | Rejects soft delete while active unexpired `ticket` rows reference `ticket_type_id` | **PROP-DEL-06-TICKET-TYPE** |
+| `position` | `trg_guard_soft_delete_and_restore_position` | Rejects soft delete while active `employee` rows (`deleted_at IS NULL`) reference `position_id` | **PROP-DEL-06-POSITION** |
+| `vehicle_type` | `trg_guard_soft_delete_and_restore_vehicle_type` | Rejects soft delete while active `vehicle` rows (`deleted_at IS NULL`) reference `vehicle_type_id` | **PROP-DEL-06-VEHICLE-TYPE** |
+| `parking_gate` | `trg_guard_soft_delete_and_restore_parking_gate` | Rejects soft delete while open sessions (`exit_time IS NULL`) reference `entry_gate_id` or `exit_gate_id` | **PROP-DEL-06-GATE** |
+
+#### 2.6.2. UI Cancellation and Rollback Actions (`CAN-01`–`CAN-13`)
 
 | Action Identifier | Operation | Stable Source Citation | Technical Behavior | Data Impact Scope |
 | :---: | :--- | :--- | :--- | :--- |
@@ -166,13 +166,17 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 
 ## 3. Deletion Authorization and Constraints Matrix
 
-| Entity | Deletion Flow ID | Permitted Roles | Domain Guard Rules | Database Action | Verbatim SRS Error Strings |
+| Entity | Deletion Flow ID | Permitted Roles | Domain & Database Guard Rules (`fn_guard_soft_delete_and_restore`) | Database Action | Verbatim SRS & Proposal Error Strings |
 | :--- | :---: | :---: | :--- | :--- | :--- |
-| **Employee (`Employee`)** | DEL-01 | `MANAGER` | - `[PROPOSAL]` Cannot self-delete active account (OQ-10).<br>- `[PROPOSAL]` Cannot delete last active Manager (OQ-10).<br>- `[PROPOSAL]` Foreign key `PROTECT` on tickets and articles. | Soft delete (`deleted_at`) | `Dữ liệu không tồn tại` / `Kết nối cơ sở dữ liệu hoặc thông tin không tồn tại` / `Lỗi kết nối server` |
-| **Customer (`Customer`)** | DEL-02 | `MANAGER`, `EMPLOYEE` | - `[PROPOSAL]` No vehicles currently inside lot (OQ-40).<br>- `[PROPOSAL]` No active parking tickets (`PROTECT` - OQ-40). | Soft delete (`deleted_at`) | `Dữ liệu đang được xóa bởi người dùng khác` / `Lỗi server` |
-| **Vehicle Row (`Vehicle`)** | DEL-03 | `MANAGER`, `EMPLOYEE` | - `[PROPOSAL]` Vehicle not bound to active ticket (OQ-41).<br>- `[PROPOSAL]` Vehicle not physically present in lot (OQ-41). | Soft delete (`deleted_at`) | `Lỗi hệ thống` |
-| **Ticket (`Ticket`)** | DEL-04 | `MANAGER` (Conservative default; Employee access is `[PROPOSAL]` in OQ-39) | - **Ticket must be expired and non-renewed (SRS Fact)**.<br>- `[PROPOSAL]` Vehicle has physically exited lot (OQ-42). | Soft delete (`deleted_at`) | `vé được xóa là vé chưa hết hạn thì không được xóa` / `vé được xóa đang được xóa bởi 1 người dùng khác thì không được xóa` / `Vé được xóa không kết nối được` |
-| **Parking Slot (`ParkingSlot`)** | DEL-05 | `MANAGER` | - **Slot not reserved by active ticket (SRS Fact)**.<br>- `[PROPOSAL]` Slot not physically occupied by vehicle (OQ-43). | Soft delete (`deleted_at`) | `TH: Xóa vị trí đang được xe đk vé đỗ` / `Xoa vị trí đang được xóa bởi người khác` / `xóa nhưng không kết nối được` |
+| **Employee & Account (`employee`, `account`)** | DEL-01 | `MANAGER` | - Cannot self-delete active account/employee (`PROP-DEL-01-SELF`, `PROP-DEL-01-SELF-EMP`).<br>- Cannot delete last active `MANAGER` (`PROP-DEL-01-LAST-MGR`, `PROP-DEL-01-LAST-MGR-EMP`). | Soft delete (`deleted_at`, `deleted_by`) | `Dữ liệu không tồn tại` / `Kết nối cơ sở dữ liệu hoặc thông tin không tồn tại` / `Lỗi kết nối server` |
+| **Customer (`customer`)** | DEL-02 | `MANAGER`, `EMPLOYEE` | - No vehicles parked in lot (`PROP-4.4.5-P02`).<br>- No active tickets (`PROP-4.4.5-P03`).<br>- No active registered vehicles (`PROP-DEL-02-ACTIVE-VEH`). | Soft delete (`deleted_at`, `deleted_by`) | `Dữ liệu đang được xóa bởi người dùng khác` / `Lỗi server` |
+| **Vehicle (`vehicle`)** | DEL-03 | `MANAGER`, `EMPLOYEE` | - No open parking session (`PROP-DEL-03-OPEN-SES`).<br>- No active ticket (`PROP-DEL-03-ACTIVE-TKT`).<br>- No active reservation (`PROP-DEL-03-ACTIVE-RSV`). | Soft delete (`deleted_at`, `deleted_by`) | `Lỗi hệ thống` |
+| **Ticket (`ticket`)** | DEL-04 | `MANAGER` | - Ticket must be expired (`ck_ticket_delete_only_expired`, `PROP-4.6.4-P01`) and non-renewed (`PROP-4.6.4-P02`).<br>- Vehicle has no open session (`PROP-DEL-04-OPEN-SES`). | Soft delete (`deleted_at`, `deleted_by`) | `PROP-4.6.4-P01`..`PROP-4.6.4-P05` |
+| **Parking Slot (`parking_slot`)** | DEL-05 | `MANAGER` | - Slot not occupied/charging (`PROP-DEL-05-OCCUPIED`).<br>- Slot not bound to active ticket (`PROP-4.8.5-P02`).<br>- Slot not reserved (`PROP-DEL-05-RESERVED`). | Soft delete (`deleted_at`, `deleted_by`) | `PROP-4.8.5-P02`..`PROP-4.8.5-P05` |
+| **Hierarchy & Lookups (`parking_lot`, `parking_floor`, `parking_zone`, `ticket_type`, `position`, `vehicle_type`, `parking_gate`)** | DEL-06 | `MANAGER` | - No active child floors/zones/slots, active tickets, active employees, active vehicles, or open gate sessions (`TL-25`). | Soft delete (`deleted_at`, `deleted_by`) | `PROP-DEL-06-LOT`..`PROP-DEL-06-GATE` |
+| **Payment (`payment`)** | DEL-07 (`TL-39`) | `MANAGER` | - Cannot soft-delete if `status IN ('PAID', 'REFUNDED')` (`PROP-DEL-PAYMENT-SETTLED`, `TL-39`). Permitted only for `UNPAID` or `CANCELLED`. | Soft delete (`deleted_at`, `deleted_by`) | `PROP-DEL-PAYMENT-SETTLED`: Không thể xóa giao dịch thanh toán đã hoàn thành (PAID) hoặc đã hoàn tiền (REFUNDED). |
+| **Slot Allowed Vehicle Type (`slot_allowed_vehicle_type`)** | `TL-37` | `MANAGER` | - Cannot plain-delete type if slot currently has active tickets, open sessions, or active reservations using this type (`PROP-DEL-SAVT-IN-USE`, `TL-37`). | Plain DELETE | `PROP-DEL-SAVT-IN-USE`: Không thể xóa loại xe khỏi vị trí đỗ khi đang có vé, phiên đỗ hoặc đặt chỗ hiệu lực. |
+| **Authentication Tokens (`persistent_login_token`, `password_reset_token`)** | `TL-36` | `SYSTEM`, `AUTHENTICATED` | - Permitted plain `DELETE` for session rotation, user logout, and token revocation (`TL-36`). Auto-cleaned during account purge. | Plain DELETE | N/A (Standard token lifecycle) |
 
 ---
 
@@ -191,73 +195,36 @@ It also integrates statutory Vietnamese privacy compliance requirements under **
 Per canonical SRS v4.1, the system processes:
 
 1. *Basic Personal Data (Article 2 Clause 3)*:
-   - Full name (`HoTenNV`, `HoTenKH`).
-   - Date of birth (`NgaySinhNV`, `NgaySinhKH`).
-   - Gender (`SexNV`, `SexKH`).
-   - Telephone number (`SDT_NV`, `SDTKH`).
-   - Address (`DiaChiNV`, `DiaChiKH`).
-   - Email address (`MailNV`, `MailKH`).
-   - National Identification Number (`CMND`).
-   - Vehicle license plate and registration data (`BienSoXe`).
+   - Full name (`HoTenNV`, `HoTenKH` -> `full_name`).
+   - Date of birth (`NgaySinhNV`, `NgaySinhKH` -> `date_of_birth`).
+   - Gender (`SexNV`, `SexKH` -> `gender`).
+   - Telephone number (`SDT_NV`, `SDTKH` -> `phone`).
+   - Address (`DiaChiNV`, `DiaChiKH` -> `address`).
+   - Email address (`MailNV`, `MailKH` -> `email`).
+   - National Identification Number (`CMND` -> `identity_card_number`).
+   - Vehicle license plate and registration data (`BienSoXe` -> `license_plate`, `license_plate_norm`).
 2. *Sensitive Personal Data (Article 2 Clause 4)*:
-   - Spatial location and movement tracking data (via automated camera license plate capture with real-time timestamps `Thời gian vào`, `Thời gian ra` at SRS 4.5.1).
+   - Spatial location and movement tracking data (via automated camera license plate capture with real-time timestamps `entry_time`, `exit_time` at SRS 4.5.1).
 
-### 4.3. Data Subject Rights & Technical Execution Architecture
+### 4.3. Data Subject Rights & Technical Execution Architecture (`OQ-12`, `TL-24`)
 
-1. **Right to Withdraw Consent (Article 9 Clause 4)**:
-   - Data subjects possess the legal right to withdraw consent, subject to statutory retention exceptions.
+1. **Right to Withdraw Consent & Right to Erasure (Articles 9 & 16)**:
+   - Upon receipt of a valid erasure request, the data controller must complete personal data erasure within **72 hours** (Article 16 Clause 5), subject to statutory accounting retention exceptions (Article 16 Clause 2 Points a & d; Accounting Law 2015).
+2. **Database & Backend Anonymization Pattern (`OQ-12`, `ck_customer_anonymized_pair`, `fn_controlled_purge`)**:
+   - Soft-delete the `customer` record (`deleted_at`, `deleted_by`) and irreversibly anonymize PII fields while setting `is_anonymized = TRUE` and `anonymized_at = timezone.now()` (enforced by `ck_customer_anonymized_pair`).
+   - `fn_controlled_purge()` refuses to physically purge any `customer` row unless `is_anonymized = TRUE` and no child rows reference it (`TL-24`).
 
-2. **Right to Erasure (Article 9 Clause 5 & Article 16 Clause 1)**:
-   - Customers have the right to request deletion of personal data when no longer necessary for stated collection purposes or upon consent withdrawal (Article 16 Clause 1 Points a, b).
-   - Upon receipt of a valid erasure request, the data controller must complete deletion within **72 hours** (Article 16 Clause 5).
+#### 4.3.1. Master Anonymization Table (`customer` / `employee`)
 
-3. **Statutory Exceptions to Deletion Obligations (Article 16 Clause 2 Points a & d)**:
-   - Personal data deletion obligations do not apply where:
-     - *Point a*: Governing law prohibits deletion (Per Accounting Law 2015, accounting vouchers substantiating parking fee revenue must be preserved for 5 to 10 years).
-     - *Point d*: Personal data is processed to serve legal obligations, scientific research, or statutory statistics (substantiating Screen 4.7.1 Revenue Statistics and tax compliance).
-
-4. **Proposed Backend Architecture Solution: Data Anonymization Pattern (`[ASSUMPTION]` & `[PROPOSAL]` OQ-12)**:
-   - To reconcile the 72-hour erasure obligation under Decree 13/2023/ND-CP with accounting voucher retention exceptions and revenue statistics preservation (SRS 4.7):
-   - Upon receiving an authorized personal data erasure request:
-     1. Execute soft deletion on the customer record (`Customer.deleted_at = timezone.now()`).
-     2. Apply **Irreversible Data Anonymization** on all identifying personal fields according to the Master Anonymization Table below:
-
-#### 4.1. Bảng Quy Chuẩn Giá Trị Ẩn Danh Hóa Dữ Liệu Cá Nhân (Master Anonymization Table)
-
-| Tên Trường (Field) | Entity Áp Dụng | Kiểu Dữ Liệu | Giá Trị Thay Thế (Marker) | Mục Đích & Căn Cứ Pháp Lý (NĐ 13/2023/NĐ-CP) |
+| Column Name (`db/01-schema.sql`) | Target Table | PostgreSQL Type | Replacement Marker | Purpose & Legal Basis (Decree 13/2023/ND-CP) |
 | :--- | :--- | :--- | :--- | :--- |
-| `full_name` (Họ tên) | Customer / Employee | CharField | `"ANONYMIZED_USER"` | Xóa bỏ họ tên thật của chủ thể dữ liệu |
-| `address` (Địa chỉ) | Customer / Employee | CharField | `"ANONYMIZED"` | Loại bỏ địa chỉ cư trú cá nhân |
-| `email` (Email) | Customer / Employee | EmailField | `"anonymized_<id>@parking.local"` | Loại bỏ thư điện tử cá nhân; bảo đảm tính duy nhất nếu có unique index |
-| `phone_number` (SĐT) | Customer / Employee | CharField | `"0000000000"` | Loại bỏ số điện thoại cá nhân |
-| `date_of_birth` (Ngày sinh) | Customer / Employee | DateField | `1970-01-01` | Thay thế ngày sinh thật bằng epoch date chuẩn |
-| `identity_card_number` (CMND/CCCD) | Customer / Employee | CharField | `"000000000"` | Che giấu số CMND/CCCD/Hộ chiếu nhạy cảm |
-| `is_anonymized` | Customer / Employee | BooleanField | `True` | Flag kỹ thuật đánh dấu bản ghi đã xử lý ẩn danh |
-| `deleted_at` | Customer / Employee | DateTimeField | `timezone.now()` | Dấu vết thời gian thực hiện soft-delete |
-| `deleted_by` | Customer / Employee | ForeignKey | `<Admin Instance>` | Lưu vết người dùng quản trị thực hiện |
-
-     3. Execution Implementation Snippet:
-        ```python
-        customer.full_name = "ANONYMIZED_USER"
-        customer.address = "ANONYMIZED"
-        customer.email = f"anonymized_{customer.id}@parking.local"
-        customer.phone_number = "0000000000"
-        customer.date_of_birth = datetime.date(1970, 1, 1)
-        customer.identity_card_number = "000000000"
-        customer.is_anonymized = True
-        customer.save(
-            update_fields=[
-                "full_name",
-                "address",
-                "email",
-                "phone_number",
-                "date_of_birth",
-                "identity_card_number",
-                "is_anonymized",
-                "updated_at",
-            ]
-        )
-        ```
-     4. Preserve foreign key references to `Ticket`, `Vehicle`, and `VehicleEntryExitLog` with anonymized technical IDs for financial auditability and occupancy reporting without exposing citizen identity.
-
-- Executed via an administrative Django Management Command (`python manage.py purge_anonymize_customers --dry-run`) with strict administrative audit approvals.
+| `full_name` | `customer` / `employee` | `VARCHAR(45)` | `'ANONYMIZED_USER'` | Scrubs data subject full name |
+| `address` | `customer` / `employee` | `VARCHAR(100)` | `'ANONYMIZED'` | Scrubs residential address |
+| `email` | `customer` / `employee` | `VARCHAR(100)` | `'anonymized_<id>@parking.local'` | Scrubs personal email while remaining valid under `ck_customer_email_format` |
+| `phone` | `customer` / `employee` | `VARCHAR(15)` | `'0900000000'` | Scrubs personal phone number while satisfying `ck_customer_phone_digits` |
+| `date_of_birth` | `customer` / `employee` | `DATE` | `'1970-01-01'` | Replaces birth date with standard epoch date (`ck_customer_dob_past`) |
+| `identity_card_number` | `customer` / `employee` | `VARCHAR(20)` | `'000000000000'` | Scrubs national ID while satisfying `ck_customer_idcard_digits` |
+| `is_anonymized` | `customer` | `BOOLEAN` | `TRUE` | Marks customer record as anonymized (`ck_customer_anonymized_pair`) |
+| `anonymized_at` | `customer` | `TIMESTAMPTZ` | `CURRENT_TIMESTAMP` | Timestamp of irreversible PII anonymization |
+| `deleted_at` | `customer` / `employee` | `TIMESTAMPTZ` | `CURRENT_TIMESTAMP` | Soft-delete timestamp (`ck_customer_soft_delete_pair`) |
+| `deleted_by` | `customer` / `employee` | `BIGINT` | `<actor_account_id>` | Administrative actor who executed erasure |

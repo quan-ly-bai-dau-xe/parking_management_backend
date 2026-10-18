@@ -57,9 +57,10 @@ jobs:
               (SELECT count(*) FROM information_schema.views WHERE table_schema='public'),
               (SELECT count(*) FROM pg_constraint WHERE contype='f'),
               (SELECT count(*) FROM pg_constraint WHERE contype='f' AND confdeltype <> 'r'),
-              (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal)")
-          echo "tables views foreign_keys non_restrict_fks triggers = ${actual}"
-          test "${actual}" = "28 8 69 0 25"
+              (SELECT count(*) FROM pg_trigger WHERE NOT tgisinternal),
+              (SELECT count(*) FROM pg_proc p WHERE p.pronamespace = 'public'::regnamespace AND NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e'))")
+          echo "tables views foreign_keys non_restrict_fks triggers functions = ${actual}"
+          test "${actual}" = "28 8 69 0 87 22"
 
       - name: Second load must fail without data loss
         run: |

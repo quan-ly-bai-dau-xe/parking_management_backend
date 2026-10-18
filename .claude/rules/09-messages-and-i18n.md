@@ -2,13 +2,13 @@
 
 ## 1. Message & Label Authority Hierarchy
 
-1. **Primary — Frontend Design (`FE`)**: UI labels, status badge strings, and dialog texts from the 11 Frontend screens (`docs/requirements/06-frontend-srs-db-alignment.md`, `TL-01`–`TL-22`) take first priority.
+1. **Primary — Frontend Design (`FE`)**: UI labels, status badge strings, and dialog texts from the 11 Frontend screens (`docs/requirements/06-frontend-srs-db-alignment.md`, `TL-01`–`TL-35`) take first priority.
 2. **Secondary — SRS v4.1 (`SRS`)**: Where the Frontend is silent, user-facing error and notification strings must be transcribed verbatim from `docs/requirements/00-srs-catalog.md` and `docs/requirements/03-delete-rules-catalog.md`.
-3. **Tertiary — Explicit Proposals (`[PROPOSAL]`)**: For behaviors lacking verbatim text in both the Frontend and the SRS, use the registered `[PROPOSAL]` strings in `docs/requirements/05-proposed-messages.md` (`PROP-*`) linked to their Decision IDs (`OQ-*`) in `docs/requirements/01-decision-log.md`.
+3. **Tertiary — Explicit Proposals (`[PROPOSAL]`)**: For behaviors lacking verbatim text in both the Frontend and the SRS, use the registered `[PROPOSAL]` strings in `docs/requirements/05-proposed-messages.md` (`PROP-*`, `PROP-DEL-*`) linked to their Decision IDs (`OQ-*`, `TL-25`) in `docs/requirements/01-decision-log.md` and `docs/requirements/06-frontend-srs-db-alignment.md`.
 
 ## 2. Check_Quality Formatting Rules (Item 6)
 
-- **Punctuation**: Verbatim SRS messages terminate without ending punctuation (e.g., `Đã thêm thành công nhân viên`, `Xóa thành công`). Preserve verbatim text without adding invented periods. Proposed messages (`PROP-*`) include ending periods as decided in `OQ-46` and `OQ-81` (`TL-22`).
+- **Punctuation**: Verbatim SRS messages terminate without ending punctuation (e.g., `Đã thêm thành công nhân viên`, `Xóa thành công`). Preserve verbatim text without adding invented periods. Proposed messages (`PROP-*`, `PROP-DEL-*`) include ending periods as decided in `OQ-46`, `OQ-81`, and `TL-25`.
 - **Item Name**: Errors for specific fields must include the field name (e.g., `Dữ liệu {item} không hợp lệ, xin mời nhập lại dữ liệu`).
 
 ## 3. Core Verbatim & Proposed Messages by Module
@@ -40,5 +40,6 @@
   - `MSG-4.6.4-M01`: `Xóa thành công` | `MSG-4.6.1-M01`: `Không tìm thấy dữ liệu`
   - `MSG-4.6.2-M01`: `Dữ liệu {item} không hợp lệ` | `MSG-4.6.3-M01`: `Lỗi dữ liệu trên {item} không hợp lệ`
 - **Statistics (4.7)**: `MSG-4.7.1-M01`: `Dữ liệu không tìm thấy`
-- **Parking Lot (4.8)**:
+- **Parking Lot (4.8) & Soft-Delete Guards (`DEL-01`–`DEL-06`, `TL-25`)**:
   - `MSG-4.8.4-M01`: `Có vấn đề, Không thể quay lại trang danh sách vị trí` | `MSG-4.8.5-M04`: `Lỗi kết nối`
+  - `PROP-DEL-01-SELF`..`PROP-DEL-06-GATE` (`[PROPOSAL]`, `TL-25`): Registered in `docs/requirements/05-proposed-messages.md` Section 2.8 and enforced by `fn_guard_soft_delete_and_restore()`.
