@@ -59,6 +59,14 @@ This document records the authoritative **Frontend-First (`FE-First`)** specific
 | `TL-39` | Payment Soft-Delete Guard for Settled | `Trang chủ`, `Main Page`, `Quản lý vé` | `payment` soft-delete guard (`PROP-DEL-PAYMENT-SETTLED`) |
 | `TL-40` | Purge 30-Day Retention & Batch FK Skip | Architecture & Data Retention | `fn_controlled_purge()` 30-day floor & per-row FK skip |
 | `TL-41` | Trigram Indexing on Text Search | Screens `02`, `03`, `04`, `05`, `07` | `pg_trgm` extension & 6 partial GIN trigram indexes |
+| `TL-42` | Payment Status Transition & Settled Immutability Guard | `Trang chủ`, `Main Page`, `Quản lý vé` | `fn_guard_payment_update()`, `trg_guard_payment_update` |
+| `TL-43` | Extension-Independent Function Count in CI | CI Architecture (`.github/workflows/01`) | `pg_depend` filter excluding extension procs (22 user funcs) |
+| `TL-44` | Django Schema Authority & RunSQL Initial Migration | Architecture & Database Operations | `apps/core` RunSQL reading `db/01-schema.sql`, `load_sample_data` |
+| `TL-45` | 1:1 Unmanaged Models & 3-Tier Base Hierarchy | 28 tables, 8 views, 69 FKs, `tests/` | `managed=False`, `SoftDeleteModel`, `Account` auth, parity tests |
+| `TL-46` | Dependency Pinning, Quality Gates & CI Workflow 02 | CI/CD & Development Standards | `requirements/*.txt`, `pyproject.toml`, `02-django-check.yml` |
+| `TL-47` | Foundation Base Layer, Auth, OpenAPI & Tests | Architecture, API Standards & Tests | Error envelope, auth APIs, Swagger UI, 6 lookups (Narrowed by `TL-48`) |
+| `TL-48` | Foundation Scope Reduction & Feature Handover | Architecture & Teamwork Governance | Gỡ bỏ login/remember-me & 6 lookups; giữ nguyên 100% foundation skeleton |
+| `TL-49` | Quality Gates Enforcement & CSpell Cache Exclusion | CI/CD & Development Standards | 0 lỗi ruff, mypy, dry-run, deploy check, test cov >= 80%, cspell cache ignore |
 
 ### 2.2. Detailed Decision Specifications
 
@@ -207,6 +215,43 @@ This document records the authoritative **Frontend-First (`FE-First`)** specific
 - **`TL-43` — Extension-Independent Function Count in CI**:
   - **Context**: Query kiểm tra schema trong CI assertion trước đây đếm toàn bộ hàm trong namespace `public`, vô tình gộp cả ~243 hàm nội tại của extension `btree_gist` và `pg_trgm`, gây rủi ro gãy CI khi cập nhật minor version của PostgreSQL hoặc image Docker mà không có thay đổi mã nguồn.
   - **Resolution**: Cập nhật câu lệnh đếm function trong workflow `.github/workflows/01-db-schema-check.yml` loại trừ các hàm thành viên của extension thông qua `pg_depend` (`NOT EXISTS (SELECT 1 FROM pg_depend d WHERE d.classid = 'pg_proc'::regclass AND d.objid = p.oid AND d.deptype = 'e')`), chỉ đếm đúng 22 hàm người dùng thuộc sở hữu dự án (`15` trigger functions + `7` non-trigger functions). Khẳng định tính độc lập và nhất quán trên cả hai môi trường `postgres:18.6-alpine` và `postgres:18.6` (Debian).
+- **`TL-44` — Django Schema Authority & Initial RunSQL Migration [COMPLETED]**:
+  - **Context**: Xác định vai trò của CSDL PostgreSQL Schema v2 (`db/01-schema.sql`) là Single Source of Truth tuyệt đối. Tránh hiện tượng phân mảnh schema giữa Django ORM migrations và CSDL đã được tối ưu hóa cao độ với triggers, constraints và extensions.
+  - **Resolution**:
+    - Thiết lập app `apps/core` với migration ban đầu `0001_initial.py` sử dụng `migrations.RunSQL` đọc trực tiếp file `db/01-schema.sql` từ đĩa tại thời điểm migrate với `atomic=False` và `reverse_sql=migrations.RunSQL.noop`. Tuyệt đối không sinh DDL tự động bằng `makemigrations`.
+    - Phát triển management command `python manage.py load_sample_data` đọc trực tiếp `db/02-seed.sql` với cờ bảo vệ an toàn `--force-production` khi `DEBUG=False`.
+- **`TL-45` — 1:1 Unmanaged Models, 3-Tier Soft-Delete Hierarchy & Account Auth [COMPLETED]**:
+  - **Context**: Ánh xạ toàn bộ cấu trúc CSDL gồm 28 bảng và 8 view sang Django ORM để phục vụ phát triển ứng dụng mà không làm sai lệch cấu trúc CSDL thực tế.
+  - **Resolution**:
+    - Toàn bộ 28 bảng (338 cột) và 8 view (55 cột) được khai báo thành Django unmanaged models (`managed=False`).
+    - Tất cả khóa ngoại trong unmanaged models sử dụng `on_delete=models.DO_NOTHING` và `db_constraint=False`, giao quyền thực thi toàn bộ cho 69 ràng buộc `ON DELETE RESTRICT` ở tầng CSDL.
+    - Cấu trúc kế thừa xóa mềm 3 tầng: `TimeStampedModel` (cung cấp `created_at`, `updated_at`), `SoftDeleteBaseModel` (bổ sung `row_version`), `SoftDeleteModel` (quản lý `deleted_at`, `deleted_by`, custom manager `deleted_at IS NULL`, `with_deleted()`, `only_deleted()`, `soft_delete()`, `restore()`). Cấm phương thức physical `delete()` trên business models, cho phép plain `DELETE` trên token models (`PersistentLoginToken`, `PasswordResetToken` per TL-36 / ADR-0004).
+    - Model `Account` (`AUTH_USER_MODEL = 'accounts.Account'`) kế thừa `AbstractBaseUser` không kèm `PermissionsMixin`, định nghĩa `email`, `phone`, `role` (`MANAGER`, `EMPLOYEE`, `CUSTOMER`) với `is_staff` dẫn xuất từ `role == 'MANAGER'` (mã đăng nhập tùy biến bằng Email/Phone và remember-me sẽ do thành viên được phân công triển khai theo `TL-48`).
+    - Message catalog tập trung tại `apps/core/messages.py` ánh xạ chính xác các mã lỗi và thông báo SRS / PROPOSAL (`119` thông báo).
+    - Automated test [`tests/test_schema_parity.py`](../../tests/test_schema_parity.py) kiểm tra đối soát trực tiếp live database: 100% khớp 28 bảng, 8 view, 69 FKs, 393 cột và `14/14` tests passed.
+- **`TL-46` — Pinned Dependencies, Quality Gates & CI Workflow 02 [COMPLETED]**:
+  - **Context**: Chuẩn hóa toàn bộ môi trường phát triển, công cụ kiểm tra chất lượng mã nguồn tĩnh và tự động hóa quy trình CI/CD.
+  - **Resolution**:
+    - Ghim chính xác các phiên bản dependencies đã qua kiểm chứng tương thích: Python 3.14.7 (cấm Python 3.15), Django 6.1.2, DRF 3.18.3, psycopg 3.3.6 trong `requirements/01-base.txt` và `requirements/02-dev.txt`.
+    - Cấu hình `pyproject.toml` đồng bộ: Ruff (linter & formatter, giới hạn 88 ký tự), Mypy kết hợp `django-stubs` và `djangorestframework-stubs` (0 lỗi), Pytest kết hợp `pytest-django` và `pytest-cov` với ngưỡng chặn coverage `>= 80%`.
+    - Xây dựng workflow `.github/workflows/02-django-check.yml` chạy trên Ubuntu với Python 3.14.7 và PostgreSQL 18.6 service container, ghim immutable commit SHA cho tất cả GitHub Actions, tích hợp đầy đủ các bước kiểm tra static analysis, schema check, OpenAPI schema validation và test suite.
+- **`TL-47` — Foundation Base Layer, Auth Endpoints, OpenAPI & Real PostgreSQL Tests [NARROWED BY TL-48]**:
+  - **Context**: Xây dựng lớp nền tảng kiến trúc API ban đầu trong Round 29 bao gồm exception handler, OpenAPI, xác thực và các endpoint danh mục tham chiếu.
+  - **Resolution**:
+    - Thiết kế base exception handler tại `apps/core/exceptions.py` bắt và chuyển đổi toàn bộ exceptions và mã PostgreSQL SQLSTATE (`23514`, `55000`, `23503`, `23505`, `22023`) thành chuẩn JSON envelope `{"code": "...", "message": "...", "details": {...}}`.
+    - Tích hợp `drf-spectacular` và Swagger UI / ReDoc tại `/api/schema/`, `/api/docs/`, `/api/redoc/` với sidecar assets. Endpoint kiểm tra sức khỏe `/api/health/`.
+    - *Ghi chú*: Phạm vi các API xác thực (login, logout, me, remember-me) và 6 danh mục lookup ban đầu trong TL-47 đã được thu hẹp và bàn giao cho các thành viên phụ trách nghiệp vụ theo quyết định `TL-48`.
+- **`TL-48` — Scope of Foundation Skeleton & Feature Code Handover [COMPLETED]**:
+  - **Context**: Hoàn thiện pull request #13 dưới dạng foundation khung dự án chuẩn mực. Theo nguyên tắc làm việc nhóm của dự án, mã nguồn chức năng nghiệp vụ (login, remember-me token rotation, và các API danh mục lookups) thuộc về các thành viên được phân công triển khai, không đưa vào skeleton dùng chung.
+  - **Resolution**:
+    - Giữ nguyên 100% nền tảng cốt lõi: 36 unmanaged models (28 bảng, 8 view), hệ thống phân cấp SoftDelete (ADR-0003), `Account` làm `AUTH_USER_MODEL`, bảng `persistent_login_token` và `password_reset_token`, cơ sở hạ tầng core (catalog thông báo `messages.py`, custom `exceptions.py`, `pagination.py`, `HealthCheckView`, `0001_initial.py` RunSQL schema migration, `load_sample_data` command), cấu trúc 3 tầng rỗng cho các domain apps làm template, và cấu hình OpenAPI/Swagger.
+    - Gỡ bỏ toàn bộ mã chức năng login, remember-me middleware/backend/views/serializers/services và 6 lookup endpoints; reset 4 file `urls.py` của các app về placeholder rỗng.
+    - Thêm tài liệu hướng dẫn bàn giao trong `README.md` ("Not in this foundation") trỏ tới Skill 05 và Skill 13.
+- **`TL-49` — Quality Gates Enforcement & CSpell Cache Exclusion [COMPLETED]**:
+  - **Context**: Đảm bảo toàn bộ quy trình kiểm soát chất lượng (Quality Gates) của skeleton được duy trì nghiêm ngặt sau khi thu hẹp phạm vi, đồng thời loại bỏ nhiễu sai chính tả sinh ra từ cache của các công cụ linter/tester.
+  - **Resolution**:
+    - Bổ sung các thư mục cache của công cụ (`.ruff_cache/**`, `.mypy_cache/**`, `.pytest_cache/**`) vào `ignorePaths` trong `cspell.json`.
+    - Bắt buộc vượt qua 100% các Quality Gates: `ruff check .` (0 lỗi), `ruff format --check .` (0 lỗi), `mypy .` (0 lỗi), `python manage.py makemigrations --check --dry-run` (0 thay đổi), `python manage.py spectacular --validate --fail-on-warn` (0 cảnh báo/lỗi), `python manage.py check --deploy` (0 lỗi), `pytest` với line coverage trên `apps/` đạt `>= 80%`.
 
 ---
 

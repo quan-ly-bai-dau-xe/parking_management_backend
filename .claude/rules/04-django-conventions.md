@@ -9,14 +9,17 @@ paths:
 
 ## 1. Project Layout & App Boundaries
 
-- All functional modules reside in `apps/<module>/`:
-  - `apps/accounts/`: Authentication, users, roles, password policies.
-  - `apps/employees/`: Employee management (4.3).
-  - `apps/customers/`: Customer management and owned vehicle lists (4.4).
-  - `apps/vehicles/`: Vehicle tracking, entries, exits, plate OCR (4.5).
-  - `apps/tickets/`: Ticket issuance, renewal, expiration, soft deletion (4.6).
-  - `apps/parking/`: Lot, floor (`B1`..`F1` / `B3`), zone (`A`..`C`), slot management, and slot reservations (4.8 & FE `Sơ đồ bãi đậu xe`).
-  - `apps/reports/`: Revenue and vehicle volume analytics (4.7).
+- All functional modules reside in `apps/<module>/` (10 domain apps):
+  - `apps/core/`: Shared base models (`TimeStampedModel`, `SoftDeleteBaseModel`, `SoftDeleteModel`), message catalog, DRF exception handler, pagination, filters, health check, and administrative boundary models (`AdministrativeProvince`, `AdministrativeDistrict`, `AdministrativeWard`).
+  - `apps/accounts/`: Authentication (`Account`, `PersistentLoginToken`, `PasswordResetToken`) and RBAC permissions.
+  - `apps/employees/`: Employee and position management (`Position`, `Employee`, 4.3).
+  - `apps/customers/`: Customer management (`Customer`, 4.4).
+  - `apps/vehicles/`: Vehicle and vehicle type management (`VehicleType`, `Vehicle`, 4.5).
+  - `apps/tickets/`: Ticket types, subscriptions, renewals, and payments (`TicketType`, `Ticket`, `TicketRenewal`, `Payment`, 4.6).
+  - `apps/parking/`: Lot, floor (`B1`..`F1` / `B3`), zone (`A`..`C`), slot, gate, reservation, entry/exit log, and plate blacklist (`ParkingLot`, `ParkingFloor`, `ParkingZone`, `ParkingSlot`, `SlotAllowedVehicleType`, `SlotReservation`, `ParkingGate`, `VehicleEntryExitLog`, `PlateBlacklist`, 4.8).
+  - `apps/content/`: News and notifications (`News`, `Notification`).
+  - `apps/audit/`: Append-only audit logs and operational system alerts (`ActivityLog`, `SystemAlert`).
+  - `apps/reports/`: Unmanaged analytical view models (`8` views, 4.7).
 - Configuration lives in `config/`:
   - `config/settings/base.py`: Shared core settings.
   - `config/settings/local.py`: Local development overrides (DEBUG=True).
@@ -42,27 +45,37 @@ paths:
    - Strictly utilize `ModelSerializer` and serializer hydration (`validated_data`) to map data into forms, avoiding manual dictionary-to-object mappings.
    - Return mock responses using fixtures (`db/02-seed.sql`) during early integration to unblock frontend developers.
 
-## 3. Standardized Error Response Format
+## 3. Unmanaged Models & Database Governance (Schema Authority)
 
-All non-2xx responses must return a uniform JSON envelope:
+- **`managed = False`**: All 28 domain tables and 8 analytical views must declare `managed = False` in their inner `Meta` class. Django migrations must never execute DDL on domain tables.
+- **Primary Keys**: Use `BigAutoField` (`DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"`).
+- **Foreign Keys**: Declare all ForeignKey relations in unmanaged models with `on_delete=models.DO_NOTHING` and `db_constraint=False`. All referential constraints (`ON DELETE RESTRICT`) are owned and enforced exclusively by PostgreSQL Schema v2.
+- **Base Hierarchy & Soft Delete**: Inherit from `SoftDeleteModel` (for 18 soft-deletable business tables) or `SoftDeleteBaseModel` / `TimeStampedModel`. Physical `delete()` on business models is prohibited (calls `soft_delete()` or raises `PermissionDenied`). Token models (`PersistentLoginToken`, `PasswordResetToken`) are exempt and allow plain `DELETE` per TL-36 / ADR-0004.
+- **Non-Editable Columns**: Mark `created_at`, `updated_at`, `row_version`, and generated columns (`license_plate_norm`) as `editable=False`.
+
+## 4. Standardized Error Response Format & SQLSTATE Mapping
+
+All non-2xx responses must return a uniform JSON envelope processed by `apps/core/exceptions.py`:
 
 ```json
 {
-  "success": false,
-  "error": {
-    "code": "VALIDATION_ERROR",
-    "message": "Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu",
-    "details": [
-      {
-        "field": "email",
-        "message": "Dữ liệu Email không đúng định dạng, .."
-      }
+  "code": "PROP-GEN-P01",
+  "message": "Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu",
+  "details": {
+    "email": [
+      "Dữ liệu Email không đúng định dạng, .."
     ]
   }
 }
 ```
 
-## 4. Logging & Privacy
+- **PostgreSQL SQLSTATE Error Mapping**:
+  - `23514` (`check_violation`): Parse error HINT or message to return specific business code (e.g., `PROP-4.5.2-P02`, `PROP-PAY-STATUS-TRANSITION`).
+  - `55000` (`object_not_in_prerequisite_state`): Raised by custom trigger guards when preconditions are violated (e.g., modifying settled payment, moving occupied slot).
+  - `23503` (`foreign_key_violation`): Mapped to referential integrity failure or active dependent records.
+  - `23505` (`unique_violation`): Mapped to duplicate entity constraint violation.
+
+## 5. Logging & Privacy
 
 - Use Python's standard `logging` configured in `settings/base.py`.
 - **PII & Secret Filter**: NEVER log plaintext passwords, bearer tokens, full identity card numbers (CMND/CCCD), or raw customer phone numbers.

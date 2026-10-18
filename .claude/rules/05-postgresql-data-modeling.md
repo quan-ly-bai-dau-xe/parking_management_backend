@@ -9,10 +9,11 @@ paths:
 
 ## 1. Schema Authority & Migrations
 
-- During Database Engineering (Rounds 23–26), `db/01-schema.sql` (Schema v2) is the authoritative Single Source of Truth.
-- When backend implementation begins in Round 27+, Django models and migrations must strictly replicate this schema 1:1, after which migrations govern schema evolution under CI check `makemigrations --check --dry-run`.
-- Every model change must be generated via `python manage.py makemigrations`.
-- CI strictly verifies schema synchronization via `python manage.py makemigrations --check --dry-run`.
+- **Frozen Schema Authority**: `db/01-schema.sql` (Schema v2) is the frozen, immutable Single Source of Truth for the database architecture (28 tables, 8 views, 69 RESTRICT FKs, 87 triggers, 22 functions).
+- **Initial RunSQL Ingestion**: Database structure is initialized via `apps/core/migrations/0001_initial.py` which executes `migrations.RunSQL` reading `db/01-schema.sql` directly from disk (`atomic=False`, `reverse_sql=migrations.RunSQL.noop`).
+- **Unmanaged Models**: All 28 domain tables and 8 views use `managed = False`. Django migrations must NEVER generate automated DDL (`CREATE TABLE`, `ALTER TABLE`, `DROP TABLE`) for domain tables.
+- **Django Internal Tables**: Django operational tables (`django_migrations`, `django_content_type`, `django_session`) remain managed by Django's native migrations.
+- **Automated Parity Verification**: Schema fidelity is guaranteed by `tests/test_schema_parity.py` introspecting live PostgreSQL catalog vs Django models (verifying 100% parity across tables, views, columns, and foreign keys).
 
 ## 2. Naming & Data Types Conventions
 
@@ -38,8 +39,12 @@ paths:
 - **Database CHECK Constraints**: Enforce domain boundaries in PostgreSQL using `models.CheckConstraint` (`ck_<table_short>_soft_delete_pair CHECK ((deleted_at IS NULL AND deleted_by IS NULL) OR (deleted_at IS NOT NULL))` across all 18 soft-deletable tables per `TL-23`, `ck_slot_dimensions_positive`, `ck_ticket_valid_period`, `ck_ticket_delete_only_expired`).
 - **Optimistic Concurrency Control (OCC)**: All `19` versioned tables include `row_version = models.IntegerField(default=1)` incremented via `BEFORE UPDATE` trigger `fn_update_row_version_and_timestamp()`.
 
-## 4. Referential Integrity
+## 4. Referential Integrity & Trigger Guards
 
-- **Mandatory PROTECT**: All `69` ForeignKey relations use `on_delete=models.PROTECT` (PostgreSQL `ON DELETE RESTRICT`; `0` `CASCADE` / `SET NULL`).
-- **No Cascade in Business Layer**: `models.CASCADE` is strictly prohibited across all domain and token tables (`TL-15`, `TL-24`).
+- **PostgreSQL RESTRICT Enforcement**: In PostgreSQL Schema v2, all `69` ForeignKey relations use `ON DELETE RESTRICT` (`0` `CASCADE` / `SET NULL`). `CASCADE` is strictly prohibited across domain tables (`TL-15`, `TL-24`).
+- **Unmanaged Model FK Declaration**: In Django unmanaged models (`managed=False`), declare ForeignKey relations with `on_delete=models.DO_NOTHING` and `db_constraint=False`. Referential integrity is enforced 100% by PostgreSQL constraints, preventing Django from emitting redundant or contradictory constraints.
+- **Trigger Guards & Immutability**: 87 PostgreSQL triggers enforce business rules independently of application code:
+  - Immutable audit logs (`activity_log`, `trg_activity_log_immutable`) and receipts (`ticket_renewal`, `vehicle_entry_exit_log`).
+  - Precondition guards (`fn_guard_soft_delete_and_restore()`, `fn_guard_parking_slot_status()`, `fn_guard_payment_update()`, `fn_guard_slot_reservation_on_entry()`).
+  - Automatic status recomputation (`fn_recompute_slot_status()`).
 - **Composite Ownership Integrity**: Enforce composite foreign keys where sub-entity relationships require strict ownership validation (`fk_ticket_vehicle_customer` on `(vehicle_id, customer_id)` per `OQ-61`, and `fk_customer_ward_hierarchy` / `fk_employee_ward_hierarchy` on `(province_id, district_id, ward_id)` per `OQ-62`).

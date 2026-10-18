@@ -25,7 +25,8 @@ class Meta:
             name="uq_employee_code_active",
         ),
         models.CheckConstraint(
-            condition=models.Q(deleted_by__isnull=True) | models.Q(deleted_at__isnull=False),
+            condition=models.Q(deleted_by__isnull=True)
+            | models.Q(deleted_at__isnull=False),
             name="ck_employee_soft_delete_pair",
         ),
     ]
