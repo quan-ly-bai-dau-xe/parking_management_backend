@@ -1,0 +1,68 @@
+[tool.ruff]
+target-version = "py314"
+line-length = 88
+exclude = [
+    ".git",
+    ".agents",
+    "__pycache__",
+    "*/migrations/*",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"config/settings/*" = ["F403", "F405"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.14"
+plugins = ["mypy_django_plugin.main", "mypy_drf_plugin.main"]
+ignore_missing_imports = true
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+exclude = [
+    "^\\.agents/",
+    "^\\.git/",
+    "^\\.venv/",
+    "^venv/",
+    "migrations/",
+]
+
+[tool.django-stubs]
+django_settings_module = "config.settings.test"
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "config.settings.test"
+python_files = ["tests.py", "test_*.py", "*_tests.py"]
+addopts = "--cov=apps --cov-report=term-missing --cov-fail-under=80"
+
+[tool.coverage.run]
+source = ["apps"]
+omit = [
+    "*/migrations/*",
+    "*/tests/*",
+    "*/management/*",
+    "*/admin.py",
+    "*/apps.py",
+]
+branch = true
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if __name__ == .__main__.:",
+]

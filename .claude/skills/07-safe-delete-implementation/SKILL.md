@@ -31,7 +31,11 @@ Standardize the implementation of soft deletion for daily business entities adhe
    ```python
    @transaction.atomic
    def soft_delete_entity_service(*, entity_id: int, user) -> Entity:
-       entity = Entity.objects.select_for_update().filter(id=entity_id, deleted_at__isnull=True).first()
+       entity = (
+           Entity.objects.select_for_update()
+           .filter(id=entity_id, deleted_at__isnull=True)
+           .first()
+       )
        if not entity:
            raise NotFoundError("Dữ liệu không tồn tại")
        # Service-layer pre-flight check (backed by DB trigger fn_guard_soft_delete_and_restore, TL-25)
