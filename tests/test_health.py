@@ -2,6 +2,7 @@
 Tests for Health check and OpenAPI / Swagger documentation endpoints per TL-47 and TL-48.
 """
 
+import logging
 from unittest.mock import patch
 
 import pytest
@@ -24,8 +25,9 @@ def test_health_check_endpoint_success():
     }
 
 
-def test_health_check_endpoint_database_error():
-    """Kiểm tra GET /api/health/ trả về 503 khi CSDL gặp sự cố mất kết nối."""
+def test_health_check_endpoint_database_error(caplog: pytest.LogCaptureFixture):
+    """Kiểm tra GET /api/health/ trả về 503 khi CSDL gặp sự cố mất kết nối và không làm lộ chi tiết lỗi."""
+    caplog.set_level(logging.ERROR, logger="apps.core.views.health")
     client = APIClient()
     with patch(
         "django.db.connection.cursor", side_effect=DatabaseError("Connection lost")
@@ -33,10 +35,20 @@ def test_health_check_endpoint_database_error():
         response = client.get("/api/health/")
 
     assert response.status_code == status.HTTP_503_SERVICE_UNAVAILABLE
-    data = response.json()
-    assert data["status"] == "unhealthy"
-    assert data["database"] == "disconnected"
-    assert "Connection lost" in data["error"]
+    assert response.json() == {
+        "status": "unhealthy",
+        "database": "disconnected",
+    }
+    assert "error" not in response.json()
+    assert "Connection lost" not in response.content.decode("utf-8")
+
+    assert any(
+        record.name == "apps.core.views.health"
+        and record.levelno == logging.ERROR
+        and record.exc_info is not None
+        for record in caplog.records
+    )
+    assert "Connection lost" in caplog.text
 
 
 def test_openapi_schema_endpoint():
