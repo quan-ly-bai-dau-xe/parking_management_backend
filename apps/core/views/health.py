@@ -2,6 +2,8 @@
 Health check endpoint for Parking Management Backend per TL-47.
 """
 
+import logging
+
 from django.db import connection
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
@@ -9,6 +11,8 @@ from rest_framework.permissions import AllowAny
 from rest_framework.request import Request
 from rest_framework.response import Response
 from rest_framework.views import APIView
+
+logger = logging.getLogger(__name__)
 
 
 class HealthCheckView(APIView):
@@ -36,8 +40,9 @@ class HealthCheckView(APIView):
                 {"status": "healthy", "database": "connected"},
                 status=status.HTTP_200_OK,
             )
-        except Exception as exc:
+        except Exception:
+            logger.exception("Database health check probe failed")
             return Response(
-                {"status": "unhealthy", "database": "disconnected", "error": str(exc)},
+                {"status": "unhealthy", "database": "disconnected"},
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
