@@ -1,6 +1,10 @@
 # Documentation Index — Car Parking Lot Management System Backend
 
-This directory contains the verified requirements specifications and Architecture Decision Records (ADRs) for `parking_management_backend`.
+This directory contains the verified requirements specifications, Architecture Decision Records (ADRs), and API usage guides for `parking_management_backend`.
+
+## 0. API Reference & Usage
+
+- [`api-endpoints.md`](api-endpoints.md): Current API inventory, request/response examples, and instructions for running the local server, opening Swagger UI at `/api/docs/`, trying endpoints, and retrieving the OpenAPI schema. The guide distinguishes implemented endpoints from modules whose routes are still empty.
 
 ## 1. Requirements Specifications (`docs/requirements/`)
 
