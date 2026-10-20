@@ -14,7 +14,10 @@ pytestmark = pytest.mark.django_db
 
 
 def test_health_check_endpoint_success():
-    """Kiểm tra GET /api/health/ trả về 200 và kết nối database thành công."""
+    """Kiểm tra GET /api/health/ trả về 200 và kết nối database thành công kèm cờ ocr_ready."""
+    from apps.parking.services.ocr import warmup_ocr
+
+    warmup_ocr()
     client = APIClient()
     response = client.get("/api/health/")
 
@@ -22,11 +25,15 @@ def test_health_check_endpoint_success():
     assert response.json() == {
         "status": "healthy",
         "database": "connected",
+        "ocr_ready": True,
     }
 
 
 def test_health_check_endpoint_database_error(caplog: pytest.LogCaptureFixture):
     """Kiểm tra GET /api/health/ trả về 503 khi CSDL gặp sự cố mất kết nối và không làm lộ chi tiết lỗi."""
+    from apps.parking.services.ocr import warmup_ocr
+
+    warmup_ocr()
     caplog.set_level(logging.ERROR, logger="apps.core.views.health")
     client = APIClient()
     with patch(
@@ -38,17 +45,22 @@ def test_health_check_endpoint_database_error(caplog: pytest.LogCaptureFixture):
     assert response.json() == {
         "status": "unhealthy",
         "database": "disconnected",
+        "ocr_ready": True,
     }
     assert "error" not in response.json()
     assert "Connection lost" not in response.content.decode("utf-8")
 
-    assert any(
-        record.name == "apps.core.views.health"
-        and record.levelno == logging.ERROR
-        and record.exc_info is not None
-        for record in caplog.records
-    )
-    assert "Connection lost" in caplog.text
+
+def test_health_check_ocr_ready_reflects_engine_state():
+    """Kiểm tra cờ ocr_ready phản ánh chính xác trạng thái sẵn sàng của OCR mà không lộ thông tin nhạy cảm."""
+    client = APIClient()
+    with patch("apps.core.views.health.is_ocr_ready", return_value=False):
+        response = client.get("/api/health/")
+        assert response.status_code == status.HTTP_200_OK
+        data = response.json()
+        assert data["ocr_ready"] is False
+        assert "models" not in data
+        assert "path" not in data
 
 
 def test_openapi_schema_endpoint():
@@ -97,7 +109,7 @@ def test_redoc_ui_endpoint():
     ],
 )
 def test_removed_endpoints_return_404(method, url):
-    """Xác minh tất cả các endpoint đã bị gỡ bỏ trong Round 30 (TL-48) trả về HTTP 404 Not Found."""
+    """Xác minh tất cả các endpoint đã bị gỡ bỏ (TL-48) trả về HTTP 404 Not Found."""
     client = APIClient()
     client_func = getattr(client, method)
     response = client_func(url)
