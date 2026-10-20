@@ -1,5 +1,6 @@
-from django.db import models
 from django.core.validators import RegexValidator
+from django.db import models
+
 from apps.customers.models import Customer
 
 

@@ -1,13 +1,14 @@
 import os
 import sys
+
 import django
+from django.contrib.auth import get_user_model
 
 # Set up Django
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'config.settings')
 sys.path.append('/e/parking_management_backend')
 django.setup()
 
-from django.contrib.auth import get_user_model
 User = get_user_model()
 
 # Create superuser

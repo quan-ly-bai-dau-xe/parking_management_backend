@@ -1,23 +1,24 @@
 """
 Login views for the accounts app.
 """
+import re
+import secrets
+from datetime import timedelta
+from hashlib import sha256
+
 from django.contrib.auth import authenticate, login
+from django.utils import timezone
+from django.utils.decorators import method_decorator
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 from django.views.decorators.csrf import ensure_csrf_cookie
 from django.views.decorators.http import require_http_methods
-from django.utils.decorators import method_decorator
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from rest_framework import status
 from rest_framework.permissions import AllowAny
-import secrets
-import re
-from django.utils.http import urlsafe_base64_encode
-from django.utils.encoding import force_bytes
-from hashlib import sha256
-from datetime import timedelta
-from django.utils import timezone
-from apps.accounts.models import Account, PersistentLoginToken
+from rest_framework.response import Response
+from rest_framework.views import APIView
 
+from apps.accounts.models import Account, PersistentLoginToken
 
 # Used to satisfy linter for Account and PersistentLoginToken
 _ = Account

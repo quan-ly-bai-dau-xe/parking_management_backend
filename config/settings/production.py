@@ -2,6 +2,8 @@
 Production settings.
 """
 
+import os
+
 from .base import *
 
 # SECURITY WARNING: keep the secret key used in production secret!
@@ -85,5 +87,4 @@ LOGGING = {
 }
 
 # Create logs directory if it doesn't exist
-import os
 os.makedirs(BASE_DIR / 'logs', exist_ok=True)

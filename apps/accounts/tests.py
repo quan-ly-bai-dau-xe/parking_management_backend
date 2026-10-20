@@ -1,8 +1,11 @@
-from django.test import TestCase, Client
-from django.contrib.auth import get_user_model
-from django.urls import reverse
 import json
+from datetime import datetime, timedelta
 from unittest.mock import patch
+
+from django.contrib.auth import get_user_model
+from django.test import Client, TestCase
+from django.urls import reverse
+
 from apps.accounts.models import Account, PersistentLoginToken
 
 User = get_user_model()
@@ -137,9 +140,9 @@ class LoginViewTest(TestCase):
     def test_login_remember_me_creates_token(self, mock_timezone):
         """Test that remember me creates a persistent login token"""
         # Mock timezone.now() to return a fixed time
-        fixed_time = timezone.datetime(2026, 10, 18, 12, 0, 0)
+        fixed_time = datetime(2026, 10, 18, 12, 0, 0)
         mock_timezone.now.return_value = fixed_time
-        mock_timezone.timedelta = timezone.timedelta
+        mock_timezone.timedelta = timedelta
 
         response = self.client.post(
             self.login_url,
@@ -164,7 +167,7 @@ class LoginViewTest(TestCase):
         self.assertIsNotNone(token.token_hash)
         self.assertEqual(token.ip_address, 'testserver')  # Django test client IP
         # Check expiration is 30 days from fixed_time
-        self.assertEqual(token.expires_at, fixed_time + timezone.timedelta(days=30))
+        self.assertEqual(token.expires_at, fixed_time + timedelta(days=30))
 
     def test_login_session_fixation_protection(self):
         """Test that session key is cycled after login"""

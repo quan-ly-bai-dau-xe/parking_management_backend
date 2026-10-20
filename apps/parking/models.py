@@ -1,5 +1,6 @@
+from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
-from django.core.validators import RegexValidator, MinValueValidator
+
 from apps.accounts.models import Account
 
 

@@ -1,11 +1,12 @@
-from django.db import models
-from django.core.validators import RegexValidator, MinValueValidator
 from django.conf import settings
+from django.core.validators import MinValueValidator, RegexValidator
+from django.db import models
+
 from apps.accounts.models import Account
 from apps.customers.models import Customer
-from apps.vehicles.models import Vehicle, TicketType
-from apps.parking.models import ParkingSlot
 from apps.employees.models import Employee
+from apps.parking.models import ParkingSlot
+from apps.vehicles.models import TicketType, Vehicle
 
 
 class Ticket(models.Model):
