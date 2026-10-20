@@ -1,6 +1,7 @@
 """
 Login views for the accounts app.
 """
+
 import re
 import secrets
 from datetime import timedelta
@@ -25,11 +26,12 @@ _ = Account
 _ = PersistentLoginToken
 
 
-@method_decorator(ensure_csrf_cookie, name='dispatch')
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class LoginView(APIView):
     """
     Handle user login requests.
     """
+
     permission_classes = [AllowAny]
 
     def post(self, request):
@@ -39,92 +41,107 @@ class LoginView(APIView):
         try:
             # Parse JSON data from request body
             data = request.data
-            username = data.get('username', '').strip()
-            password = data.get('password', '')
-            remember_me = data.get('remember_me', False)
+            username = data.get("username", "").strip()
+            password = data.get("password", "")
+            remember_me = data.get("remember_me", False)
 
             # Validation
             if not username:
-                return Response({
-                    'success': False,
-                    'error': {
-                        'code': 'VALIDATION_ERROR',
-                        'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu',
-                        'details': [
-                            {
-                                'field': 'username',
-                                'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu'
-                            }
-                        ]
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                            "details": [
+                                {
+                                    "field": "username",
+                                    "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                                }
+                            ],
+                        },
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             if not password:
-                return Response({
-                    'success': False,
-                    'error': {
-                        'code': 'VALIDATION_ERROR',
-                        'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu',
-                        'details': [
-                            {
-                                'field': 'password',
-                                'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu'
-                            }
-                        ]
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
+                return Response(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                            "details": [
+                                {
+                                    "field": "password",
+                                    "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                                }
+                            ],
+                        },
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             # Check for special characters in username (per SRS 4.1-F01)
             # The Account model already has a validator, but we check here for immediate feedback
-            if not re.match(r'^[a-zA-Z0-9_.-]+$', username):
-                return Response({
-                    'success': False,
-                    'error': {
-                        'code': 'VALIDATION_ERROR',
-                        'message': 'Tên đăng nhập không chứa ký tự đặc biệt',
-                        'details': [
-                            {
-                                'field': 'username',
-                                'message': 'Tên đăng nhập không chứa ký tự đặc biệt'
-                            }
-                        ]
-                    }
-                }, status=status.HTTP_400_BAD_REQUEST)
+            if not re.match(r"^[a-zA-Z0-9_.-]+$", username):
+                return Response(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Tên đăng nhập không chứa ký tự đặc biệt",
+                            "details": [
+                                {
+                                    "field": "username",
+                                    "message": "Tên đăng nhập không chứa ký tự đặc biệt",
+                                }
+                            ],
+                        },
+                    },
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
             # Authenticate user
             user = authenticate(request, username=username, password=password)
 
             if user is None:
                 # Invalid credentials
-                return Response({
-                    'success': False,
-                    'error': {
-                        'code': 'INVALID_CREDENTIALS',
-                        'message': 'Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu',
-                        'details': [
-                            {
-                                'field': 'non_field',
-                                'message': 'Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu'
-                            }
-                        ]
-                    }
-                }, status=status.HTTP_401_UNAUTHORIZED)
+                return Response(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "INVALID_CREDENTIALS",
+                            "message": "Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu",
+                            "details": [
+                                {
+                                    "field": "non_field",
+                                    "message": "Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu",
+                                }
+                            ],
+                        },
+                    },
+                    status=status.HTTP_401_UNAUTHORIZED,
+                )
 
             # Check if user is active
             if not user.is_active:
-                return Response({
-                    'success': False,
-                    'error': {
-                        'code': 'ACCOUNT_DISABLED',
-                        'message': 'Tài khoản đã được vô hiệu hóa',
-                        'details': [
-                            {
-                                'field': 'non_field',
-                                'message': 'Tài khoản đã được vô hiệu hóa'
-                            }
-                        ]
-                    }
-                }, status=status.HTTP_403_FORBIDDEN)
+                return Response(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "ACCOUNT_DISABLED",
+                            "message": "Tài khoản đã được vô hiệu hóa",
+                            "details": [
+                                {
+                                    "field": "non_field",
+                                    "message": "Tài khoản đã được vô hiệu hóa",
+                                }
+                            ],
+                        },
+                    },
+                    status=status.HTTP_403_FORBIDDEN,
+                )
 
             # Perform login
             login(request, user)
@@ -137,33 +154,34 @@ class LoginView(APIView):
                 self._handle_remember_me(request, user)
 
             # Return success response
-            return Response({
-                'success': True,
-                'data': {
-                    'user': {
-                        'id': user.id,
-                        'username': user.username,
-                        'role': user.role,
-                        'is_staff': user.is_staff,
-                        'is_superuser': user.is_superuser
-                    }
-                }
-            }, status=status.HTTP_200_OK)
+            return Response(
+                {
+                    "success": True,
+                    "data": {
+                        "user": {
+                            "id": user.id,
+                            "username": user.username,
+                            "role": user.role,
+                            "is_staff": user.is_staff,
+                            "is_superuser": user.is_superuser,
+                        }
+                    },
+                },
+                status=status.HTTP_200_OK,
+            )
 
         except Exception as _:
-            return Response({
-                'success': False,
-                'error': {
-                    'code': 'SERVER_ERROR',
-                    'message': 'Lỗi hệ thống',
-                    'details': [
-                        {
-                            'field': 'non_field',
-                            'message': 'Lỗi hệ thống'
-                        }
-                    ]
-                }
-            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+            return Response(
+                {
+                    "success": False,
+                    "error": {
+                        "code": "SERVER_ERROR",
+                        "message": "Lỗi hệ thống",
+                        "details": [{"field": "non_field", "message": "Lỗi hệ thống"}],
+                    },
+                },
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            )
 
     def _handle_remember_me(self, request, user):
         """
@@ -190,8 +208,8 @@ class LoginView(APIView):
             series=urlsafe_base64_encode(force_bytes(secrets.token_bytes(16))),
             token_hash=token_hash,
             ip_address=ip_address,
-            user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],  # Limit length
-            expires_at=expires_at
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],  # Limit length
+            expires_at=expires_at,
         )
 
         # In a real implementation, we would set the cookie here
@@ -209,11 +227,11 @@ class LoginView(APIView):
         """
         Get the client's IP address from the request.
         """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
+            ip = x_forwarded_for.split(",")[0]
         else:
-            ip = request.META.get('REMOTE_ADDR')
+            ip = request.META.get("REMOTE_ADDR")
         return ip
 
 
@@ -238,7 +256,4 @@ def reset_view(request):
     # It simply returns success so the frontend can clear the form
     # Use request to satisfy linter (even though we don't need it in this function)
     _ = request
-    return Response({
-        'success': True,
-        'message': 'Form reset successfully'
-    })
+    return Response({"success": True, "message": "Form reset successfully"})

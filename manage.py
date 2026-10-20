@@ -9,7 +9,7 @@ def main():
     """Run administrative tasks."""
     # Set default settings module to local development
     # Can be overridden by setting DJANGO_SETTINGS_MODULE environment variable
-    if 'DJANGO_SETTINGS_MODULE' not in os.environ:
+    if "DJANGO_SETTINGS_MODULE" not in os.environ:
         os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
     try:
         from django.core.management import execute_from_command_line

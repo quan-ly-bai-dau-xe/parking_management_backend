@@ -23,21 +23,26 @@ def list_entities(*, filter_val: str | None = None) -> QuerySet[Entity]:
     qs = Entity.objects.all()  # Excludes deleted records
     return qs.filter(name__icontains=filter_val.strip()) if filter_val else qs
 
+
 # services.py (Write)
 @transaction.atomic
 def mutate_entity_service(*, entity_id: int, user, **data) -> Entity:
     entity = Entity.objects.select_for_update().filter(id=entity_id).first()
     if not entity:
         raise NotFoundError("Entity does not exist.")
-    for k, v in data.items(): setattr(entity, k, v)
+    for k, v in data.items():
+        setattr(entity, k, v)
     entity.save()
     return entity
+
 
 # views.py (Thin Controller)
 class EntityViewSet(viewsets.ModelViewSet):
     permission_classes = [IsManager]
     serializer_class = EntitySerializer
-    def get_queryset(self): return list_entities()
+
+    def get_queryset(self):
+        return list_entities()
 ```
 
 ## 4. Verification Checklist

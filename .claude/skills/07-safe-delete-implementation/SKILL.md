@@ -20,7 +20,8 @@ Standardize entity soft deletion adhering to `06-data-deletion-and-destructive-o
 @transaction.atomic
 def delete_entity_service(*, entity_id: int, user) -> Entity:
     entity = Entity.objects.select_for_update().filter(id=entity_id).first()
-    if not entity: raise NotFoundError("Entity does not exist.")
+    if not entity:
+        raise NotFoundError("Entity does not exist.")
     # Domain guard: evaluate business constraints
     if entity.has_active_dependencies():
         raise BusinessValidationError("Cannot delete entity with active dependencies.")

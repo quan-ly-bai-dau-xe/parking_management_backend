@@ -1,6 +1,7 @@
 """
 Login views for the accounts app.
 """
+
 import json
 import re
 import secrets
@@ -24,7 +25,7 @@ _ = Account
 _ = PersistentLoginToken
 
 
-@method_decorator(ensure_csrf_cookie, name='dispatch')
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class LoginView(View):
     """
     Handle user login requests.
@@ -37,95 +38,110 @@ class LoginView(View):
         try:
             # Parse JSON data from request body
             data = json.loads(request.body)
-            username = data.get('username', '').strip()
-            password = data.get('password', '')
-            remember_me = data.get('remember_me', False)
+            username = data.get("username", "").strip()
+            password = data.get("password", "")
+            remember_me = data.get("remember_me", False)
 
             # Validation
             if not username:
-                return JsonResponse({
-                    'success': False,
-                    'error': {
-                        'code': 'VALIDATION_ERROR',
-                        'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu',
-                        'details': [
-                            {
-                                'field': 'username',
-                                'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu'
-                            }
-                        ]
-                    }
-                }, status=400)
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                            "details": [
+                                {
+                                    "field": "username",
+                                    "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                                }
+                            ],
+                        },
+                    },
+                    status=400,
+                )
 
             if not password:
-                return JsonResponse({
-                    'success': False,
-                    'error': {
-                        'code': 'VALIDATION_ERROR',
-                        'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu',
-                        'details': [
-                            {
-                                'field': 'password',
-                                'message': 'Xin nhập đầy đủ Tên đăng nhập và Mật khẩu'
-                            }
-                        ]
-                    }
-                }, status=400)
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                            "details": [
+                                {
+                                    "field": "password",
+                                    "message": "Xin nhập đầy đủ Tên đăng nhập và Mật khẩu",
+                                }
+                            ],
+                        },
+                    },
+                    status=400,
+                )
 
             # Check for special characters in username (per SRS 4.1-F01)
             # The Account model already has a validator, but we check here for immediate feedback
-            if not re.match(r'^[a-zA-Z0-9_.-]+$', username):
-                return JsonResponse({
-                    'success': False,
-                    'error': {
-                        'code': 'VALIDATION_ERROR',
-                        'message': 'Tên đăng nhập không chứa ký tự đặc biệt',
-                        'details': [
-                            {
-                                'field': 'username',
-                                'message': 'Tên đăng nhập không chứa ký tự đặc biệt'
-                            }
-                        ]
-                    }
-                }, status=400)
+            if not re.match(r"^[a-zA-Z0-9_.-]+$", username):
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "VALIDATION_ERROR",
+                            "message": "Tên đăng nhập không chứa ký tự đặc biệt",
+                            "details": [
+                                {
+                                    "field": "username",
+                                    "message": "Tên đăng nhập không chứa ký tự đặc biệt",
+                                }
+                            ],
+                        },
+                    },
+                    status=400,
+                )
 
             # Authenticate user
             user = authenticate(request, username=username, password=password)
 
             if user is None:
                 # Invalid credentials
-                return JsonResponse({
-                    'success': False,
-                    'error': {
-                        'code': 'INVALID_CREDENTIALS',
-                        'message': 'Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu',
-                        'details': [
-                            {
-                                'field': 'non_field',
-                                'message': 'Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu'
-                            }
-                        ]
-                    }
-                }, status=401)
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "INVALID_CREDENTIALS",
+                            "message": "Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu",
+                            "details": [
+                                {
+                                    "field": "non_field",
+                                    "message": "Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu",
+                                }
+                            ],
+                        },
+                    },
+                    status=401,
+                )
 
             # Inform Pylance that user is an Account instance
             user: Account
 
             # Check if user is active
             if not user.is_active:
-                return JsonResponse({
-                    'success': False,
-                    'error': {
-                        'code': 'ACCOUNT_DISABLED',
-                        'message': 'Tài khoản đã được vô hiệu hóa',
-                        'details': [
-                            {
-                                'field': 'non_field',
-                                'message': 'Tài khoản đã được vô hiệu hóa'
-                            }
-                        ]
-                    }
-                }, status=403)
+                return JsonResponse(
+                    {
+                        "success": False,
+                        "error": {
+                            "code": "ACCOUNT_DISABLED",
+                            "message": "Tài khoản đã được vô hiệu hóa",
+                            "details": [
+                                {
+                                    "field": "non_field",
+                                    "message": "Tài khoản đã được vô hiệu hóa",
+                                }
+                            ],
+                        },
+                    },
+                    status=403,
+                )
 
             # Perform login
             login(request, user)
@@ -138,47 +154,47 @@ class LoginView(View):
                 self._handle_remember_me(request, user)
 
             # Return success response
-            return JsonResponse({
-                'success': True,
-                'data': {
-                    'user': {
-                        'id': user.id,
-                        'username': user.username,
-                        'role': user.role,
-                        'is_staff': user.is_staff,
-                        'is_superuser': user.is_superuser
-                    }
+            return JsonResponse(
+                {
+                    "success": True,
+                    "data": {
+                        "user": {
+                            "id": user.id,
+                            "username": user.username,
+                            "role": user.role,
+                            "is_staff": user.is_staff,
+                            "is_superuser": user.is_superuser,
+                        }
+                    },
                 }
-            })
+            )
 
         except json.JSONDecodeError:
-            return JsonResponse({
-                'success': False,
-                'error': {
-                    'code': 'INVALID_REQUEST',
-                    'message': 'Yêu cầu không hợp lệ',
-                    'details': [
-                        {
-                            'field': 'non_field',
-                            'message': 'Yêu cầu không hợp lệ'
-                        }
-                    ]
-                }
-            }, status=400)
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": {
+                        "code": "INVALID_REQUEST",
+                        "message": "Yêu cầu không hợp lệ",
+                        "details": [
+                            {"field": "non_field", "message": "Yêu cầu không hợp lệ"}
+                        ],
+                    },
+                },
+                status=400,
+            )
         except Exception as _:
-            return JsonResponse({
-                'success': False,
-                'error': {
-                    'code': 'SERVER_ERROR',
-                    'message': 'Lỗi hệ thống',
-                    'details': [
-                        {
-                            'field': 'non_field',
-                            'message': 'Lỗi hệ thống'
-                        }
-                    ]
-                }
-            }, status=500)
+            return JsonResponse(
+                {
+                    "success": False,
+                    "error": {
+                        "code": "SERVER_ERROR",
+                        "message": "Lỗi hệ thống",
+                        "details": [{"field": "non_field", "message": "Lỗi hệ thống"}],
+                    },
+                },
+                status=500,
+            )
 
     def _handle_remember_me(self, request, user):
         """
@@ -205,8 +221,8 @@ class LoginView(View):
             series=urlsafe_base64_encode(force_bytes(secrets.token_bytes(16))),
             token_hash=token_hash,
             ip_address=ip_address,
-            user_agent=request.META.get('HTTP_USER_AGENT', '')[:255],  # Limit length
-            expires_at=expires_at
+            user_agent=request.META.get("HTTP_USER_AGENT", "")[:255],  # Limit length
+            expires_at=expires_at,
         )
 
         # In a real implementation, we would set the cookie here
@@ -224,11 +240,11 @@ class LoginView(View):
         """
         Get the client's IP address from the request.
         """
-        x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+        x_forwarded_for = request.META.get("HTTP_X_FORWARDED_FOR")
         if x_forwarded_for:
-            ip = x_forwarded_for.split(',')[0]
+            ip = x_forwarded_for.split(",")[0]
         else:
-            ip = request.META.get('REMOTE_ADDR')
+            ip = request.META.get("REMOTE_ADDR")
         return ip
 
 
@@ -253,7 +269,4 @@ def reset_view(request):
     # It simply returns success so the frontend can clear the form
     # Use request to satisfy linter (even though we don't need it in this function)
     _ = request
-    return JsonResponse({
-        'success': True,
-        'message': 'Form reset successfully'
-    })
+    return JsonResponse({"success": True, "message": "Form reset successfully"})
