@@ -2,10 +2,10 @@
 URL configuration for accounts app.
 """
 from django.urls import path
+from . import login_views
 
 urlpatterns = [
-    # API endpoints will be added here as views are implemented
-    # Example:
-    # path('register/', views.register, name='register'),
-    # path('login/', views.login_view, name='login'),
+    path('login/', login_views.login_view, name='login'),
+    # Additional endpoints will be added here as views are implemented
+    # path('register/', login_views.register, name='register'),
 ]
