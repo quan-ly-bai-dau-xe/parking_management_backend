@@ -67,6 +67,8 @@ This document records the authoritative **Frontend-First (`FE-First`)** specific
 | `TL-47` | Foundation Base Layer, Auth, OpenAPI & Tests | Architecture, API Standards & Tests | Error envelope, auth APIs, Swagger UI, 6 lookups (Narrowed by `TL-48`) |
 | `TL-48` | Foundation Scope Reduction & Feature Handover | Architecture & Teamwork Governance | Gỡ bỏ login/remember-me & 6 lookups; giữ nguyên 100% foundation skeleton |
 | `TL-49` | Quality Gates Enforcement & CSpell Cache Exclusion | CI/CD & Development Standards | 0 lỗi ruff, mypy, dry-run, deploy check, test cov >= 80%, cspell cache ignore |
+| `TL-50` | Vehicle Entry/Exit Tariff Rules (Round 32) | `Lịch sử ra/vào — Smart Mobility.png` | `vehicle_entry_exit_log.fee_amount`, Decimal tariff calculation |
+| `TL-51` | Scan API Response Contract & Corrections (Round 35) | `POST /api/v1/parking/plate-scans/` | `plate_raw`, `plate_final`, `corrections` list, sync `best_candidate` |
 
 ### 2.2. Detailed Decision Specifications
 
@@ -252,6 +254,20 @@ This document records the authoritative **Frontend-First (`FE-First`)** specific
   - **Resolution**:
     - Bổ sung các thư mục cache của công cụ (`.ruff_cache/**`, `.mypy_cache/**`, `.pytest_cache/**`) vào `ignorePaths` trong `cspell.json`.
     - Bắt buộc vượt qua 100% các Quality Gates: `ruff check .` (0 lỗi), `ruff format --check .` (0 lỗi), `mypy .` (0 lỗi), `python manage.py makemigrations --check --dry-run` (0 thay đổi), `python manage.py spectacular --validate --fail-on-warn` (0 cảnh báo/lỗi), `python manage.py check --deploy` (0 lỗi), `pytest` với line coverage trên `apps/` đạt `>= 80%`.
+- **`TL-50` — Vehicle Entry/Exit Parking Tariff Calculation Rules [COMPLETED]**:
+  - **Context**: Xác lập quy tắc nghiệp vụ tính cước gửi xe tại barrier check-out cho Task 8 (SRS 4.5.1), đảm bảo tính toán tài chính chính xác tuyệt đối, tránh lỗi dấu phẩy động (floating-point).
+  - **Resolution**:
+    - Khi phương tiện check-out: Kiểm tra xem phương tiện có vé (`ticket`) đang ở trạng thái `ACTIVE`, chưa bị xóa mềm (`deleted_at IS NULL`), và thời điểm ra nằm trong khoảng hiệu lực (`effective_from <= exit_time < effective_to`). Nếu có, cước phí được miễn giảm hoàn toàn: `fee_amount = Decimal("0.00")`.
+    - Khi không có vé hợp lệ hoặc là xe vãng lai (`vehicle_id IS NULL`): Tính thời gian đỗ `duration = exit_time - entry_time`. Số giờ tính phí được làm tròn lên (`ceil(duration_seconds / 3600)`), với mức tối thiểu là `1` giờ. Cước phí bằng số giờ tính phí nhân với đơn giá giờ đọc từ cấu hình hệ thống (`PARKING_HOURLY_RATE_VND`, mặc định `Decimal("10000.00")`), làm tròn chính xác `Decimal("0.01")` kiểu `NUMERIC(12,2)`.
+    - Bắt buộc sử dụng kiểu dữ liệu `Decimal`, tuyệt đối không dùng `float`.
+- **`TL-51` — Scan API Response Contract & Character Corrections [COMPLETED]**:
+  - **Context**: Chuẩn hóa cấu trúc phản hồi của API nhận diện biển số (`POST /api/v1/parking/plate-scans/`) nhằm minh bạch giữa kết quả đọc thô của mô hình OCR và kết quả sau khi áp dụng bộ quy chuẩn ký tự vị trí (position-aware rules), đồng thời bảo toàn tính tương thích ngược cho frontend và các dịch vụ downstream.
+  - **Resolution**:
+    - Bổ sung 2 trường cấp cao nhất: `plate_raw` (chuỗi chuẩn hóa từ kết quả đọc thô ban đầu của OCR ensemble) và `plate_final` (biển số đề xuất sau khi áp dụng bộ quy tắc sửa ký tự vị trí). Nếu không có sửa đổi, `plate_final == plate_raw`.
+    - Trả về danh sách chi tiết các sửa đổi `corrections: list[dict]`, mỗi phần tử gồm: `{position: int, from: str, to: str, rule: str, reason: str}` (giữ `original_char` và `corrected_char` làm alias tương thích ngược).
+    - Đồng bộ `best_candidate` để `best_candidate.plate_normalized = plate_final` và `best_candidate.plate_text = corrected_plate`, đảm bảo client đọc `best_candidate` để check-in luôn trùng khớp với kết quả tra cứu `vehicle_lookup`.
+    - Toàn bộ các dịch vụ phụ thuộc gồm `vehicle_lookup`, `suggestions`, và Review Policy đều sử dụng nhất quán `plate_final`.
+    - Nguyên tắc sửa lỗi: Đảm bảo 0 broken correct reads; không tự ý sửa đổi nếu kết quả sau khi sửa vẫn là `UNKNOWN_PLATE_PATTERN` hoặc không hợp lệ.
 
 ---
 
