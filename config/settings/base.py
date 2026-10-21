@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "drf_spectacular",
     "drf_spectacular_sidecar",
     # Local apps
+    "apps.core",
     "apps.accounts",
     "apps.customers",
     "apps.employees",
@@ -60,6 +61,8 @@ INSTALLED_APPS = [
     "apps.tickets",
     "apps.parking",
     "apps.reports",
+    "apps.content",
+    "apps.audit",
 ]
 
 MIDDLEWARE = [
