@@ -1,6 +1,7 @@
 """
 Test settings.
 """
+
 import os
 
 from .base import *
