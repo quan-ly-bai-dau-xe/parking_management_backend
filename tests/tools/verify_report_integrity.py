@@ -26,6 +26,7 @@ import sys
 import unicodedata
 import urllib.error
 import urllib.request
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Any, Final
 
@@ -36,33 +37,59 @@ if hasattr(sys.stderr, "reconfigure"):
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
-_r40_report = REPO_ROOT / ".agents" / "round40_final_report.md"
-_r39_report = REPO_ROOT / ".agents" / "round39_final_report.md"
-_r38_report = REPO_ROOT / ".agents" / "round38_final_report.md"
-_r37_report = REPO_ROOT / ".agents" / "round37_final_report.md"
-DEFAULT_REPORT_FILE = (
-    _r40_report
-    if _r40_report.exists()
-    else (
-        _r39_report
-        if _r39_report.exists()
-        else (_r38_report if _r38_report.exists() else _r37_report)
-    )
-)
 
-_r40_notes = REPO_ROOT / ".agents" / "round40_notes.md"
-_r39_notes = REPO_ROOT / ".agents" / "round39_notes.md"
-_r38_notes = REPO_ROOT / ".agents" / "round38_notes.md"
-_r37_notes = REPO_ROOT / ".agents" / "round37_notes.md"
-NOTES_FILE = (
-    _r40_notes
-    if _r40_notes.exists()
-    else (
-        _r39_notes
-        if _r39_notes.exists()
-        else (_r38_notes if _r38_notes.exists() else _r37_notes)
-    )
-)
+def find_highest_round_report(agents_dir: Path | None = None) -> Path:
+    """Find the highest-numbered round final report in agents_dir, sorted by integer round number.
+
+    Falls back to round37_final_report.md if agents_dir does not exist or has no round reports.
+    """
+    if agents_dir is None:
+        agents_dir = REPO_ROOT / ".agents"
+    fallback = agents_dir / "round37_final_report.md"
+    if not agents_dir.exists():
+        return fallback
+
+    candidates: list[tuple[int, Path]] = []
+    pattern = re.compile(r"^round(\d+)_final_report\.md$")
+    for p in agents_dir.glob("round*_final_report.md"):
+        if p.is_file():
+            m = pattern.match(p.name)
+            if m:
+                candidates.append((int(m.group(1)), p))
+
+    if not candidates:
+        return fallback
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+def find_highest_round_notes(agents_dir: Path | None = None) -> Path:
+    """Find the highest-numbered round notes in agents_dir, sorted by integer round number.
+
+    Falls back to round37_notes.md if agents_dir does not exist or has no round notes.
+    """
+    if agents_dir is None:
+        agents_dir = REPO_ROOT / ".agents"
+    fallback = agents_dir / "round37_notes.md"
+    if not agents_dir.exists():
+        return fallback
+
+    candidates: list[tuple[int, Path]] = []
+    pattern = re.compile(r"^round(\d+)_notes\.md$")
+    for p in agents_dir.glob("round*_notes.md"):
+        if p.is_file():
+            m = pattern.match(p.name)
+            if m:
+                candidates.append((int(m.group(1)), p))
+
+    if not candidates:
+        return fallback
+    candidates.sort(key=lambda item: item[0], reverse=True)
+    return candidates[0][1]
+
+
+DEFAULT_REPORT_FILE = find_highest_round_report()
+NOTES_FILE = find_highest_round_notes()
 
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
@@ -260,36 +287,26 @@ def parse_schema_sql() -> dict[str, set[str]]:
     }
 
 
-def load_repo_and_notes_corpus(exclude_path: Path) -> tuple[set[str], str]:
+def load_repo_and_notes_corpus(
+    exclude_path: Path, agents_dir: Path | None = None
+) -> tuple[set[str], str]:
     basenames: set[str] = set()
     corpus_parts: list[str] = []
+    exclude_resolved = exclude_path.resolve()
 
-    agents_dir = REPO_ROOT / ".agents"
+    if agents_dir is None:
+        agents_dir = REPO_ROOT / ".agents"
     if agents_dir.exists():
-        for notes_name in [
-            "round40_notes.md",
-            "round40_final_report.md",
-            "round39_notes.md",
-            "round39_final_report.md",
-            "round38_notes.md",
-            "round38_final_report.md",
-            "round37_notes.md",
-            "round37_final_report.md",
-            "round36_final_report.md",
-            "PROMPT_VONG40_EN.txt",
-            "PROMPT_VONG40_VI.txt",
-            "PROMPT_VONG39_EN.txt",
-            "PROMPT_VONG39_VI.txt",
-        ]:
-            nf = agents_dir / notes_name
-            if nf.exists() and nf.resolve() != exclude_path:
-                basenames.add(nf.name)
-                notes_text = nf.read_text(encoding="utf-8", errors="ignore")
-                corpus_parts.append(notes_text)
-                corpus_parts.append(str(len(notes_text.splitlines())))
+        for pattern in ["round*", "PROMPT_VONG*"]:
+            for nf in sorted(agents_dir.glob(pattern)):
+                if nf.is_file() and nf.resolve() != exclude_resolved:
+                    basenames.add(nf.name)
+                    notes_text = nf.read_text(encoding="utf-8", errors="ignore")
+                    corpus_parts.append(notes_text)
+                    corpus_parts.append(str(len(notes_text.splitlines())))
 
         orig_req = agents_dir / "teamwork" / "ORIGINAL_REQUEST.md"
-        if orig_req.exists() and orig_req.resolve() != exclude_path:
+        if orig_req.exists() and orig_req.resolve() != exclude_resolved:
             basenames.add(orig_req.name)
             req_text = orig_req.read_text(encoding="utf-8", errors="ignore")
             corpus_parts.append(req_text)
@@ -306,7 +323,7 @@ def load_repo_and_notes_corpus(exclude_path: Path) -> tuple[set[str], str]:
     ]
     for rf in root_files:
         p = REPO_ROOT / rf
-        if p.exists():
+        if p.exists() and p.resolve() != exclude_resolved:
             basenames.add(p.name)
             corpus_parts.append(p.read_text(encoding="utf-8", errors="ignore"))
 
@@ -318,7 +335,7 @@ def load_repo_and_notes_corpus(exclude_path: Path) -> tuple[set[str], str]:
             if (
                 p.is_file()
                 and "__pycache__" not in p.parts
-                and p.resolve() != exclude_path
+                and p.resolve() != exclude_resolved
             ):
                 basenames.add(p.name)
                 if p.suffix in {
@@ -336,24 +353,159 @@ def load_repo_and_notes_corpus(exclude_path: Path) -> tuple[set[str], str]:
     return basenames, "\n".join(corpus_parts)
 
 
+_SKIPPED_HTML_TAGS: Final[frozenset[str]] = frozenset({"script", "style", "noscript"})
+_BLOCK_HTML_TAGS: Final[frozenset[str]] = frozenset(
+    {
+        "p",
+        "div",
+        "tr",
+        "li",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "br",
+        "hr",
+        "pre",
+        "blockquote",
+    }
+)
+
+
+class _HTMLTextExtractor(HTMLParser):
+    """HTML parser that strips script/style/noscript blocks, converts block tags to newlines, and unescapes entities."""
+
+    def __init__(self) -> None:
+        # convert_charrefs=True automatically decodes named and numeric entities
+        # into Unicode in handle_data, avoiding a secondary unescape pass that
+        # would corrupt double-escaped entities like '&amp;lt;'.
+        super().__init__(convert_charrefs=True)
+        self._pieces: list[str] = []
+        self._skip_stack: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag_lower = tag.lower()
+        if tag_lower in _SKIPPED_HTML_TAGS:
+            self._skip_stack.append(tag_lower)
+            return
+        if self._skip_stack:
+            return
+        if tag_lower in _BLOCK_HTML_TAGS:
+            self._pieces.append("\n")
+
+    def handle_endtag(self, tag: str) -> None:
+        tag_lower = tag.lower()
+        if self._skip_stack:
+            if tag_lower == self._skip_stack[-1]:
+                self._skip_stack.pop()
+            return
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_stack:
+            return
+        self._pieces.append(data)
+
+    def get_text(self) -> str:
+        return "".join(self._pieces)
+
+
 def extract_text_from_html(html_content: str) -> str:
-    """Extract clean plaintext from HTML while preserving code snippets and unescaping entities."""
-    # Remove script, style, noscript tags and their contents
-    cleaned = re.sub(
-        r"<(?:script|style|noscript)[^>]*>[\s\S]*?</(?:script|style|noscript)>",
-        " ",
-        html_content,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(
-        r"<(?:p|div|tr|li|h[1-6]|br|hr|pre|blockquote)[^>]*>",
-        "\n",
-        cleaned,
-        flags=re.IGNORECASE,
-    )
-    text = re.sub(r"<[^>]+>", "", text)
-    text = html_lib.unescape(text)
-    return text
+    """Extract clean plaintext from HTML while preserving code snippets and unescaping entities.
+
+    Non-str arguments (None, numbers, bytes, etc.) return an empty string explicitly.
+    """
+    if not isinstance(html_content, str) or not html_content:
+        return ""
+    extractor = _HTMLTextExtractor()
+    extractor.feed(html_content)
+    extractor.close()
+    return extractor.get_text()
+
+
+_HEADING_HTML_TAGS: Final[frozenset[str]] = frozenset({"h1", "h2", "h3"})
+
+
+class _HTMLMetadataExtractor(HTMLParser):
+    """HTML parser to extract page title and h1-h3 heading texts."""
+
+    def __init__(self) -> None:
+        super().__init__(convert_charrefs=True)
+        self.title: str = ""
+        self.headings: list[str] = []
+        self._in_title: bool = False
+        self._title_pieces: list[str] = []
+        self._current_heading_tag: str | None = None
+        self._heading_pieces: list[str] = []
+        self._skip_stack: list[str] = []
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        tag_lower = tag.lower()
+        if tag_lower in _SKIPPED_HTML_TAGS:
+            self._skip_stack.append(tag_lower)
+            return
+        if self._skip_stack:
+            return
+        if tag_lower == "title" and not self.title:
+            self._in_title = True
+        elif tag_lower in _HEADING_HTML_TAGS and self._current_heading_tag is None:
+            self._current_heading_tag = tag_lower
+            self._heading_pieces = []
+
+    def handle_endtag(self, tag: str) -> None:
+        tag_lower = tag.lower()
+        if self._skip_stack:
+            if tag_lower == self._skip_stack[-1]:
+                self._skip_stack.pop()
+            return
+        if tag_lower == "title" and self._in_title:
+            self._in_title = False
+            self.title = "".join(self._title_pieces)
+        elif (
+            self._current_heading_tag is not None
+            and tag_lower == self._current_heading_tag
+        ):
+            heading_text = "".join(self._heading_pieces)
+            if heading_text.strip():
+                self.headings.append(heading_text)
+            self._current_heading_tag = None
+            self._heading_pieces = []
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_stack:
+            return
+        if self._in_title:
+            self._title_pieces.append(data)
+        if self._current_heading_tag is not None:
+            self._heading_pieces.append(data)
+
+    def close(self) -> None:
+        super().close()
+        if self._in_title and not self.title:
+            self.title = "".join(self._title_pieces)
+        if self._current_heading_tag is not None and self._heading_pieces:
+            heading_text = "".join(self._heading_pieces)
+            if heading_text.strip():
+                self.headings.append(heading_text)
+
+
+def extract_title_and_headings(html_content: str) -> tuple[str, list[str]]:
+    """Extract page title and h1-h3 heading texts using HTMLParser.
+
+    Returns (clean_title, clean_headings) with whitespace normalized.
+    Non-str arguments (None, numbers, bytes, etc.) return ('', []).
+    """
+    if not isinstance(html_content, str) or not html_content:
+        return "", []
+    extractor = _HTMLMetadataExtractor()
+    extractor.feed(html_content)
+    extractor.close()
+    clean_title = " ".join(extractor.title.split())
+    clean_headings = [
+        " ".join(h.split()) for h in extractor.headings if " ".join(h.split())
+    ]
+    return clean_title, clean_headings
 
 
 def extract_citations(md_text: str) -> list[dict[str, Any]]:
@@ -901,11 +1053,7 @@ def verify_url_and_quote(
             result["status_code"] = status
             raw_body = resp.read().decode("utf-8", errors="replace")
 
-            title_m = re.search(
-                r"<title>(.*?)</title>", raw_body, re.IGNORECASE | re.DOTALL
-            )
-            title = title_m.group(1).strip() if title_m else ""
-            clean_title = " ".join(title.split())
+            clean_title, clean_headings = extract_title_and_headings(raw_body)
             result["title"] = clean_title
 
             if not (200 <= status < 300):
@@ -914,12 +1062,6 @@ def verify_url_and_quote(
                 result["message"] = f"HTTP {status} Unexpected non-2xx"
                 return result
 
-            headings = re.findall(
-                r"<h[1-3][^>]*>(.*?)</h[1-3]>", raw_body, flags=re.IGNORECASE
-            )
-            clean_headings = [
-                " ".join(re.sub(r"<[^>]+>", "", h).split()) for h in headings
-            ]
             heading_corpus = " ".join(clean_headings)
             raw_text = extract_text_from_html(raw_body)
 
