@@ -20,6 +20,10 @@ import pytest
 from tests.tools.verify_report_integrity import (
     extract_citations,
     extract_text_from_html,
+    extract_title_and_headings,
+    find_highest_round_notes,
+    find_highest_round_report,
+    load_repo_and_notes_corpus,
     verify_url_and_quote,
 )
 
@@ -52,6 +56,367 @@ class TestReportIntegrityVerification(unittest.TestCase):
         html = "<p>Th&ocirc;ng t&#432; s&#7889; 79/2024/TT-BCA</p>"
         text = extract_text_from_html(html)
         self.assertIn("Thông tư số 79/2024/TT-BCA", text)
+
+    def test_extract_text_strips_script_with_trailing_spaces_in_end_tag(self) -> None:
+        """CodeQL py/bad-tag-filter: </script > with spaces before > must strip script content."""
+        html = "<p>Before</p><script>alert('sensitive_x')</script ><p>After</p>"
+        text = extract_text_from_html(html)
+        self.assertNotIn("alert('sensitive_x')", text)
+        self.assertNotIn("sensitive_x", text)
+        self.assertIn("Before", text)
+        self.assertIn("After", text)
+
+    def test_extract_text_strips_script_with_newlines_and_attributes_in_end_tag(
+        self,
+    ) -> None:
+        """Closing tags with newlines and trailing attributes like </script\\nfoo> must strip script content."""
+        html = "<p>Before</p><script>payload_data = 1;</script\nfoo><p>After</p>"
+        text = extract_text_from_html(html)
+        self.assertNotIn("payload_data", text)
+        self.assertIn("Before", text)
+        self.assertIn("After", text)
+
+    def test_extract_text_strips_uppercase_script_tags(self) -> None:
+        """Uppercase <SCRIPT>...</SCRIPT > with whitespace must strip content case-insensitively."""
+        html = "<p>Visible</p><SCRIPT>console.log('secret');</SCRIPT ><p>Text</p>"
+        text = extract_text_from_html(html)
+        self.assertNotIn("secret", text)
+        self.assertIn("Visible", text)
+        self.assertIn("Text", text)
+
+    def test_extract_text_handles_nested_and_unclosed_scripts(self) -> None:
+        """Unclosed script hides subsequent text as a browser does; nested noscript respects tag depth."""
+        # Unclosed script hides the rest
+        unclosed = "Keep this text<script>var unclosed = 'leak'; hidden content"
+        text_unclosed = extract_text_from_html(unclosed)
+        self.assertNotIn("unclosed", text_unclosed)
+        self.assertNotIn("leak", text_unclosed)
+        self.assertNotIn("hidden content", text_unclosed)
+        self.assertIn("Keep this text", text_unclosed)
+
+        # Nested tags depth handling
+        nested = "<noscript><noscript>nested_payload</noscript>outer_payload</noscript><p>Safe</p>"
+        text_nested = extract_text_from_html(nested)
+        self.assertNotIn("nested_payload", text_nested)
+        self.assertNotIn("outer_payload", text_nested)
+        self.assertIn("Safe", text_nested)
+
+        # Self-closing script should not hide subsequent content
+        self_closing = '<script src="bundle.js"/>Visible content'
+        self.assertEqual(extract_text_from_html(self_closing), "Visible content")
+
+        # Comment containing script tag should not trigger skip depth
+        comment_script = "Visible Before<!-- <script>alert(1)</script> -->Visible After"
+        self.assertEqual(
+            extract_text_from_html(comment_script), "Visible BeforeVisible After"
+        )
+
+    def test_extract_text_strips_style_and_noscript_variants(self) -> None:
+        """Variants of <style > and <noscript > with whitespace and unclosed variants are stripped."""
+        html_style = "Header<style >body { color: red; }</style >Content"
+        text_style = extract_text_from_html(html_style)
+        self.assertNotIn("color: red", text_style)
+        self.assertIn("Header", text_style)
+        self.assertIn("Content", text_style)
+
+        html_noscript = "Header<noscript\nbar>Enable JavaScript</noscript >Content"
+        text_noscript = extract_text_from_html(html_noscript)
+        self.assertNotIn("Enable JavaScript", text_noscript)
+        self.assertIn("Header", text_noscript)
+        self.assertIn("Content", text_noscript)
+
+        # Unclosed style hides rest
+        html_unclosed_style = "Prefix<style>body { font-size: 14px; }"
+        text_unclosed_style = extract_text_from_html(html_unclosed_style)
+        self.assertNotIn("font-size", text_unclosed_style)
+        self.assertIn("Prefix", text_unclosed_style)
+
+    def test_extract_text_decodes_entities_without_double_unescape(self) -> None:
+        """Entities (&ocirc;, &#432;, &amp;, hex &#x20AC;) are decoded, and &amp;lt; must stay '&lt;' without double unescape."""
+        html = "<p>Th&ocirc;ng t&#432; s&#7889; 79/2024/TT-BCA &amp; q &amp;lt; 10 &#x20AC;</p>"
+        text = extract_text_from_html(html)
+        self.assertIn("Thông tư số 79/2024/TT-BCA", text)
+        self.assertIn("& q", text)
+        self.assertIn("&lt; 10", text)
+        self.assertNotIn("< 10", text)
+        self.assertIn("€", text)
+
+    def test_extract_text_preserves_escaped_script_tags_as_text(self) -> None:
+        """Escaped '&lt;script&gt;' represents documentation/code text, not an executable HTML tag."""
+        html = "<p>Example: &lt;script&gt;console.log('tutorial')&lt;/script&gt;</p>"
+        text = extract_text_from_html(html)
+        self.assertIn("<script>console.log('tutorial')</script>", text)
+
+    def test_extract_text_block_tags_produce_newlines(self) -> None:
+        """Block tags (p, div, tr, li, h1-h6, br, hr, pre, blockquote) produce newlines."""
+        html = (
+            "<h1>Heading 1</h1>"
+            "<h2>Heading 2</h2>"
+            "<h3>Heading 3</h3>"
+            "<h4>Heading 4</h4>"
+            "<h5>Heading 5</h5>"
+            "<h6>Heading 6</h6>"
+            "<p>Paragraph</p>"
+            "<div>Division</div>"
+            "<blockquote>Quote</blockquote>"
+            "<pre>CodeBlock</pre>"
+            "<hr>"
+            "<ul><li>Item 1</li><li>Item 2</li></ul>"
+            "<table><tr>Row 1</tr></table>"
+            "Inline<br>Break"
+        )
+        text = extract_text_from_html(html)
+        for piece in [
+            "Heading 1",
+            "Heading 2",
+            "Heading 3",
+            "Heading 4",
+            "Heading 5",
+            "Heading 6",
+            "Paragraph",
+            "Division",
+            "Quote",
+            "CodeBlock",
+            "Item 1",
+            "Item 2",
+            "Row 1",
+            "Break",
+        ]:
+            self.assertIn(f"\n{piece}", text)
+
+    def test_extract_text_malformed_html_does_not_raise(self) -> None:
+        """Severely malformed HTML markup parses gracefully without raising exceptions."""
+        malformed_inputs: list[Any] = [
+            '<<<>>> <tag unclosed="abc <script> >>> &invalid; </</<',
+            '<div <span class="broken"',
+            '<a href="http://example.com/unclosed',
+            "text &amp&invalid;&#999999999; </ >",
+            "<![CDATA[ unclosed CDATA",
+            "<!-- unclosed comment",
+            "<?xml bogus processing instruction?>",
+            "",
+            None,
+            12345,
+            b"<p>bytes</p>",
+        ]
+        for malformed in malformed_inputs:
+            text = extract_text_from_html(malformed)
+            self.assertIsInstance(text, str)
+
+    def test_extract_text_decodes_named_entity_vietnamese_copilot_guard(self) -> None:
+        """Named entities like &ocirc; must decode to Unicode (guards against Copilot convert_charrefs=False)."""
+        html = "<p>Th&ocirc;ng b&aacute;o k&#7871;t qu&#7843;</p>"
+        text = extract_text_from_html(html)
+        self.assertIn("Thông báo kết quả", text)
+
+    def test_extract_text_returns_empty_string_for_non_str_explicitly(self) -> None:
+        """Non-string inputs (None, integers, floats, bytes, dicts) return empty string explicitly without try/except."""
+        non_str_inputs: list[Any] = [
+            None,
+            0,
+            12345,
+            3.14,
+            b"<p>bytes</p>",
+            [],
+            {},
+            True,
+            False,
+        ]
+        for non_str in non_str_inputs:
+            self.assertEqual(extract_text_from_html(cast(Any, non_str)), "")
+
+    def test_extract_text_fuzz_malformed_html_strings(self) -> None:
+        """Seeded fuzz test with 2000 pseudo-random malformed HTML strings must not raise exceptions."""
+        import random
+
+        rng = random.Random(20261021)
+        tokens = [
+            "<",
+            ">",
+            "/",
+            "!",
+            "-",
+            "&",
+            "#",
+            ";",
+            '"',
+            "'",
+            "script",
+            "style",
+            "noscript",
+            "p",
+            "div",
+            "h1",
+            "h2",
+            "h3",
+            "br",
+            "a",
+            "b",
+            "c",
+            " ",
+            "\n",
+            "\t",
+            "=",
+            "x",
+            "1",
+            "9",
+            "&ocirc;",
+            "&lt;",
+            "&amp;",
+        ]
+        for _ in range(2000):
+            length = rng.randint(0, 80)
+            malformed = "".join(rng.choice(tokens) for _ in range(length))
+            res = extract_text_from_html(malformed)
+            self.assertIsInstance(res, str)
+            title, headings = extract_title_and_headings(malformed)
+            self.assertIsInstance(title, str)
+            self.assertIsInstance(headings, list)
+
+    def test_extract_text_stack_skipping_nested_and_mismatched_tags(self) -> None:
+        """Stack-based tag skipping ignores mismatched closing tags and handles nested skipped blocks."""
+        # 1. Exact input from P3 requirement: mismatched </style> must not close <noscript>
+        html_leak = "<noscript></style>LEAK</noscript>after"
+        text_leak = extract_text_from_html(html_leak)
+        self.assertEqual(text_leak, "after")
+        self.assertNotIn("LEAK", text_leak)
+
+        # 2. <style> inside <noscript>
+        html_style_in_ns = (
+            "<noscript>before_style<style>body { color: red; }</style>"
+            "after_style</noscript>visible_tail"
+        )
+        text_style_in_ns = extract_text_from_html(html_style_in_ns)
+        self.assertEqual(text_style_in_ns, "visible_tail")
+        self.assertNotIn("before_style", text_style_in_ns)
+        self.assertNotIn("color: red", text_style_in_ns)
+        self.assertNotIn("after_style", text_style_in_ns)
+
+        # 3. <script> inside <noscript>
+        html_script_in_ns = (
+            "<noscript>ns_head<script>alert(1);</script>ns_tail</noscript>visible_after"
+        )
+        text_script_in_ns = extract_text_from_html(html_script_in_ns)
+        self.assertEqual(text_script_in_ns, "visible_after")
+        self.assertNotIn("ns_head", text_script_in_ns)
+        self.assertNotIn("alert(1)", text_script_in_ns)
+        self.assertNotIn("ns_tail", text_script_in_ns)
+
+    def test_find_highest_round_report_picks_highest_integer(self) -> None:
+        """Report detector must sort round numbers by integer value, so round100 beats round41 and round9."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            td = Path(tmp_dir)
+            (td / "round9_final_report.md").write_text("# Round 9", encoding="utf-8")
+            (td / "round41_final_report.md").write_text("# Round 41", encoding="utf-8")
+            (td / "round100_final_report.md").write_text(
+                "# Round 100", encoding="utf-8"
+            )
+            highest = find_highest_round_report(td)
+            self.assertEqual(highest.name, "round100_final_report.md")
+
+            (td / "round9_notes.md").write_text("# Notes 9", encoding="utf-8")
+            (td / "round41_notes.md").write_text("# Notes 41", encoding="utf-8")
+            (td / "round100_notes.md").write_text("# Notes 100", encoding="utf-8")
+            highest_notes = find_highest_round_notes(td)
+            self.assertEqual(highest_notes.name, "round100_notes.md")
+
+            # Subdirectories matching the pattern must be ignored in favor of regular files
+            (td / "round999_final_report.md").mkdir()
+            (td / "round999_notes.md").mkdir()
+            self.assertEqual(
+                find_highest_round_report(td).name, "round100_final_report.md"
+            )
+            self.assertEqual(find_highest_round_notes(td).name, "round100_notes.md")
+
+    def test_find_highest_round_report_safe_default_when_empty_or_missing(self) -> None:
+        """Report detector returns safe fallback when directory is empty or missing."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            td = Path(tmp_dir)
+            self.assertEqual(
+                find_highest_round_report(td).name, "round37_final_report.md"
+            )
+            self.assertEqual(find_highest_round_notes(td).name, "round37_notes.md")
+            non_existent = td / "non_existent_agents"
+            self.assertEqual(
+                find_highest_round_report(non_existent).name, "round37_final_report.md"
+            )
+            self.assertEqual(
+                find_highest_round_notes(non_existent).name, "round37_notes.md"
+            )
+
+    def test_load_repo_and_notes_corpus_picks_up_new_round_files(self) -> None:
+        """Corpus loader globs round* and PROMPT_VONG* dynamically picking up newly added round files."""
+        import tempfile
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            td = Path(tmp_dir)
+            (td / "round99_notes.md").write_text(
+                "UniqueNoteIdentifier99", encoding="utf-8"
+            )
+            (td / "round99_final_report.md").write_text(
+                "UniqueReportIdentifier99", encoding="utf-8"
+            )
+            (td / "PROMPT_VONG99_VI.txt").write_text(
+                "UniquePromptIdentifier99", encoding="utf-8"
+            )
+            basenames, corpus = load_repo_and_notes_corpus(
+                exclude_path=td / "other.md", agents_dir=td
+            )
+            self.assertIn("round99_notes.md", basenames)
+            self.assertIn("round99_final_report.md", basenames)
+            self.assertIn("PROMPT_VONG99_VI.txt", basenames)
+            self.assertIn("UniqueNoteIdentifier99", corpus)
+            self.assertIn("UniqueReportIdentifier99", corpus)
+            self.assertIn("UniquePromptIdentifier99", corpus)
+
+    def test_extract_title_and_headings_handles_attributes_case_newlines_and_inline_tags(
+        self,
+    ) -> None:
+        """HTMLParser-based extractor parses title and h1-h3 with attributes, uppercase tags, newlines, inline tags, and trailing spaces."""
+        html = (
+            '<title class="meta-title" lang="vi">Trang ch&#7911;\nTh&#7871; gi&#7899;i</title>'
+            '<H1 id="main-head">Ti&ecirc;u &#273;&#7873; <span>ph&#7909; 1</span></H1 >'
+            '<h2 data-ref="sec2">Ti&ecirc;u &#273;&#7873;\nLine 2</h2>'
+            "<H3>Ti&ecirc;u &#273;&#7873; <code>code</code> <em>em</em></H3>"
+        )
+        title, headings = extract_title_and_headings(html)
+        self.assertEqual(title, "Trang chủ Thế giới")
+        self.assertEqual(
+            headings,
+            [
+                "Tiêu đề phụ 1",
+                "Tiêu đề Line 2",
+                "Tiêu đề code em",
+            ],
+        )
+        # Non-string or empty inputs return ('', []) explicitly
+        self.assertEqual(extract_title_and_headings(cast(Any, None)), ("", []))
+        self.assertEqual(extract_title_and_headings(cast(Any, 12345)), ("", []))
+        self.assertEqual(
+            extract_title_and_headings(cast(Any, b"<title>x</title>")), ("", [])
+        )
+
+    def test_heading_split_over_two_lines_missed_by_old_regex(self) -> None:
+        """Demonstrates that old regex without DOTALL missed multiline headings, whereas HTMLParser extracts them."""
+        raw_heading = "<h2>D&#7919; li&#7879;u\nQu&#7889;c gia</h2>"
+
+        # Old regex lacked re.DOTALL:
+        old_regex_matches = re.findall(
+            r"<h[1-3][^>]*>(.*?)</h[1-3]>", raw_heading, flags=re.IGNORECASE
+        )
+        self.assertEqual(
+            old_regex_matches,
+            [],
+            "Proof: old regex without DOTALL fails to match heading split across newlines",
+        )
+
+        # New HTMLParser-based extraction extracts and normalizes it cleanly:
+        _, new_headings = extract_title_and_headings(raw_heading)
+        self.assertEqual(new_headings, ["Dữ liệu Quốc gia"])
 
     @patch("urllib.request.urlopen")
     def test_genuine_2xx_with_matching_quote_passes(self, mock_urlopen: Any) -> None:
