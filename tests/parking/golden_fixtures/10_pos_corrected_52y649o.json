@@ -1,0 +1,70 @@
+{
+  "plate_raw": "52Y-649O",
+  "plate_final": "52Y6490",
+  "candidates": [
+    {
+      "plate_text": "52Y-649O",
+      "plate_normalized": "52Y6490",
+      "confidence": 94.0,
+      "char_confidences": [
+        94.0,
+        94.0,
+        94.0,
+        94.0,
+        94.0,
+        94.0,
+        92.0
+      ],
+      "min_char_confidence": 92.0,
+      "bounding_box": {
+        "x1": 100,
+        "y1": 200,
+        "x2": 380,
+        "y2": 290
+      }
+    }
+  ],
+  "best_candidate": {
+    "plate_text": "52Y-649O",
+    "plate_normalized": "52Y6490",
+    "confidence": 94.0,
+    "char_confidences": [
+      94.0,
+      94.0,
+      94.0,
+      94.0,
+      94.0,
+      94.0,
+      92.0
+    ],
+    "min_char_confidence": 92.0,
+    "bounding_box": {
+      "x1": 100,
+      "y1": 200,
+      "x2": 380,
+      "y2": 290
+    }
+  },
+  "image_url": "/media/parking_scans/2026/10/20/sample_scan.jpg",
+  "vehicle_lookup": null,
+  "is_blacklisted": false,
+  "open_session": null,
+  "engine_name": "fast_alpr",
+  "latency_ms": 45.2,
+  "review_status": "NEEDS_REVIEW",
+  "review_reasons": [
+    "POSITION_CORRECTED"
+  ],
+  "corrections": [
+    {
+      "position": 6,
+      "from": "O",
+      "to": "0",
+      "rule": "0_to_D_O_Q",
+      "reason": "Character at tail position must be digit",
+      "original_char": "O",
+      "corrected_char": "0"
+    }
+  ],
+  "suggestions": []
+}

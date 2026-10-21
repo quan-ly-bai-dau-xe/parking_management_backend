@@ -1,0 +1,60 @@
+{
+  "plate_raw": "14A-555.55",
+  "plate_final": "14A55555",
+  "candidates": [
+    {
+      "plate_text": "14A-555.55",
+      "plate_normalized": "14A55555",
+      "confidence": 97.0,
+      "char_confidences": [
+        97.0,
+        97.0,
+        97.0,
+        97.0,
+        97.0,
+        97.0,
+        97.0,
+        95.0
+      ],
+      "min_char_confidence": 95.0,
+      "bounding_box": {
+        "x1": 105,
+        "y1": 210,
+        "x2": 415,
+        "y2": 305
+      }
+    }
+  ],
+  "best_candidate": {
+    "plate_text": "14A-555.55",
+    "plate_normalized": "14A55555",
+    "confidence": 97.0,
+    "char_confidences": [
+      97.0,
+      97.0,
+      97.0,
+      97.0,
+      97.0,
+      97.0,
+      97.0,
+      95.0
+    ],
+    "min_char_confidence": 95.0,
+    "bounding_box": {
+      "x1": 105,
+      "y1": 210,
+      "x2": 415,
+      "y2": 305
+    }
+  },
+  "image_url": "/media/parking_scans/2026/10/20/sample_scan.jpg",
+  "vehicle_lookup": null,
+  "is_blacklisted": false,
+  "open_session": null,
+  "engine_name": "fast_alpr",
+  "latency_ms": 45.2,
+  "review_status": "AUTO",
+  "review_reasons": [],
+  "corrections": [],
+  "suggestions": []
+}

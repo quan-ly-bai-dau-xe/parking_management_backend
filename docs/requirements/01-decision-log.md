@@ -1,8 +1,8 @@
-# Decision Log (OQ-01 to OQ-84)
+# Decision Log (OQ-01 to OQ-86)
 
-Canonical decision log for `parking_management_backend` (`TL-01`–`TL-41`). All `84` items (`OQ-01`–`OQ-84`) are decided (`DECIDED` or `DECIDED-DEFERRED`), with Round 27 technical refinements (`TL-36`–`TL-41`).
+Canonical decision log for `parking_management_backend` (`TL-01`–`TL-51`). All `86` items (`OQ-01`–`OQ-86`) are decided (`DECIDED` or `DECIDED-DEFERRED`), with Round 35 domain rules and contract technical refinements (`TL-51`).
 
-## 1. Decisions (`OQ-01`–`OQ-84`)
+## 1. Decisions (`OQ-01`–`OQ-86`)
 
 - **OQ-01 — Security & Non-Functional Stack** (`DECIDED` | `persistent_login_token`, `ADR-0001`, `ADR-0004`, `TL-22`, `TL-36`): Prohibit password cookies; use split-token `persistent_login_token` (`HttpOnly`, `Secure`, `SameSite=Lax`) on Python `3.14.7`, Django `6.1.2`, PostgreSQL `18.6`. Per Round 27 `TL-36`, token tables permit direct plain `DELETE` for session rotation and revocation, FKs enforce `ON DELETE RESTRICT`, and tokens are cleaned up in the same transaction during account purge.
 - **OQ-02 — Account Credentials & Case-Insensitive Email** (`DECIDED` | `account.email`, `account.phone`, `ck_account_login_identifier_present`, `uq_account_email_active`, `uq_account_phone_active`, `TL-01`, `TL-21`, `TL-22`): Authenticate via `email VARCHAR(100) NULL` (`lower(email)` unique) or `phone VARCHAR(15) NULL` (`phone` unique); no `username` column.
@@ -88,6 +88,15 @@ Canonical decision log for `parking_management_backend` (`TL-01`–`TL-41`). All
 - **OQ-82 — VietQR Payment Gateway Integration** (`DECIDED-DEFERRED` | `payment.method`, `payment.provider_ref`, `ck_payment_method_enum`, `TL-07`, `TL-22`): `payment.method IN ('CASH', 'VIETQR')` and `payment.provider_ref VARCHAR(100) NULL` are provisioned in `db/01-schema.sql`; external webhook integration is deferred to the integration sprint.
 - **OQ-83 — Camera & AI Plate Recognition Integration** (`DECIDED-DEFERRED` | `vehicle_entry_exit_log.ai_confidence`, `vehicle_entry_exit_log.recognition_source`, `vehicle_entry_exit_log.review_status`, `TL-06`, `TL-22`): `ai_confidence`, `recognition_source`, and `review_status` are provisioned in `db/01-schema.sql` (threshold `ai_confidence >= 85.00`); live camera integration is deferred to the integration sprint.
 - **OQ-84 — Password Reset Rate Limiting & Token Deletion** (`DECIDED` | `password_reset_token`, `idx_password_reset_account_Active`, `TL-19`, `TL-22`, `TL-36`): Enforce rate limits of `3` requests/hour per normalized email and `10` requests/hour per `requested_ip`. Consumed and expired reset tokens permit plain `DELETE` per `TL-36`.
+- **OQ-85 — Vehicle Entry/Exit Parking Tariff Calculation Rules** (`DECIDED` | `vehicle_entry_exit_log.fee_amount`, `ticket`, `TL-50`, `Round 32`): Cước phí đỗ xe tại barrier check-out được tính toán nguyên tử và chuẩn xác:
+  1. Nếu phương tiện được bảo đảm bởi một vé gửi xe (`ticket`) đang ở trạng thái `ACTIVE`, chưa bị xóa mềm, và có hiệu lực tại thời điểm ra (`effective_from <= exit_time < effective_to`), cước phí được miễn giảm hoàn toàn: `fee_amount = Decimal("0.00")`.
+  2. Trường hợp xe vãng lai hoặc không có vé hợp lệ: Thời lượng đỗ xe được xác định bởi `duration = exit_time - entry_time`. Số giờ tính phí được làm tròn lên (`ceil(duration_seconds / 3600)`), với ngưỡng tối thiểu là `1` giờ. Cước phí bằng số giờ tính phí nhân với đơn giá giờ đọc từ cấu hình hệ thống (`PARKING_HOURLY_RATE_VND`, mặc định `Decimal("10000.00")`), làm tròn chính xác `Decimal("0.01")` kiểu `NUMERIC(12,2)`. Bắt buộc sử dụng kiểu dữ liệu `Decimal`, tuyệt đối không dùng `float`.
+- **OQ-86 — Vietnamese License Plate Domain Rules, Car-Only Scope, and Administrative Reorganization** (`DECIDED` | `vn_plate_rules.py`, `plate_correction.py`, `PROP-4.5.1-P16`, `TL-51`, `Round 35`):
+  1. Căn cứ Thông tư 79/2024/TT-BCA và Thông tư 51/2025/TT-BCA Phụ lục số 02 (sắp xếp đơn vị hành chính cấp tỉnh còn 34 tỉnh/thành phố từ 01/07/2025), bãi đỗ xe ô tô công cộng bắt buộc phải chấp nhận tập hợp (UNION) của tất cả `81` mã hai chữ số hợp lệ tham gia giao thông trong lịch sử trên tổng số `89` mã (`11..99`), bao gồm `50` mã `CURRENT`, `30` mã `LEGACY` (29 tỉnh/thành sáp nhập ngày 01/07/2025 cộng với mã `33` Hà Tây sáp nhập Hà Nội năm 2008), và `1` mã cơ quan Trung ương `AGENCY` (`80`).
+  2. Bổ sung các mã tỉnh đang lưu hành bị thiếu trong vòng trước: `39` (Đồng Nai), `40` (Hà Nội), `41` (TP. Hồ Chí Minh).
+  3. Kho `8` mã số dự trữ chưa từng cấp phát (`NEVER_ISSUED`): `13, 42, 44, 45, 46, 87, 91, 96`.
+  4. Phạm vi hoạt động bãi đỗ xe là dành riêng cho ô tô (`CAR` & `EV`, per SRS v4.1 & `OQ-49`). Loại bỏ hoàn toàn regex xe máy khỏi logic xác thực ô tô; biển số xe máy hoặc cấu trúc sai lệch bị phân loại là `INVALID_FORMAT`.
+  5. Phân định rạch ròi giữa `INVALID_FORMAT` (sai lệch cấu trúc, sai độ dài, ký tự cấm) và `UNKNOWN_PLATE_PATTERN` (`PROP-4.5.1-P16`: cấu trúc khả dĩ nhưng mang mã tỉnh dự trữ `NEVER_ISSUED`, chữ cái sê-ri không thuộc 20 chữ cái ô tô dân sự `I, J, O, Q, R, W`, sê-ri đặc thù `RM, MK, MD, HC`, hoặc biển quân sự 2 chữ cái `TM, QA, TC...`). Khi gặp `UNKNOWN_PLATE_PATTERN`, hệ thống tuyệt đối không tự ý sửa đổi ký tự (không ép chữ thành số) và gắn cờ `NEEDS_REVIEW` để nhân viên kiểm tra trực quan.
 
 ## 2. Rounds 27–28 Technical Decisions (`TL-36`–`TL-43`)
 

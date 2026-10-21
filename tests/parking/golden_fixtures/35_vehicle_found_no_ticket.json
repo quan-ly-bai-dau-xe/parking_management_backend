@@ -1,0 +1,76 @@
+{
+  "plate_raw": "43A-678.90",
+  "plate_final": "43A67890",
+  "candidates": [
+    {
+      "plate_text": "43A-678.90",
+      "plate_normalized": "43A67890",
+      "confidence": 99.1,
+      "char_confidences": [
+        99.1,
+        99.1,
+        99.1,
+        99.1,
+        99.1,
+        99.1,
+        99.1,
+        98.0
+      ],
+      "min_char_confidence": 98.0,
+      "bounding_box": {
+        "x1": 110,
+        "y1": 220,
+        "x2": 420,
+        "y2": 310
+      }
+    }
+  ],
+  "best_candidate": {
+    "plate_text": "43A-678.90",
+    "plate_normalized": "43A67890",
+    "confidence": 99.1,
+    "char_confidences": [
+      99.1,
+      99.1,
+      99.1,
+      99.1,
+      99.1,
+      99.1,
+      99.1,
+      98.0
+    ],
+    "min_char_confidence": 98.0,
+    "bounding_box": {
+      "x1": 110,
+      "y1": 220,
+      "x2": 420,
+      "y2": 310
+    }
+  },
+  "image_url": "/media/parking_scans/2026/10/20/sample_scan.jpg",
+  "vehicle_lookup": {
+    "vehicle": {
+      "id": 103,
+      "code": "XE0103",
+      "plate_number": "43A67890",
+      "vehicle_type": "CAR_UP_TO_9_SEATS"
+    },
+    "customer": {
+      "id": 203,
+      "full_name": "Le Van C",
+      "phone": "0923456789"
+    },
+    "parking_position": null,
+    "active_ticket": null,
+    "open_session": null,
+    "is_blacklisted": false
+  },
+  "is_blacklisted": false,
+  "open_session": null,
+  "engine_name": "fast_alpr",
+  "latency_ms": 45.2,
+  "review_status": "AUTO",
+  "review_reasons": [],
+  "corrections": [],
+  "suggestions": []
+}
