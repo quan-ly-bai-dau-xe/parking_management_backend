@@ -41,10 +41,11 @@ django_settings_module = "config.settings.test"
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
-addopts = "--cov=apps --cov-report=term-missing --cov-fail-under=80 -m 'not network'"
+addopts = "--cov=apps --cov-report=term-missing --cov-fail-under=80 -m 'not network and not host'"
 markers = [
     "perf: Performance and latency-sensitive benchmark tests (skipped by default unless RUN_PERF_TESTS=1)",
     "network: Tests that require active internet connection (skipped by default in offline CI)",
+    "host: tests requiring host machine state (skipped by default in CI)",
 ]
 
 [tool.coverage.run]

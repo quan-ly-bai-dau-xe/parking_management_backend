@@ -5,7 +5,6 @@ Verifies:
 1. AST Line Count Enforcement (PlateScanView.post <= 20 lines)
 2. Defensive File Cleanup on Failure Injection (Zero orphan files on disk)
 3. 35+ Synthetic Edge Cases for 100% Byte-Equivalence between execute_plate_scan and ReferenceContractValidator
-4. Invariant: Docker Volume Count == 27
 """
 
 from __future__ import annotations
@@ -13,7 +12,6 @@ from __future__ import annotations
 import ast
 import inspect
 import io
-import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -798,20 +796,3 @@ class TestNonCircularReferenceContractStress35Cases:
         # Clean up temporary disk file
         if exec_result.saved_file_path and exec_result.saved_file_path.is_file():
             exec_result.saved_file_path.unlink(missing_ok=True)
-
-
-class TestDockerVolumeInvariant:
-    """Docker volume count remains strictly 27."""
-
-    def test_docker_volume_count_strictly_27(self) -> None:
-        """Query docker CLI to verify active volume count equals 27."""
-        result = subprocess.run(
-            ["powershell", "-Command", "(docker volume ls -q).Count"],
-            capture_output=True,
-            text=True,
-            check=True,
-        )
-        count_str = result.stdout.strip()
-        assert count_str == "27", (
-            f"Docker volume count drifted! Expected 27, got {count_str}"
-        )

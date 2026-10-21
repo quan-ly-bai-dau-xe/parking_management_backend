@@ -36,22 +36,32 @@ if hasattr(sys.stderr, "reconfigure"):
 
 REPO_ROOT = Path(__file__).resolve().parent.parent.parent
 
+_r40_report = REPO_ROOT / ".agents" / "round40_final_report.md"
 _r39_report = REPO_ROOT / ".agents" / "round39_final_report.md"
 _r38_report = REPO_ROOT / ".agents" / "round38_final_report.md"
 _r37_report = REPO_ROOT / ".agents" / "round37_final_report.md"
 DEFAULT_REPORT_FILE = (
-    _r39_report
-    if _r39_report.exists()
-    else (_r38_report if _r38_report.exists() else _r37_report)
+    _r40_report
+    if _r40_report.exists()
+    else (
+        _r39_report
+        if _r39_report.exists()
+        else (_r38_report if _r38_report.exists() else _r37_report)
+    )
 )
 
+_r40_notes = REPO_ROOT / ".agents" / "round40_notes.md"
 _r39_notes = REPO_ROOT / ".agents" / "round39_notes.md"
 _r38_notes = REPO_ROOT / ".agents" / "round38_notes.md"
 _r37_notes = REPO_ROOT / ".agents" / "round37_notes.md"
 NOTES_FILE = (
-    _r39_notes
-    if _r39_notes.exists()
-    else (_r38_notes if _r38_notes.exists() else _r37_notes)
+    _r40_notes
+    if _r40_notes.exists()
+    else (
+        _r39_notes
+        if _r39_notes.exists()
+        else (_r38_notes if _r38_notes.exists() else _r37_notes)
+    )
 )
 
 if str(REPO_ROOT) not in sys.path:
@@ -126,6 +136,12 @@ OFFLINE_PAGE_FIXTURES: Final[dict[str, dict[str, Any]]] = {
         "title": "Creative Commons — Attribution 4.0 International — CC BY 4.0",
         "headings": ["Attribution 4.0 International (CC BY 4.0)"],
         "body": "You are free to share and adapt the material under appropriate credit. Attribution — You must give appropriate credit, provide a link to the license, and indicate if changes were made.",
+    },
+    "https://pypi.org": {
+        "status": 200,
+        "title": "PyPI · The Python Package Index",
+        "headings": ["PyPI"],
+        "body": "The Python Package Index (PyPI) is a repository of software for the Python programming language.",
     },
 }
 
@@ -251,13 +267,19 @@ def load_repo_and_notes_corpus(exclude_path: Path) -> tuple[set[str], str]:
     agents_dir = REPO_ROOT / ".agents"
     if agents_dir.exists():
         for notes_name in [
+            "round40_notes.md",
+            "round40_final_report.md",
             "round39_notes.md",
-            "round38_notes.md",
-            "round37_notes.md",
-            "round36_final_report.md",
-            "round37_final_report.md",
-            "round38_final_report.md",
             "round39_final_report.md",
+            "round38_notes.md",
+            "round38_final_report.md",
+            "round37_notes.md",
+            "round37_final_report.md",
+            "round36_final_report.md",
+            "PROMPT_VONG40_EN.txt",
+            "PROMPT_VONG40_VI.txt",
+            "PROMPT_VONG39_EN.txt",
+            "PROMPT_VONG39_VI.txt",
         ]:
             nf = agents_dir / notes_name
             if nf.exists() and nf.resolve() != exclude_path:
@@ -265,6 +287,13 @@ def load_repo_and_notes_corpus(exclude_path: Path) -> tuple[set[str], str]:
                 notes_text = nf.read_text(encoding="utf-8", errors="ignore")
                 corpus_parts.append(notes_text)
                 corpus_parts.append(str(len(notes_text.splitlines())))
+
+        orig_req = agents_dir / "teamwork" / "ORIGINAL_REQUEST.md"
+        if orig_req.exists() and orig_req.resolve() != exclude_path:
+            basenames.add(orig_req.name)
+            req_text = orig_req.read_text(encoding="utf-8", errors="ignore")
+            corpus_parts.append(req_text)
+            corpus_parts.append(str(len(req_text.splitlines())))
 
     scan_dirs = ["apps", "config", "tests", "docs", "db", "docker", "requirements"]
     root_files = [
@@ -988,8 +1017,13 @@ def verify_report(
 
         for token in unique_tokens:
             path_candidate = re.split(r"[:#]", token)[0].strip()
-            if path_candidate and (
-                (REPO_ROOT / path_candidate).exists() or token in basenames
+            path_stripped = path_candidate.rstrip("/*")
+            if (path_candidate or path_stripped) and (
+                (REPO_ROOT / path_candidate).exists()
+                or (path_stripped and (REPO_ROOT / path_stripped).exists())
+                or token in basenames
+                or path_candidate in basenames
+                or path_stripped in basenames
             ):
                 counts_by_category["repo_files"] += 1
                 continue

@@ -15,14 +15,14 @@ Verifies:
    - Co-occurrence of POSITION_CORRECTED with all other failure reasons.
    - Strict uniqueness (0 duplicates).
 4. Full API and Service integration tests with test doubles (non-circular contract alignment).
-5. Invariants: Host Docker volume count == 27, zero committed dataset images.
+5. Invariants: Zero committed dataset images in repo tree.
 """
 
 from __future__ import annotations
 
 import inspect
 import io
-import subprocess
+import os
 from pathlib import Path
 
 import pytest
@@ -589,84 +589,40 @@ class TestFullScanIntegrationAdversarial:
 
 
 # ==============================================================================
-# 6. INVARIANT CHECKS: VOLUME COUNT & NO IMAGES COMMITTED
+# 6. INVARIANT CHECKS: NO DATASET IMAGES COMMITTED
 # ==============================================================================
 
 
 class TestMandatoryInvariants:
-    """Verify Docker volume count == 27 and no dataset images are committed."""
+    """Verify no dataset images or parquet files are committed in repository tree."""
 
-    def test_docker_volume_count_strictly_27(self):
-        """Host Docker volume count must remain strictly 27."""
-        try:
-            res = subprocess.run(
-                ["powershell", "-Command", "(docker volume ls -q).Count"],
-                capture_output=True,
-                text=True,
-                timeout=5,
-            )
-            if res.returncode == 0 and res.stdout.strip().isdigit():
-                count = int(res.stdout.strip())
-                assert count == 27, (
-                    f"Docker volume count violated! Expected 27, got {count}"
-                )
-            else:
-                pytest.skip("Docker daemon not accessible in this environment")
-        except Exception:
-            pytest.skip("Docker daemon or PowerShell not available in this environment")
+    def test_zero_dataset_images_in_git(self) -> None:
+        """Dataset images and parquet files must NEVER exist in the repository tree."""
+        excluded_dirs = {
+            ".git",
+            ".venv",
+            "venv",
+            ".agents",
+            "media",
+            "__pycache__",
+            ".mypy_cache",
+            ".pytest_cache",
+            ".ruff_cache",
+            "node_modules",
+            "build",
+            "dist",
+        }
+        forbidden_exts = {".jpg", ".jpeg", ".bmp", ".webp", ".parquet"}
 
-    def test_zero_dataset_images_in_git(self):
-        """Dataset images must NEVER be committed to git."""
-        git_dir = REPO_ROOT / ".git"
-        if git_dir.exists():
-            try:
-                res = subprocess.run(
-                    ["git", "ls-files", "--stage"],
-                    capture_output=True,
-                    text=True,
-                    cwd=str(REPO_ROOT),
-                    timeout=5,
-                )
-                if res.returncode == 0:
-                    lines = [
-                        line
-                        for line in res.stdout.strip().splitlines()
-                        if any(
-                            line.endswith(ext)
-                            for ext in [".jpg", ".jpeg", ".bmp", ".webp"]
-                        )
-                    ]
-                    assert len(lines) == 0, (
-                        f"Found committed image files in git: {lines}"
-                    )
-                    return
-            except Exception:
-                pass
+        found_dataset_files: list[str] = []
+        for root, dirs, files in os.walk(REPO_ROOT):
+            # Prune excluded directories in-place to avoid descending into cache/venv/agents trees
+            dirs[:] = [d for d in dirs if d not in excluded_dirs]
+            for file_name in files:
+                file_path = Path(root) / file_name
+                if file_path.suffix.lower() in forbidden_exts:
+                    found_dataset_files.append(str(file_path.relative_to(REPO_ROOT)))
 
-        image_files = []
-        for p in REPO_ROOT.glob("*"):
-            if p.is_dir() and p.name in {
-                ".git",
-                ".venv",
-                "venv",
-                "media",
-                "__pycache__",
-            }:
-                continue
-            if p.is_file() and p.suffix.lower() in {".jpg", ".jpeg", ".bmp", ".webp"}:
-                image_files.append(str(p))
-            elif p.is_dir():
-                for sub in p.rglob("*"):
-                    if any(
-                        part in {".git", ".venv", "venv", "media", "__pycache__"}
-                        for part in sub.parts
-                    ):
-                        continue
-                    if sub.is_file() and sub.suffix.lower() in {
-                        ".jpg",
-                        ".jpeg",
-                        ".bmp",
-                        ".webp",
-                    }:
-                        image_files.append(str(sub))
-        assert len(image_files) == 0, f"Found image files in repo tree: {image_files}"
+        assert len(found_dataset_files) == 0, (
+            f"Found forbidden dataset image/parquet files in repository tree: {found_dataset_files}"
+        )

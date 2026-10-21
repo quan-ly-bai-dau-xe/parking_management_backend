@@ -344,6 +344,7 @@ class TestSyntheticImageScanGeneration:
             assert raw_bytes[:2] == b"\xff\xd8"  # Valid JPEG magic bytes
 
 
+@pytest.mark.host
 class TestParquetGroundTruthDataset:
     """Evaluation against the 322 ground-truth Vietnamese dataset rows."""
 

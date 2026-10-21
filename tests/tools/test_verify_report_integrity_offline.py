@@ -46,7 +46,7 @@ VERIFY_SCRIPT = REPO_ROOT / "tests" / "tools" / "verify_report_integrity.py"
 
 
 @pytest.fixture(autouse=True)
-def override_db_fixture() -> None:
+def ensure_sample_data() -> None:
     """Override conftest db fixture: no database needed for offline verifier tests."""
     return None
 

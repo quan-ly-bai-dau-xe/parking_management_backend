@@ -55,18 +55,25 @@ class TestReportIntegrityFuzzingFixtures:
 
     @pytest.fixture
     def pristine_report_text(self) -> str:
-        report_path = REPO_ROOT / ".agents" / "round38_final_report.md"
-        if report_path.exists():
-            return report_path.read_text(encoding="utf-8")
+        for name in (
+            "round40_final_report.md",
+            "round39_final_report.md",
+            "round38_final_report.md",
+        ):
+            p = REPO_ROOT / ".agents" / name
+            if p.exists():
+                return p.read_text(encoding="utf-8")
         return FALLBACK_PRISTINE_REPORT
 
     @pytest.mark.network
     def test_baseline_pristine_report_passes(self) -> None:
         """The actual production report passes with strictly 0 failures and 0 unmatched tokens."""
-        report_path = REPO_ROOT / ".agents" / "round39_final_report.md"
+        r40 = REPO_ROOT / ".agents" / "round40_final_report.md"
+        r39 = REPO_ROOT / ".agents" / "round39_final_report.md"
+        report_path = r40 if r40.exists() else r39
         if not report_path.exists():
             pytest.skip(
-                "Active round39_final_report.md not generated yet; skips until final report generation"
+                "Neither round40_final_report.md nor round39_final_report.md exists; skips until report generation"
             )
         failures = verify_report(report_path)
         assert failures == 0, f"Expected 0 failures on pristine report, got {failures}"
@@ -197,10 +204,14 @@ class TestReportIntegrityFuzzingFixtures:
         - Mutated report returns non-zero exit code.
         """
         script_path = str(REPO_ROOT / "tests" / "tools" / "verify_report_integrity.py")
+        r40 = REPO_ROOT / ".agents" / "round40_final_report.md"
         r39 = REPO_ROOT / ".agents" / "round39_final_report.md"
 
         # 1. Clean report exit code 0
-        if r39.exists():
+        if r40.exists():
+            clean_target = str(r40)
+            tmp_clean = None
+        elif r39.exists():
             clean_target = str(r39)
             tmp_clean = None
         else:
@@ -234,9 +245,10 @@ class TestReportIntegrityFuzzingFixtures:
 
         # 2. Mutated report with fake token exit code 1
         dyn_bad_token = f"cli_bad_token_{uuid.uuid4().hex}"
+        active_report = r40 if r40.exists() else (r39 if r39.exists() else None)
         base_clean = (
-            r39.read_text(encoding="utf-8")
-            if r39.exists()
+            active_report.read_text(encoding="utf-8")
+            if active_report is not None
             else FALLBACK_PRISTINE_REPORT
         )
         with tempfile.NamedTemporaryFile(
