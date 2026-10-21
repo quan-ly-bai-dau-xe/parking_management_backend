@@ -27,7 +27,7 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 
 ---
 
-## 2. Frontend Screen Traceability Matrix (61 Items)
+## 2. Frontend Screen Traceability Matrix (67 Items)
 
 | ID | Element | Target Object | Status | Decision / Logic |
 |---|---|---|:---:|---|
@@ -65,6 +65,12 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-FE-05-04 | Timestamps in/out | vehicle_entry_exit_log(entry, exit) | COVERED | TIMESTAMPTZ (TL-34) |
 | TRC-FE-05-05 | Parking Duration | vehicle_entry_exit_log | DERIVED | Duration interval (TL-28.4) |
 | TRC-FE-05-06 | Parking Fee | vehicle_entry_exit_log.fee_amount | COVERED | Fee NUMERIC(12,2) (TL-05) |
+| TRC-FE-05-07 | ALPR Camera Scan | apps/parking/views/scans.py (`POST /api/v1/parking/plate-scans/`) | COVERED | Round 32 Fast-ALPR scan + Pillow security validation |
+| TRC-FE-05-08 | Auto Vehicle & Customer Fill | apps/parking/views/lookup.py (`GET /api/v1/parking/vehicle-lookup/`) | COVERED | Round 32 Exact lookup by license_plate_norm (TL-17) |
+| TRC-FE-05-09 | Check-in Action | apps/parking/views/sessions.py (`POST /api/v1/parking/sessions/check-in/`) | COVERED | Round 32 Session creation (#PK-YYYYMMDD-NN), blacklist guard |
+| TRC-FE-05-10 | Check-out & Tariff Payment | apps/parking/views/sessions.py (`POST /api/v1/parking/sessions/check-out/`) | COVERED | Round 32 TL-50 tariff Decimal, atomic payment row |
+| TRC-FE-05-11 | Gate Selection | apps/parking/views/gates.py (`GET /api/v1/parking/gates/`) | COVERED | Round 32 Active barrier gates list |
+| TRC-FE-05-12 | Modal Tìm Xe (Unified Search) | apps/parking/views/search.py (`GET /api/v1/parking/vehicle-search/`) | COVERED | Round 32 Task 9 multi-field search (TL-41 GIN trigram) |
 | TRC-FE-06-01 | Hierarchy 4-lvl | lot, floor, zone, slot | COVERED | 4-level model (TL-02,29) |
 | TRC-FE-06-02 | Slot Filters | parking_slot, allowed_type | COVERED | Filters (TL-37) |
 | TRC-FE-06-03 | Slot Stats KPI | v_slot_occupancy_by_floor | COVERED | Counts (TL-14) |
@@ -95,7 +101,7 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 
 ---
 
-## 3. SRS v4.1 Functional & Non-Functional Traceability Matrix (42 Items)
+## 3. SRS v4.1 Functional & Non-Functional Traceability Matrix (45 Items)
 
 | ID | Requirement | Target Object | Status | Guard & Logic |
 |---|---|---|:---:|---|
@@ -116,11 +122,14 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-SRS-04-04 | Edit Customer Profile (4.4.4) | customer, vehicle | COVERED | RESTRICT FK |
 | TRC-SRS-04-05 | Delete Customer (DEL-02, 4.4.5) | customer.deleted_at, trigger | COVERED | Guarded delete (TL-25) |
 | TRC-SRS-04-06 | PII Anonymization (4.4.5) | customer(anonymized fields) | COVERED | PII anon (OQ-12) |
-| TRC-SRS-05-01 | Vehicle Entry Check-in (4.5.1) | vehicle_entry_exit_log, guard | COVERED | Check-in (TL-17) |
-| TRC-SRS-05-02 | Exit & Payment (4.5.1) | vehicle_entry_exit_log, payment | COVERED | Check-out (TL-05) |
-| TRC-SRS-05-03 | Entry Guard Msgs (4.5.1) | MSG-4.5.1-M01..M03 | COVERED | 'Dữ liệu biển số xe không hợp lệ', etc. |
+| TRC-SRS-05-01 | Vehicle Entry Check-in (4.5.1) | vehicle_entry_exit_log, guard (`POST /api/v1/parking/sessions/check-in/`) | COVERED | Check-in, session_code, blacklist guard (Round 32) |
+| TRC-SRS-05-02 | Exit & Payment (4.5.1) | vehicle_entry_exit_log, payment (`POST /api/v1/parking/sessions/check-out/`) | COVERED | Check-out, TL-50 tariff Decimal, atomic payment (Round 32) |
+| TRC-SRS-05-03 | Entry Guard Msgs (4.5.1) | MSG-4.5.1-M01..M03, PROP-4.5.1-P01..P12 | COVERED | Verbatim M03 fix ('lỗi kết nối'), mapped trigger exceptions (Round 32) |
 | TRC-SRS-05-04 | Parking Visual Grid (4.5.2) | lot, floor, zone, slot | COVERED | 4-level map (TL-02) |
 | TRC-SRS-05-05 | Slot Maint Guard (4.5.2) | MSG-4.5.2-M02, PROP-4.5.2-P01 | COVERED | 'Vị trí này đang bảo trì, chọn vị trí khác' |
+| TRC-SRS-05-06 | Offline Plate Scan ALPR (4.5.1) | apps/parking/views/scans.py (`POST /api/v1/parking/plate-scans/`) | COVERED | Offline Fast-ALPR OCR, Pillow magic validation & EXIF strip (Round 32) |
+| TRC-SRS-05-07 | Exact Vehicle Lookup (4.5.1) | apps/parking/views/lookup.py (`GET /api/v1/parking/vehicle-lookup/`) | COVERED | Exact match on license_plate_norm, parking position, ticket (Round 32) |
+| TRC-SRS-05-08 | Vehicle Search Modal (Task 9) | apps/parking/views/search.py (`GET /api/v1/parking/vehicle-search/`) | COVERED | Multi-field search (q, name, phone, plate) utilizing TL-41 GIN trigram (Round 32) |
 | TRC-SRS-06-01 | Ticket List & Expiry (4.6.1) | ticket, ticket_type | COVERED / DERIVED | Filter/derived (TL-28) |
 | TRC-SRS-06-02 | Issue / Buy Ticket (4.6.2) | ticket, payment | COVERED | Issue ticket (TL-10,38) |
 | TRC-SRS-06-03 | Ticket Renewal Flow (4.6.3) | ticket_renewal, ticket | COVERED | Renewal (OQ-52) |
@@ -226,7 +235,7 @@ FROM occ ORDER BY floor_code ASC;
 
 ## 5. Traceability Audit Summary & Verification Checklist
 
-- [x] **100% UI Image Coverage**: All 11 UI design files verified across 61 items (Section 1).
-- [x] **100% SRS Coverage**: Sections 4.1–4.8, deletion guards DEL-01..DEL-05, NFRs mapped across 42 items.
+- [x] **100% UI Image Coverage**: All 11 UI design files verified across 67 items (Section 1 & 2).
+- [x] **100% SRS Coverage**: Sections 4.1–4.8, deletion guards DEL-01..DEL-05, NFRs mapped across 45 items (Section 3).
 - [x] **Schema Invariant**: Preserves 28 tables, 8 views, 69 FKs, 338+55 columns.
-- [x] **Zero Gaps**: All variations resolved under `TL-29`–`TL-41`.
+- [x] **Zero Gaps**: All variations resolved under `TL-29`–`TL-50`.

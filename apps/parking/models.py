@@ -277,11 +277,14 @@ class VehicleEntryExitLog(models.Model):
         ("MANUAL", "Nhân viên nhập tay"),
     ]
 
-    REVIEW_STATUS_CHOICES = [
-        ("AUTO", "Tự động duyệt"),
-        ("VERIFIED", "Nhân viên đã xác nhận"),
-        ("DISCREPANCY", "Có sai lệch biển số"),
-    ]
+    class ReviewStatus(models.TextChoices):
+        AUTO = "AUTO", "Tự động duyệt"
+        MATCHED = "MATCHED", "Ảnh khớp"
+        NEEDS_REVIEW = "NEEDS_REVIEW", "Cần duyệt"
+        APPROVED = "APPROVED", "Đã duyệt"
+        REJECTED = "REJECTED", "Từ chối"
+
+    REVIEW_STATUS_CHOICES = ReviewStatus.choices
 
     id = models.BigAutoField(primary_key=True)
     session_code = models.CharField(max_length=30, unique=True)

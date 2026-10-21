@@ -113,13 +113,15 @@ def test_exception_handler_sqlstate_22023_invalid_parameter():
 
 
 def test_exception_handler_unhandled_database_error():
-    """Kiểm tra ngoại lệ CSDL không xác định được map thành HTTP 500 Internal Server Error."""
+    """Kiểm tra ngoại lệ CSDL không xác định được map thành HTTP 500 với mã MSG-4.5.1-M03 per F2."""
     exc = DatabaseError("Fatal database corruption")
 
     response = custom_exception_handler(exc, context={})
     assert response is not None
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
-    assert response.data["code"] == "MSG-4.2-M01"
+    assert response.data["code"] == "MSG-4.5.1-M03"
+    assert response.data["message"] == "lỗi kết nối"
+    assert response.data["details"] == {}
 
 
 def test_exception_handler_validation_error():
@@ -186,10 +188,159 @@ def test_exception_handler_not_found():
 
 
 def test_exception_handler_generic_unhandled_exception():
-    """Kiểm tra ngoại lệ chung chưa được xử lý trả về HTTP 500 với envelope chuẩn."""
+    """Kiểm tra ngoại lệ chung chưa được xử lý trả về HTTP 500 với envelope chuẩn và details rỗng per F2."""
     exc = RuntimeError("Unexpected runtime failure")
     response = custom_exception_handler(exc, context={})
     assert response is not None
     assert response.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
     assert response.data["code"] == "MSG-4.2-M01"
-    assert "Unexpected runtime failure" in response.data["details"]["error"]
+    assert response.data["details"] == {}
+
+
+def test_exception_handler_f2_never_leaks_raw_database_text():
+    """Kiểm tra F2: custom_exception_handler không bao giờ làm rò rỉ raw SQL / database error text."""
+    raw_sql = 'duplicate key value violates unique constraint "uq_log_session_code"'
+    cause = FakePsycopgError(raw_sql, "23505")
+    exc = IntegrityError("Unique violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "MSG-4.3.1-M05"
+    assert raw_sql not in response.data["message"]
+    assert (
+        response.data["message"]
+        == "Dữ liệu đã tồn tại trong hệ thống, không thể tạo trùng lặp."
+    )
+    assert "uq_log_session_code" not in str(response.data)
+
+
+def test_exception_handler_trigger_maintenance_slot():
+    """Kiểm tra trigger slot MAINTENANCE map sang PROP-4.5.2-P01 và HTTP 409 Conflict."""
+    cause = FakePsycopgError(
+        "Vị trí này đang bảo trì.\nHINT: Slot is currently under maintenance.",
+        "23514",
+    )
+    exc = IntegrityError("Check violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "PROP-4.5.2-P01"
+    assert response.data["message"] == "Vị trí này đang bảo trì."
+
+
+def test_exception_handler_trigger_reserved_slot():
+    """Kiểm tra trigger slot đã đặt trước map sang PROP-4.5.2-P05 và HTTP 409 Conflict."""
+    cause = FakePsycopgError(
+        "Vị trí này đã được đặt trước cho phương tiện khác.\nHINT: Active reservation.",
+        "23514",
+    )
+    exc = IntegrityError("Check violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "PROP-4.5.2-P05"
+    assert (
+        response.data["message"] == "Vị trí này đã được đặt trước cho phương tiện khác."
+    )
+
+
+def test_exception_handler_trigger_slot_vehicle_type_mismatch():
+    """Kiểm tra trigger loại xe không phù hợp map sang PROP-SLOT-VEHICLE-TYPE-MISMATCH và HTTP 409 Conflict."""
+    cause = FakePsycopgError(
+        "Loại xe không phù hợp với cấu hình cho phép của vị trí đỗ.\nHINT: Vehicle type not permitted.",
+        "23514",
+    )
+    exc = IntegrityError("Check violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "PROP-SLOT-VEHICLE-TYPE-MISMATCH"
+
+
+def test_exception_handler_trigger_slot_active_ticket():
+    """Kiểm tra trigger slot đã có vé của xe khác map sang MSG-4.5.2-M02 và HTTP 409 Conflict."""
+    cause = FakePsycopgError(
+        "Vị trí này đã có xe đk vé và đang sử dụng",
+        "23514",
+    )
+    exc = IntegrityError("Check violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "MSG-4.5.2-M02"
+    assert response.data["message"] == "Vị trí này đã có xe đk vé và đang sử dụng"
+
+
+def test_exception_handler_trigger_vehicle_plate_mismatch():
+    """Kiểm tra trigger biển số không khớp xe đăng ký map sang MSG-4.5.1-M02 và HTTP 400 Bad Request."""
+    cause = FakePsycopgError(
+        "Lỗi dữ liệu không tìm thấy đê lưu",
+        "23514",
+    )
+    exc = IntegrityError("Check violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_400_BAD_REQUEST
+    assert response.data["code"] == "MSG-4.5.1-M02"
+    assert response.data["message"] == "Lỗi dữ liệu không tìm thấy đê lưu"
+
+
+def test_exception_handler_partial_unique_index_open_session_plate():
+    """Kiểm tra vi phạm index uq_log_open_session_plate map sang PROP-4.5.1-P07 và HTTP 409 Conflict."""
+    cause = FakePsycopgError(
+        'duplicate key value violates unique constraint "uq_log_open_session_plate"\nDETAIL: Key (license_plate_norm)=(51K99214) already exists.',
+        "23505",
+    )
+    exc = IntegrityError("Unique violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "PROP-4.5.1-P07"
+    assert (
+        response.data["message"]
+        == "Biển số xe đã có phiên đỗ xe đang mở chưa hoàn thành."
+    )
+
+
+def test_exception_handler_partial_unique_index_open_session_vehicle():
+    """Kiểm tra vi phạm index uq_log_open_session_vehicle map sang PROP-4.5.1-P07 và HTTP 409 Conflict."""
+    cause = FakePsycopgError(
+        'duplicate key value violates unique constraint "uq_log_open_session_vehicle"\nDETAIL: Key (vehicle_id)=(10) already exists.',
+        "23505",
+    )
+    exc = IntegrityError("Unique violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "PROP-4.5.1-P07"
+
+
+def test_exception_handler_partial_unique_index_open_session_slot():
+    """Kiểm tra vi phạm index uq_log_open_session_slot map sang PROP-4.5.2-P02 và HTTP 409 Conflict."""
+    cause = FakePsycopgError(
+        'duplicate key value violates unique constraint "uq_log_open_session_slot"\nDETAIL: Key (slot_id)=(5) already exists.',
+        "23505",
+    )
+    exc = IntegrityError("Unique violation")
+    exc.__cause__ = cause
+
+    response = custom_exception_handler(exc, context={})
+    assert response is not None
+    assert response.status_code == status.HTTP_409_CONFLICT
+    assert response.data["code"] == "PROP-4.5.2-P02"

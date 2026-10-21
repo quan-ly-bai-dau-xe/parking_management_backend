@@ -1,0 +1,58 @@
+# Git and Version Control
+.git
+.gitignore
+.gitattributes
+
+# Environment and Secrets (F1 Security Requirement)
+.env
+.env.*
+.env*.local
+!.env.example
+
+# Virtual Environments
+.venv
+venv
+env
+ENV
+
+# Python Cache & Bytecode
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Testing, Linting and Coverage
+.pytest_cache
+.mypy_cache
+.ruff_cache
+.hypothesis
+.cache
+htmlcov
+.coverage
+.coverage.*
+*.cover
+
+# Media and User Uploads
+media
+media/
+media/*
+
+# Agent Metadata & IDE Artifacts
+.agents
+.agents/
+.claude
+.idea
+.vscode
+
+# Binary Assets & Images in Docs/DB
+db/*.png
+docs/*.png
+
+# Docker configuration files
+Dockerfile*
+docker-compose*.yml
+
+# Build and Distribution
+build/
+dist/
+*.egg-info/
