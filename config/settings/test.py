@@ -2,6 +2,7 @@
 Test settings.
 """
 import os
+
 from .base import *
 
 # Use in-memory database for testing
