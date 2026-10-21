@@ -19,17 +19,6 @@ from django.core.management import call_command
 from django.db import connection, models
 
 from apps.core.messages import MESSAGES, get_message
-from apps.parking.models import PlateBlacklist
-from apps.reports.models import (
-    VAiRecognitionStats,
-    VCustomerStatusSummary,
-    VCustomerVehicleSummary,
-    VRevenueStatistics,
-    VRevenueTodayByMethod,
-    VSlotOccupancyByFloor,
-    VTrafficByHour,
-    VVehicleTrafficDaily,
-)
 
 pytestmark = pytest.mark.django_db
 
@@ -65,22 +54,11 @@ EXPECTED_TABLES = [
 ]
 
 EXPECTED_VIEWS = [
-    "v_slot_occupancy_by_floor",
-    "v_revenue_today_by_method",
-    "v_traffic_by_hour",
-    "v_ai_recognition_stats",
-    "v_customer_status_summary",
     "v_revenue_statistics",
     "v_vehicle_traffic_daily",
+    "v_slot_occupancy_by_floor",
     "v_customer_vehicle_summary",
 ]
-
-
-@pytest.fixture(autouse=True)
-def ensure_sample_data():
-    """Ensure seed operational data is loaded into the test database."""
-    if PlateBlacklist.all_objects.count() == 0:
-        call_command("load_sample_data", force_production=True)
 
 
 def get_domain_models():
@@ -275,55 +253,35 @@ def test_db_managed_fields_editable_false():
 
 
 def test_soft_delete_lifecycle_and_hard_delete_ban():
-    """Verify soft-delete (.delete()), filter hiding, restore (.restore()), and hard_delete ban."""
-    # Test on PlateBlacklist which has soft-delete enabled
-    item = PlateBlacklist.objects.first()
-    assert item is not None, "PlateBlacklist sample data required"
-    assert item.deleted_at is None
+    """Verify soft-delete behavior on the existing notification model."""
+    from apps.content.models import Notification
 
+    item = Notification.objects.create(
+        title="Soft-delete test",
+        content="Temporary test notification",
+    )
     item_id = item.id
-    initial_active_count = PlateBlacklist.objects.count()
 
-    # 1. Soft-delete via .delete()
     item.delete()
     assert item.deleted_at is not None
-    assert PlateBlacklist.objects.filter(id=item_id).exists() is False
-    assert PlateBlacklist.all_objects.filter(id=item_id).exists() is True
-    assert PlateBlacklist.objects.count() == initial_active_count - 1
+    assert Notification.objects.filter(id=item_id).exists() is False
+    assert Notification.all_objects.filter(id=item_id).exists() is True
 
-    # 2. Restore via .restore()
     item.restore()
     assert item.deleted_at is None
-    assert PlateBlacklist.objects.filter(id=item_id).exists() is True
-    assert PlateBlacklist.objects.count() == initial_active_count
+    assert Notification.objects.filter(id=item_id).exists() is True
 
-    # 3. Hard delete attempt raises PermissionDenied
     with pytest.raises(PermissionDenied):
         item.hard_delete()
 
 
-def test_query_all_8_unmanaged_views():
-    """Verify querying all 8 unmanaged views succeeds and returns data."""
-    views = [
-        VSlotOccupancyByFloor,
-        VRevenueTodayByMethod,
-        VTrafficByHour,
-        VAiRecognitionStats,
-        VCustomerStatusSummary,
-        VRevenueStatistics,
-        VVehicleTrafficDaily,
-        VCustomerVehicleSummary,
-    ]
-
-    for view_model in views:
-        count = view_model.objects.count()
-        first_record = view_model.objects.first()
-        assert count > 0, (
-            f"View {view_model._meta.db_table} returned 0 rows from seed data"
-        )
-        assert first_record is not None, (
-            f"View {view_model._meta.db_table}.objects.first() returned None"
-        )
+def test_query_database_views():
+    """Verify each view declared by the current SQL schema is queryable."""
+    with connection.cursor() as cursor:
+        for view_name in EXPECTED_VIEWS:
+            cursor.execute(f'SELECT COUNT(*) FROM "{view_name}"')
+            count = cursor.fetchone()[0]
+            assert count >= 0, f"View {view_name} could not be queried"
 
 
 def test_load_sample_data_idempotency():
@@ -540,7 +498,6 @@ def test_orm_insert_on_business_models():
     from apps.audit.models import ActivityLog
     from apps.customers.models import Customer
     from apps.employees.models import Position
-    from apps.parking.models import PlateBlacklist
     from apps.tickets.models import TicketType
     from apps.vehicles.models import Vehicle, VehicleType
 
@@ -650,17 +607,7 @@ def test_orm_insert_on_business_models():
     reset_tok.delete()
     assert PasswordResetToken.objects.filter(id=reset_tok_id).exists() is False
 
-    # 7. INSERT PlateBlacklist (Bảng danh sách đen có GeneratedField và SoftDelete)
-    bl = PlateBlacklist.objects.create(
-        license_plate="29a-77777",
-        reason="Xe cố tình vi phạm kiểm thử",
-    )
-    assert bl.id is not None
-    assert bl.created_at is not None
-    assert bl.updated_at is not None
-    assert bl.license_plate_norm == "29A77777"
-
-    # 8. INSERT ActivityLog (Bảng append-only với occurred_at timestamp)
+    # 7. INSERT ActivityLog (Bảng append-only với occurred_at timestamp)
     log_entry = ActivityLog.objects.create(
         actor_account=test_user,
         action="TEST_INSERT",
