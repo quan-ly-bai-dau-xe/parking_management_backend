@@ -1,28 +1,39 @@
 """
 Test settings.
 """
-
+import os
 from .base import *
 
 # Use in-memory database for testing
+# DATABASES = {
+#     "default": {
+#         "ENGINE": "django.db.backends.sqlite3",
+#         "NAME": ":memory:",
+#     }
+# }
+
+
 DATABASES = {
     "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+        "ENGINE": "django.db.backends.postgresql",
+        "NAME": os.environ.get("POSTGRES_DB", "parking_ci_test"),
+        "USER": os.environ.get("POSTGRES_USER", "postgres"),
+        "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "postgres"),
+        "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+        "PORT": os.environ.get("POSTGRES_PORT", "5432"),
     }
 }
 
-
 # Disable migrations for faster tests
-class DisableMigrations:
-    def __contains__(self, item):
-        return True
+# class DisableMigrations:
+#     def __contains__(self, item):
+#         return True
 
-    def __getitem__(self, item):
-        return None
+#     def __getitem__(self, item):
+#         return None
 
 
-MIGRATION_MODULES = DisableMigrations()
+# MIGRATION_MODULES = DisableMigrations()
 
 # Password hashing for testing (faster)
 PASSWORD_HASHERS = [
