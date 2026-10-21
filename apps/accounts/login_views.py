@@ -19,11 +19,7 @@ from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from apps.accounts.models import Account, PersistentLoginToken
-
-# Used to satisfy linter for Account and PersistentLoginToken
-_ = Account
-_ = PersistentLoginToken
+from apps.accounts.models import PersistentLoginToken
 
 
 @method_decorator(ensure_csrf_cookie, name="dispatch")

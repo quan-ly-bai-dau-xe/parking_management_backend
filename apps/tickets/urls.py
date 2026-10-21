@@ -2,6 +2,8 @@
 URL configuration for tickets app.
 """
 
-urlpatterns = [
+from django.urls import URLPattern
+
+urlpatterns: list[URLPattern] = [
     # API endpoints will be added here as views are implemented
 ]

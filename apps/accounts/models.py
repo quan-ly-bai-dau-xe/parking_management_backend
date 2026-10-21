@@ -1,6 +1,8 @@
 from django.contrib.auth.models import (
     AbstractBaseUser,
     BaseUserManager,
+    Group,
+    Permission,
     PermissionsMixin,
 )
 from django.core.validators import RegexValidator
@@ -87,7 +89,7 @@ class Account(AbstractBaseUser, PermissionsMixin):
     )
 
     # Override groups and user_permissions to avoid clashes with auth.User
-    groups = models.ManyToManyField(
+    groups: models.ManyToManyField[Group, Account] = models.ManyToManyField(  # type: ignore[assignment]
         "auth.Group",
         verbose_name="groups",
         blank=True,
@@ -95,13 +97,15 @@ class Account(AbstractBaseUser, PermissionsMixin):
         related_name="account_set",
         related_query_name="account",
     )
-    user_permissions = models.ManyToManyField(
-        "auth.Permission",
-        verbose_name="user permissions",
-        blank=True,
-        help_text="Specific permissions for this user.",
-        related_name="account_set",
-        related_query_name="account",
+    user_permissions: models.ManyToManyField[Permission, Account] = (
+        models.ManyToManyField(  # type: ignore[assignment]
+            "auth.Permission",
+            verbose_name="user permissions",
+            blank=True,
+            help_text="Specific permissions for this user.",
+            related_name="account_set",
+            related_query_name="account",
+        )
     )
 
     objects = AccountManager()

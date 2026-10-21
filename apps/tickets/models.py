@@ -1,4 +1,6 @@
 from django.conf import settings
+from django.contrib.postgres.constraints import ExclusionConstraint
+from django.contrib.postgres.fields import RangeOperators
 from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 
@@ -131,17 +133,17 @@ class Ticket(models.Model):
         ]
         if settings.DATABASES["default"]["ENGINE"] == "django.db.backends.postgresql":
             constraints.append(
-                models.ExclusionConstraint(
+                ExclusionConstraint(
                     name="excl_ticket_slot_time_overlap",
                     expressions=[
-                        ("slot", models.RangeOperators.EQUAL),
+                        ("slot", RangeOperators.EQUAL),
                         (
                             models.Func(
                                 models.F("effective_from"),
                                 models.F("effective_to"),
                                 function="TSTZRANGE",
                             ),
-                            models.RangeOperators.OVERLAP,
+                            RangeOperators.OVERLAPS,
                         ),
                     ],
                     condition=models.Q(deleted_at__isnull=True),
