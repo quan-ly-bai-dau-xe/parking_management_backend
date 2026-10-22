@@ -65,6 +65,10 @@ SRS_MESSAGES = {
 
 # Approved Proposal Messages ([PROPOSAL]) per docs/requirements/05-proposed-messages.md
 PROPOSAL_MESSAGES = {
+    "PROP-4.1-P01": "Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.",
+    "PROP-4.1-P02": "Khởi tạo cookie CSRF thành công.",
+    "PROP-4.1-P03": "Đăng xuất thành công.",
+    "PROP-4.1-P06": "Mã CSRF không hợp lệ hoặc bị thiếu.",
     "PROP-4.3.1-P01": "Dữ liệu {item} không hợp lệ, xin mời nhập lại.",
     "PROP-4.3.3-P01": "Cập nhật thông tin nhân viên thành công.",
     "PROP-4.3.3-P02": "Nhân viên không tồn tại hoặc đã bị xóa.",
