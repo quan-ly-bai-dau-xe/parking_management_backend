@@ -1,0 +1,70 @@
+{
+  "plate_raw": "43B-5678",
+  "plate_final": "4385678",
+  "candidates": [
+    {
+      "plate_text": "43B-5678",
+      "plate_normalized": "4385678",
+      "confidence": 93.0,
+      "char_confidences": [
+        93.0,
+        93.0,
+        93.0,
+        93.0,
+        93.0,
+        93.0,
+        91.5
+      ],
+      "min_char_confidence": 91.5,
+      "bounding_box": {
+        "x1": 100,
+        "y1": 200,
+        "x2": 380,
+        "y2": 290
+      }
+    }
+  ],
+  "best_candidate": {
+    "plate_text": "43B-5678",
+    "plate_normalized": "4385678",
+    "confidence": 93.0,
+    "char_confidences": [
+      93.0,
+      93.0,
+      93.0,
+      93.0,
+      93.0,
+      93.0,
+      91.5
+    ],
+    "min_char_confidence": 91.5,
+    "bounding_box": {
+      "x1": 100,
+      "y1": 200,
+      "x2": 380,
+      "y2": 290
+    }
+  },
+  "image_url": "/media/parking_scans/2026/10/20/sample_scan.jpg",
+  "vehicle_lookup": null,
+  "is_blacklisted": false,
+  "open_session": null,
+  "engine_name": "fast_alpr",
+  "latency_ms": 45.2,
+  "review_status": "NEEDS_REVIEW",
+  "review_reasons": [
+    "POSITION_CORRECTED"
+  ],
+  "corrections": [
+    {
+      "position": 2,
+      "from": "B",
+      "to": "8",
+      "rule": "8_to_B",
+      "reason": "Character at position 2 corrected from B to 8",
+      "original_char": "B",
+      "corrected_char": "8"
+    }
+  ],
+  "suggestions": []
+}
