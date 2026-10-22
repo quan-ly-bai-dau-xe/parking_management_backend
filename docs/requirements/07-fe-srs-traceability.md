@@ -105,10 +105,10 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 
 | ID | Requirement | Target Object | Status | Guard & Logic |
 |---|---|---|:---:|---|
-| TRC-SRS-01-01 | Login by ID/Password (4.1.1) | account, customer, employee | COVERED | Auth (TL-01) |
-| TRC-SRS-01-02 | Invalid Credential (4.1.1) | MSG-4.1-01 | COVERED | 'Xin vui lòng nhập lại Tên đăng nhập...' |
-| TRC-SRS-01-03 | Special Chars Msg (4.1.1) | MSG-4.1-02 | COVERED | 'Tên đăng nhập không chứa ký tự đặc biệt' |
-| TRC-SRS-01-04 | Persistent Login (4.1.1) | persistent_login_token | COVERED | Split-token (OQ-01, TL-36) |
+| TRC-SRS-01-01 | Login by ID/Password (4.1.1) | account, customer, employee | COVERED | Case-insensitive email or normalized phone (TL-01, TL-52) |
+| TRC-SRS-01-02 | Invalid Credential (4.1.1) | MSG-4.1-M02 | COVERED | 'Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu' (401, uniform anti-timing) |
+| TRC-SRS-01-03 | Special Chars Msg (4.1.1) | MSG-4.1-M01 | NOT APPLICABLE | Email/Phone requires @, ., -; exempt per TL-52/D3 to prevent account enumeration |
+| TRC-SRS-01-04 | Persistent Login (4.1.1) | persistent_login_token | COVERED | Split-token with 30s grace window in token_hash (OQ-01, OQ-87, TL-36, TL-52) |
 | TRC-SRS-02-01 | Role-Based Access (4.2.1) | account.role, ck constraint | COVERED | Enum roles (TL-01) |
 | TRC-SRS-02-02 | Manager vs Staff Menu (4.2.1) | API Permissions / DRF | COVERED | Manager only (OQ-45) |
 | TRC-SRS-03-01 | Employee List & Filter (4.3.1) | employee, position | COVERED | Filter (TL-11) |
@@ -150,6 +150,38 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-SRS-09-05 | Blacklist & Debt (NFR) | plate_blacklist | COVERED | Blacklist (TL-08) |
 | TRC-SRS-09-06 | Multi-Target Payments (NFR) | payment | COVERED | Payment link (TL-39) |
 | TRC-SRS-09-07 | Activity Log Audit (NFR) | activity_log | COVERED | Audit log (TL-12) |
+
+---
+
+### 3.1. Detailed Traceability for SRS Section 4.1 (Login Screen, Actions & Messages)
+
+#### A. Field Inventory (REQ-4.1-F01..F04)
+
+| Field ID | SRS Field Name | Frontend Label | Required | Data Type / Format | Implementation & Database Target | Status | Decision Reference |
+|---|---|---|:---:|---|---|:---:|---|
+| **REQ-4.1-F01** | Tên đăng nhập | Email hoặc Số điện thoại | Yes | Text (`VARCHAR(100)` / `VARCHAR(15)`) | `POST /api/v1/auth/login/` field `identifier`. Authenticated against `account.email` (via case-insensitive expression index `uq_account_email_active` on `lower(email)`) OR `account.phone` (`^[0-9]{9,15}$`). | **COVERED** | `TL-01`, `TL-21`, `TL-52` |
+| **REQ-4.1-F02** | Mật khẩu | Mật khẩu | Yes | Password string | `POST /api/v1/auth/login/` field `password`. Verified via primary `Argon2PasswordHasher` (`account.password_hash`). | **COVERED** | `OQ-01`, `TL-52` |
+| **REQ-4.1-F03** | Ghi nhớ mật khẩu | Ghi nhớ đăng nhập | No | Boolean (default: `false`) | `POST /api/v1/auth/login/` field `remember`. When true, generates a secure 256-bit token (`secrets.token_hex(32)`), stores SHA-256 composite hash in `persistent_login_token.token_hash VARCHAR(255)`, sets `parking_remember_token` cookie (`HttpOnly=True`, `SameSite='Lax'`, 30-day TTL). Replaces insecure plaintext cookie rule with OWASP ASVS persistent login pattern. | **COVERED** | `OQ-01`, `OQ-87`, `TL-36`, `TL-52`, `ADR-0004` |
+| **REQ-4.1-F04** | Quên mật khẩu | Quên mật khẩu? | N/A | Navigation link | Triggers password reset workflow using `password_reset_token` (`account_id`, `token_hash`, `expires_at`). | **COVERED** | `OQ-84`, `TL-36` |
+
+#### B. Action Inventory (ACT-4.1-A01..A02)
+
+| Action ID | SRS Action Name | Frontend Element | Trigger & Workflow | Implementation Target | Status | Decision Reference |
+|---|---|---|---|---|:---:|---|
+| **ACT-4.1-A01** | Log in | Nút "Đăng nhập" | Click "Đăng nhập" after entering identifier and password. Successful login navigates to system home, cycles session key (`request.session.cycle_key()`), updates `last_login`, sets `sessionid` and optional `parking_remember_token`. Failure returns standard error envelope. | `POST /api/v1/auth/login/` (`LoginView`) | **COVERED** | `TL-52` |
+| **ACT-4.1-A02** | Reset | Clear inputs | Clears entered identifier and password fields. Managed on client side by SPA state; backend REST API is stateless with respect to unsubmitted form inputs. | Client SPA UI interaction | **COVERED** | `TL-52` |
+
+#### C. Messages Traceability (MSG-4.1-M01..M03 & PROP-4.1-P01..P03, P06)
+
+| Message ID | Type | Message Content | Trigger Condition & Behavior | HTTP Status | Status | Decision & Rationale |
+|---|---|---|---|:---:|:---:|---|
+| **MSG-4.1-M01** | Verbatim SRS | `Tên đăng nhập không chứa ký tự đặc biệt` | Entering invalid/special characters in login identifier | 401 | **NOT APPLICABLE** | **Exempt per Decision D3 / TL-52**: Under Frontend-First design (`TL-01`), login is by "Email hoặc Số điện thoại". Email addresses strictly require special characters (`@`, `.`, `+`, `_`, `-`) and phone numbers accept formatting separators (`-`, ` `, `.`). Rejecting special characters prevents valid email authentication. Furthermore, returning character-specific errors aids credential enumeration. All invalid or non-existent identifiers uniformly receive HTTP 401 with `MSG-4.1-M02`. |
+| **MSG-4.1-M02** | Verbatim SRS | `Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu` | Incorrect password, non-existent account, inactive account (`is_active = FALSE`), or soft-deleted account (`deleted_at IS NOT NULL`). | 401 Unauthorized | **COVERED** | Byte-identical envelope returned across all credential failure modes. Anti-timing defense executes dummy Argon2 hash when account is not found (`RSK-03`). |
+| **MSG-4.1-M03** | Verbatim SRS | `Xin nhập đầy đủ Tên đăng nhập và Mật khẩu` | Empty string, whitespace-only, missing key, or invalid data types in login request payload. | 400 Bad Request | **COVERED** | DRF serializer validation enforced in `LoginSerializer`. |
+| **PROP-4.1-P01** | Proposal | `Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.` | Exceeding brute-force rate limit (>5 failed attempts / 15 min per identifier, or >30 attempts / 15 min per client IP). | 429 Too Many Requests | **COVERED** | Enforced by `LoginIdentifierRateThrottle` and `LoginIPRateThrottle` with `Retry-After: 900` header (`OQ-87`, `TL-52`). |
+| **PROP-4.1-P02** | Proposal | `Khởi tạo cookie CSRF thành công.` | GET `/api/v1/auth/csrf/` endpoint for SPA CSRF cookie handshake. | 200 OK | **COVERED** | `CSRFBootstrapView` sets `csrftoken` cookie for double-submit header (`TL-52`). |
+| **PROP-4.1-P03** | Proposal | `Đăng xuất thành công.` | POST `/api/v1/auth/logout/` endpoint to destroy user session. | 200 OK | **COVERED** | Flushes Django session, revokes persistent token row via plain `DELETE` (`TL-36`), clears cookies (`TL-52`). |
+| **PROP-4.1-P06** | Proposal | `Mã CSRF không hợp lệ hoặc bị thiếu.` | Missing or invalid CSRF header/token on POST login or logout endpoints. | 403 Forbidden | **COVERED** | Handled by `custom_csrf_failure_view` and `custom_exception_handler` returning standard JSON error envelope (`TL-53`, Q1). |
 
 ---
 

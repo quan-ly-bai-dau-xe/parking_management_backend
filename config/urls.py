@@ -23,6 +23,7 @@ urlpatterns: list = [
     path("api/health/", HealthCheckView.as_view(), name="health"),
     # API v1 routes
     path("api/v1/", include("apps.core.urls")),
+    path("api/v1/auth/", include("apps.accounts.urls")),
     path("api/v1/", include("apps.customers.urls")),
     path("api/v1/", include("apps.employees.urls")),
     path("api/v1/", include("apps.vehicles.urls")),
