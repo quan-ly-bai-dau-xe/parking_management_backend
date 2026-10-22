@@ -56,6 +56,7 @@ INSTALLED_APPS = [
     "django.contrib.messages",
     "django.contrib.staticfiles",
     # Third party apps
+    "corsheaders",
     "drf_spectacular",
     "drf_spectacular_sidecar",
     # Local apps
@@ -74,9 +75,11 @@ INSTALLED_APPS = [
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
+    "corsheaders.middleware.CorsMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "apps.accounts.middleware.PersistentRememberMeMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -151,6 +154,14 @@ AUTH_PASSWORD_VALIDATORS = [
     {
         "NAME": "django.contrib.auth.password_validation.NumericPasswordValidator",
     },
+]
+
+# Password hashers
+# https://docs.djangoproject.com/en/6.1/topics/auth/passwords/#how-django-stores-passwords
+PASSWORD_HASHERS = [
+    "django.contrib.auth.hashers.Argon2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2PasswordHasher",
+    "django.contrib.auth.hashers.PBKDF2SHA1PasswordHasher",
 ]
 
 
@@ -406,3 +417,40 @@ LOGGING = {
         },
     },
 }
+
+# ==============================================================================
+# CORS & CSRF Settings (Rule 07, ADR-0004, TL-52, TL-53)
+# ==============================================================================
+CORS_ALLOWED_ORIGINS = env.list("CORS_ALLOWED_ORIGINS", default=[])
+CORS_ALLOW_CREDENTIALS = True
+CORS_ALLOW_ALL_ORIGINS = False
+CSRF_TRUSTED_ORIGINS = env.list("CSRF_TRUSTED_ORIGINS", default=[])
+CSRF_COOKIE_HTTPONLY = False
+CSRF_FAILURE_VIEW = "apps.accounts.views.csrf.custom_csrf_failure_view"
+
+
+# ==============================================================================
+# Session & Cookie Security (Rule 07, ADR-0004, TL-53)
+# ==============================================================================
+SESSION_COOKIE_HTTPONLY = True
+SESSION_COOKIE_SAMESITE = "Lax"
+SESSION_COOKIE_AGE = env.int("SESSION_COOKIE_AGE", default=43200)
+
+# ==============================================================================
+# Persistent Remember-Me Token Settings (OQ-87, ADR-0004, TL-53)
+# ==============================================================================
+REMEMBER_COOKIE_NAME = "parking_remember_token"
+REMEMBER_ROTATION_GRACE_SECONDS = env.int("REMEMBER_ROTATION_GRACE_SECONDS", default=30)
+REMEMBER_TOKEN_LIFETIME_DAYS = env.int("REMEMBER_TOKEN_LIFETIME_DAYS", default=30)
+REMEMBER_MAX_TOKENS_PER_ACCOUNT = env.int("REMEMBER_MAX_TOKENS_PER_ACCOUNT", default=10)
+
+# ==============================================================================
+# Authentication Throttle Limits (ADR-0004, TL-53)
+# ==============================================================================
+AUTH_THROTTLE_PAIR_LIMIT = env.int("AUTH_THROTTLE_PAIR_LIMIT", default=5)
+AUTH_THROTTLE_IDENTIFIER_LIMIT = env.int("AUTH_THROTTLE_IDENTIFIER_LIMIT", default=20)
+AUTH_THROTTLE_IP_LIMIT = env.int("AUTH_THROTTLE_IP_LIMIT", default=30)
+AUTH_THROTTLE_WINDOW_SECONDS = env.int("AUTH_THROTTLE_WINDOW_SECONDS", default=900)
+
+# DRF Proxy Configuration
+NUM_PROXIES = env.int("NUM_PROXIES", default=0)
