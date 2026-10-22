@@ -20,6 +20,17 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 
 ## 2. Catalog of Proposed Messages by Module
 
+### 2.0. Authentication & Session Management Module (SRS 4.1 & ADR-0004)
+
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
+| :---: | :--- | :--- | :--- | :--- | :---: | :---: |
+| **PROP-4.1-P01** | 4.1 Login (`POST /api/v1/auth/login/`) | Brute-force throttling exceeded on identifier or IP | SRS does not define brute-force throttling | `Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.` | 429 Too Many Requests | **TL-52**, **OQ-87** |
+| **PROP-4.1-P02** | 4.1 Auth Bootstrap (`GET /api/v1/auth/csrf/`) | Bootstrap CSRF cookie for SPA handshake | SRS does not define CSRF handshake | `Khởi tạo cookie CSRF thành công.` | 200 OK | **TL-52** |
+| **PROP-4.1-P03** | 4.1 Logout (`POST /api/v1/auth/logout/`) | User session destroyed, remember token revoked and cookies cleared | SRS does not define logout response | `Đăng xuất thành công.` | 200 OK | **TL-52** |
+| **PROP-4.1-P06** | 4.1 Login / Logout (`POST /api/v1/auth/login/`, `POST /api/v1/auth/logout/`) | Missing or invalid CSRF token in request header / cookie | SRS does not define CSRF validation | `Mã CSRF không hợp lệ hoặc bị thiếu.` | 403 Forbidden | **TL-53**, **Q1** |
+
+---
+
 ### 2.1. Employee Management Module (SRS 4.3)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
