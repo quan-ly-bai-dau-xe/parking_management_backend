@@ -2,8 +2,6 @@
 URL configuration for reports app.
 """
 
-from django.urls import URLPattern
-
-urlpatterns: list[URLPattern] = [
+urlpatterns: list = [
     # API endpoints will be added here as views are implemented
 ]

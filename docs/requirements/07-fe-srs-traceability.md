@@ -27,7 +27,7 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 
 ---
 
-## 2. Frontend Screen Traceability Matrix (61 Items)
+## 2. Frontend Screen Traceability Matrix (67 Items)
 
 | ID | Element | Target Object | Status | Decision / Logic |
 |---|---|---|:---:|---|
@@ -65,6 +65,12 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-FE-05-04 | Timestamps in/out | vehicle_entry_exit_log(entry, exit) | COVERED | TIMESTAMPTZ (TL-34) |
 | TRC-FE-05-05 | Parking Duration | vehicle_entry_exit_log | DERIVED | Duration interval (TL-28.4) |
 | TRC-FE-05-06 | Parking Fee | vehicle_entry_exit_log.fee_amount | COVERED | Fee NUMERIC(12,2) (TL-05) |
+| TRC-FE-05-07 | ALPR Camera Scan | apps/parking/views/scans.py (`POST /api/v1/parking/plate-scans/`) | COVERED | Round 32 Fast-ALPR scan + Pillow security validation |
+| TRC-FE-05-08 | Auto Vehicle & Customer Fill | apps/parking/views/lookup.py (`GET /api/v1/parking/vehicle-lookup/`) | COVERED | Round 32 Exact lookup by license_plate_norm (TL-17) |
+| TRC-FE-05-09 | Check-in Action | apps/parking/views/sessions.py (`POST /api/v1/parking/sessions/check-in/`) | COVERED | Round 32 Session creation (#PK-YYYYMMDD-NN), blacklist guard |
+| TRC-FE-05-10 | Check-out & Tariff Payment | apps/parking/views/sessions.py (`POST /api/v1/parking/sessions/check-out/`) | COVERED | Round 32 TL-50 tariff Decimal, atomic payment row |
+| TRC-FE-05-11 | Gate Selection | apps/parking/views/gates.py (`GET /api/v1/parking/gates/`) | COVERED | Round 32 Active barrier gates list |
+| TRC-FE-05-12 | Modal Tìm Xe (Unified Search) | apps/parking/views/search.py (`GET /api/v1/parking/vehicle-search/`) | COVERED | Round 32 Task 9 multi-field search (TL-41 GIN trigram) |
 | TRC-FE-06-01 | Hierarchy 4-lvl | lot, floor, zone, slot | COVERED | 4-level model (TL-02,29) |
 | TRC-FE-06-02 | Slot Filters | parking_slot, allowed_type | COVERED | Filters (TL-37) |
 | TRC-FE-06-03 | Slot Stats KPI | v_slot_occupancy_by_floor | COVERED | Counts (TL-14) |
@@ -95,14 +101,14 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 
 ---
 
-## 3. SRS v4.1 Functional & Non-Functional Traceability Matrix (42 Items)
+## 3. SRS v4.1 Functional & Non-Functional Traceability Matrix (45 Items)
 
 | ID | Requirement | Target Object | Status | Guard & Logic |
 |---|---|---|:---:|---|
-| TRC-SRS-01-01 | Login by ID/Password (4.1.1) | account, customer, employee | COVERED | Auth (TL-01) |
-| TRC-SRS-01-02 | Invalid Credential (4.1.1) | MSG-4.1-01 | COVERED | 'Xin vui lòng nhập lại Tên đăng nhập...' |
-| TRC-SRS-01-03 | Special Chars Msg (4.1.1) | MSG-4.1-02 | COVERED | 'Tên đăng nhập không chứa ký tự đặc biệt' |
-| TRC-SRS-01-04 | Persistent Login (4.1.1) | persistent_login_token | COVERED | Split-token (OQ-01, TL-36) |
+| TRC-SRS-01-01 | Login by ID/Password (4.1.1) | account, customer, employee | COVERED | Case-insensitive email or normalized phone (TL-01, TL-52) |
+| TRC-SRS-01-02 | Invalid Credential (4.1.1) | MSG-4.1-M02 | COVERED | 'Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu' (401, uniform anti-timing) |
+| TRC-SRS-01-03 | Special Chars Msg (4.1.1) | MSG-4.1-M01 | NOT APPLICABLE | Email/Phone requires @, ., -; exempt per TL-52/D3 to prevent account enumeration |
+| TRC-SRS-01-04 | Persistent Login (4.1.1) | persistent_login_token | COVERED | Split-token with 30s grace window in token_hash (OQ-01, OQ-87, TL-36, TL-52) |
 | TRC-SRS-02-01 | Role-Based Access (4.2.1) | account.role, ck constraint | COVERED | Enum roles (TL-01) |
 | TRC-SRS-02-02 | Manager vs Staff Menu (4.2.1) | API Permissions / DRF | COVERED | Manager only (OQ-45) |
 | TRC-SRS-03-01 | Employee List & Filter (4.3.1) | employee, position | COVERED | Filter (TL-11) |
@@ -116,11 +122,14 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-SRS-04-04 | Edit Customer Profile (4.4.4) | customer, vehicle | COVERED | RESTRICT FK |
 | TRC-SRS-04-05 | Delete Customer (DEL-02, 4.4.5) | customer.deleted_at, trigger | COVERED | Guarded delete (TL-25) |
 | TRC-SRS-04-06 | PII Anonymization (4.4.5) | customer(anonymized fields) | COVERED | PII anon (OQ-12) |
-| TRC-SRS-05-01 | Vehicle Entry Check-in (4.5.1) | vehicle_entry_exit_log, guard | COVERED | Check-in (TL-17) |
-| TRC-SRS-05-02 | Exit & Payment (4.5.1) | vehicle_entry_exit_log, payment | COVERED | Check-out (TL-05) |
-| TRC-SRS-05-03 | Entry Guard Msgs (4.5.1) | MSG-4.5.1-M01..M03 | COVERED | 'Dữ liệu biển số xe không hợp lệ', etc. |
+| TRC-SRS-05-01 | Vehicle Entry Check-in (4.5.1) | vehicle_entry_exit_log, guard (`POST /api/v1/parking/sessions/check-in/`) | COVERED | Check-in, session_code, blacklist guard (Round 32) |
+| TRC-SRS-05-02 | Exit & Payment (4.5.1) | vehicle_entry_exit_log, payment (`POST /api/v1/parking/sessions/check-out/`) | COVERED | Check-out, TL-50 tariff Decimal, atomic payment (Round 32) |
+| TRC-SRS-05-03 | Entry Guard Msgs (4.5.1) | MSG-4.5.1-M01..M03, PROP-4.5.1-P01..P12 | COVERED | Verbatim M03 fix ('lỗi kết nối'), mapped trigger exceptions (Round 32) |
 | TRC-SRS-05-04 | Parking Visual Grid (4.5.2) | lot, floor, zone, slot | COVERED | 4-level map (TL-02) |
 | TRC-SRS-05-05 | Slot Maint Guard (4.5.2) | MSG-4.5.2-M02, PROP-4.5.2-P01 | COVERED | 'Vị trí này đang bảo trì, chọn vị trí khác' |
+| TRC-SRS-05-06 | Offline Plate Scan ALPR (4.5.1) | apps/parking/views/scans.py (`POST /api/v1/parking/plate-scans/`) | COVERED | Offline Fast-ALPR OCR, Pillow magic validation & EXIF strip (Round 32) |
+| TRC-SRS-05-07 | Exact Vehicle Lookup (4.5.1) | apps/parking/views/lookup.py (`GET /api/v1/parking/vehicle-lookup/`) | COVERED | Exact match on license_plate_norm, parking position, ticket (Round 32) |
+| TRC-SRS-05-08 | Vehicle Search Modal (Task 9) | apps/parking/views/search.py (`GET /api/v1/parking/vehicle-search/`) | COVERED | Multi-field search (q, name, phone, plate) utilizing TL-41 GIN trigram (Round 32) |
 | TRC-SRS-06-01 | Ticket List & Expiry (4.6.1) | ticket, ticket_type | COVERED / DERIVED | Filter/derived (TL-28) |
 | TRC-SRS-06-02 | Issue / Buy Ticket (4.6.2) | ticket, payment | COVERED | Issue ticket (TL-10,38) |
 | TRC-SRS-06-03 | Ticket Renewal Flow (4.6.3) | ticket_renewal, ticket | COVERED | Renewal (OQ-52) |
@@ -141,6 +150,38 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-SRS-09-05 | Blacklist & Debt (NFR) | plate_blacklist | COVERED | Blacklist (TL-08) |
 | TRC-SRS-09-06 | Multi-Target Payments (NFR) | payment | COVERED | Payment link (TL-39) |
 | TRC-SRS-09-07 | Activity Log Audit (NFR) | activity_log | COVERED | Audit log (TL-12) |
+
+---
+
+### 3.1. Detailed Traceability for SRS Section 4.1 (Login Screen, Actions & Messages)
+
+#### A. Field Inventory (REQ-4.1-F01..F04)
+
+| Field ID | SRS Field Name | Frontend Label | Required | Data Type / Format | Implementation & Database Target | Status | Decision Reference |
+|---|---|---|:---:|---|---|:---:|---|
+| **REQ-4.1-F01** | Tên đăng nhập | Email hoặc Số điện thoại | Yes | Text (`VARCHAR(100)` / `VARCHAR(15)`) | `POST /api/v1/auth/login/` field `identifier`. Authenticated against `account.email` (via case-insensitive expression index `uq_account_email_active` on `lower(email)`) OR `account.phone` (`^[0-9]{9,15}$`). | **COVERED** | `TL-01`, `TL-21`, `TL-52` |
+| **REQ-4.1-F02** | Mật khẩu | Mật khẩu | Yes | Password string | `POST /api/v1/auth/login/` field `password`. Verified via primary `Argon2PasswordHasher` (`account.password_hash`). | **COVERED** | `OQ-01`, `TL-52` |
+| **REQ-4.1-F03** | Ghi nhớ mật khẩu | Ghi nhớ đăng nhập | No | Boolean (default: `false`) | `POST /api/v1/auth/login/` field `remember`. When true, generates a secure 256-bit token (`secrets.token_hex(32)`), stores SHA-256 composite hash in `persistent_login_token.token_hash VARCHAR(255)`, sets `parking_remember_token` cookie (`HttpOnly=True`, `SameSite='Lax'`, 30-day TTL). Replaces insecure plaintext cookie rule with OWASP ASVS persistent login pattern. | **COVERED** | `OQ-01`, `OQ-87`, `TL-36`, `TL-52`, `ADR-0004` |
+| **REQ-4.1-F04** | Quên mật khẩu | Quên mật khẩu? | N/A | Navigation link | Triggers password reset workflow using `password_reset_token` (`account_id`, `token_hash`, `expires_at`). | **COVERED** | `OQ-84`, `TL-36` |
+
+#### B. Action Inventory (ACT-4.1-A01..A02)
+
+| Action ID | SRS Action Name | Frontend Element | Trigger & Workflow | Implementation Target | Status | Decision Reference |
+|---|---|---|---|---|:---:|---|
+| **ACT-4.1-A01** | Log in | Nút "Đăng nhập" | Click "Đăng nhập" after entering identifier and password. Successful login navigates to system home, cycles session key (`request.session.cycle_key()`), updates `last_login`, sets `sessionid` and optional `parking_remember_token`. Failure returns standard error envelope. | `POST /api/v1/auth/login/` (`LoginView`) | **COVERED** | `TL-52` |
+| **ACT-4.1-A02** | Reset | Clear inputs | Clears entered identifier and password fields. Managed on client side by SPA state; backend REST API is stateless with respect to unsubmitted form inputs. | Client SPA UI interaction | **COVERED** | `TL-52` |
+
+#### C. Messages Traceability (MSG-4.1-M01..M03 & PROP-4.1-P01..P03, P06)
+
+| Message ID | Type | Message Content | Trigger Condition & Behavior | HTTP Status | Status | Decision & Rationale |
+|---|---|---|---|:---:|:---:|---|
+| **MSG-4.1-M01** | Verbatim SRS | `Tên đăng nhập không chứa ký tự đặc biệt` | Entering invalid/special characters in login identifier | 401 | **NOT APPLICABLE** | **Exempt per Decision D3 / TL-52**: Under Frontend-First design (`TL-01`), login is by "Email hoặc Số điện thoại". Email addresses strictly require special characters (`@`, `.`, `+`, `_`, `-`) and phone numbers accept formatting separators (`-`, ` `, `.`). Rejecting special characters prevents valid email authentication. Furthermore, returning character-specific errors aids credential enumeration. All invalid or non-existent identifiers uniformly receive HTTP 401 with `MSG-4.1-M02`. |
+| **MSG-4.1-M02** | Verbatim SRS | `Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu` | Incorrect password, non-existent account, inactive account (`is_active = FALSE`), or soft-deleted account (`deleted_at IS NOT NULL`). | 401 Unauthorized | **COVERED** | Byte-identical envelope returned across all credential failure modes. Anti-timing defense executes dummy Argon2 hash when account is not found (`RSK-03`). |
+| **MSG-4.1-M03** | Verbatim SRS | `Xin nhập đầy đủ Tên đăng nhập và Mật khẩu` | Empty string, whitespace-only, missing key, or invalid data types in login request payload. | 400 Bad Request | **COVERED** | DRF serializer validation enforced in `LoginSerializer`. |
+| **PROP-4.1-P01** | Proposal | `Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.` | Exceeding brute-force rate limit (>5 failed attempts / 15 min per identifier, or >30 attempts / 15 min per client IP). | 429 Too Many Requests | **COVERED** | Enforced by `LoginIdentifierRateThrottle` and `LoginIPRateThrottle` with `Retry-After: 900` header (`OQ-87`, `TL-52`). |
+| **PROP-4.1-P02** | Proposal | `Khởi tạo cookie CSRF thành công.` | GET `/api/v1/auth/csrf/` endpoint for SPA CSRF cookie handshake. | 200 OK | **COVERED** | `CSRFBootstrapView` sets `csrftoken` cookie for double-submit header (`TL-52`). |
+| **PROP-4.1-P03** | Proposal | `Đăng xuất thành công.` | POST `/api/v1/auth/logout/` endpoint to destroy user session. | 200 OK | **COVERED** | Flushes Django session, revokes persistent token row via plain `DELETE` (`TL-36`), clears cookies (`TL-52`). |
+| **PROP-4.1-P06** | Proposal | `Mã CSRF không hợp lệ hoặc bị thiếu.` | Missing or invalid CSRF header/token on POST login or logout endpoints. | 403 Forbidden | **COVERED** | Handled by `custom_csrf_failure_view` and `custom_exception_handler` returning standard JSON error envelope (`TL-53`, Q1). |
 
 ---
 
@@ -226,7 +267,7 @@ FROM occ ORDER BY floor_code ASC;
 
 ## 5. Traceability Audit Summary & Verification Checklist
 
-- [x] **100% UI Image Coverage**: All 11 UI design files verified across 61 items (Section 1).
-- [x] **100% SRS Coverage**: Sections 4.1–4.8, deletion guards DEL-01..DEL-05, NFRs mapped across 42 items.
+- [x] **100% UI Image Coverage**: All 11 UI design files verified across 67 items (Section 1 & 2).
+- [x] **100% SRS Coverage**: Sections 4.1–4.8, deletion guards DEL-01..DEL-05, NFRs mapped across 45 items (Section 3).
 - [x] **Schema Invariant**: Preserves 28 tables, 8 views, 69 FKs, 338+55 columns.
-- [x] **Zero Gaps**: All variations resolved under `TL-29`–`TL-41`.
+- [x] **Zero Gaps**: All variations resolved under `TL-29`–`TL-50`.

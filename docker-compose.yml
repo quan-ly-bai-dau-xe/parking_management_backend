@@ -19,6 +19,72 @@ services:
       retries: 5
       start_period: 10s
 
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    restart: unless-stopped
+    command: ["gunicorn", "-c", "docker/gunicorn.conf.py", "config.wsgi:application"]
+    ports:
+      # Security boundary: bind exclusively to local loopback interface 127.0.0.1
+      - "127.0.0.1:${WEB_PORT:-8000}:8000"
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.local}
+      SECRET_KEY: "${SECRET_KEY:?Error: SECRET_KEY is required}"
+      POSTGRES_DB: ${POSTGRES_DB:-parking_db}
+      POSTGRES_USER: ${POSTGRES_USER:-parking_user}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD is required}"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DEBUG: ${DEBUG:-True}
+      ALLOWED_HOSTS: ${ALLOWED_HOSTS:-localhost,127.0.0.1,web}
+      PARKING_HOURLY_RATE_VND: ${PARKING_HOURLY_RATE_VND:-10000.00}
+      RUN_MIGRATIONS: ${RUN_MIGRATIONS:-1}
+      LOAD_SAMPLE_DATA: ${LOAD_SAMPLE_DATA:-0}
+      DJANGO_LOG_SQL_QUERIES: ${DJANGO_LOG_SQL_QUERIES:-0}
+      DB_POOL_ENABLE: ${DB_POOL_ENABLE:-0}
+      DB_CONN_MAX_AGE: ${DB_CONN_MAX_AGE:-60}
+      GUNICORN_WORKERS: ${GUNICORN_WORKERS:-4}
+      GUNICORN_THREADS: ${GUNICORN_THREADS:-6}
+      GUNICORN_MAX_REQUESTS: ${GUNICORN_MAX_REQUESTS:-0}
+      GUNICORN_MAX_REQUESTS_JITTER: ${GUNICORN_MAX_REQUESTS_JITTER:-100}
+      GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
+      GUNICORN_MEMORY_LIMIT_MB: ${GUNICORN_MEMORY_LIMIT_MB:-1536}
+      PARKING_OCR_ENGINE: ${PARKING_OCR_ENGINE:-fast_alpr}
+      PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD: ${PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD:-90.0}
+      PARKING_OCR_ADAPTIVE_ENSEMBLE: ${PARKING_OCR_ADAPTIVE_ENSEMBLE:-1}
+      PARKING_OCR_ADAPTIVE_THRESHOLD: ${PARKING_OCR_ADAPTIVE_THRESHOLD:-94.0}
+      PARKING_OCR_LEADING_CHAR_THRESHOLD: ${PARKING_OCR_LEADING_CHAR_THRESHOLD:-99.2}
+      PARKING_OCR_ADAPTIVE_AVG_THRESHOLD: ${PARKING_OCR_ADAPTIVE_AVG_THRESHOLD:-96.0}
+      PARKING_OCR_CROP_MARGIN: ${PARKING_OCR_CROP_MARGIN:-4}
+      PARKING_OCR_CONCURRENCY_LIMIT: ${PARKING_OCR_CONCURRENCY_LIMIT:-4}
+      PARKING_OCR_QUEUE_TIMEOUT: ${PARKING_OCR_QUEUE_TIMEOUT:-2.0}
+      PARKING_OCR_RETRY_AFTER: ${PARKING_OCR_RETRY_AFTER:-3}
+      PARKING_REVIEW_DETECTOR_CONF_THRESHOLD: ${PARKING_REVIEW_DETECTOR_CONF_THRESHOLD:-80.0}
+      PARKING_REVIEW_MIN_ASPECT_RATIO: ${PARKING_REVIEW_MIN_ASPECT_RATIO:-1.3}
+      PARKING_REVIEW_MAX_ASPECT_RATIO: ${PARKING_REVIEW_MAX_ASPECT_RATIO:-6.0}
+      PARKING_REVIEW_MIN_SHARPNESS: ${PARKING_REVIEW_MIN_SHARPNESS:-30.0}
+      MAX_IMAGE_SIZE_MB: ${MAX_IMAGE_SIZE_MB:-5}
+      ONNX_INTRA_OP_THREADS: ${ONNX_INTRA_OP_THREADS:-1}
+      ONNX_INTER_OP_THREADS: ${ONNX_INTER_OP_THREADS:-1}
+      ONNX_ALLOW_SPINNING: ${ONNX_ALLOW_SPINNING:-0}
+      PARKING_OCR_MODELS_DIR: ${PARKING_OCR_MODELS_DIR:-/app/models/ocr}
+      OCR_MODELS_DIR: ${OCR_MODELS_DIR:-/app/models/ocr}
+      PARKING_LOG_PRIVACY_MODE: ${PARKING_LOG_PRIVACY_MODE:-1}
+      PARKING_LOG_MASK_PLATES: ${PARKING_LOG_MASK_PLATES:-1}
+    # Linux Host Permission Note:
+    # If deploying on native Linux, ensure host directory ./media is writable by container UID 10001:
+    #   mkdir -p media && sudo chown -R 10001:10001 media
+    # Alternatively, specify matching host user:
+    #   user: "${CURRENT_UID:-10001}:${CURRENT_GID:-10001}"
+    volumes:
+      # Bind mount directly to host media directory (STRICT: no named volume for media)
+      - ./media:/app/media
+    depends_on:
+      db:
+        condition: service_healthy
+
 volumes:
   postgres_data:
     name: parking_postgres_data

@@ -1,0 +1,3 @@
+"""
+Management commands package for accounts app.
+"""

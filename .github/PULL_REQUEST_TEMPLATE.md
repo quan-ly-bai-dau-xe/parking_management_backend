@@ -1,4 +1,4 @@
-## Description of Changes
+# Description of Changes
 <!-- Provide a concise summary of the changes and the architectural rationale (WHY, not just WHAT). -->
 
 **Related Issue**: Closes #<!-- Issue ID -->
@@ -6,6 +6,7 @@
 ---
 
 ## Type of Change
+
 - [ ] `feat`: New feature (backward-compatible)
 - [ ] `fix`: Bug fix
 - [ ] `refactor`: Code refactoring without behavior change
@@ -29,6 +30,7 @@
 ---
 
 ## Definition of Done (DoD) Checklist
+
 - [ ] **Peer Review**: Code has been reviewed and approved by at least 1 peer.
 - [ ] **Automated Tests**: `pytest` passes 100% with line coverage >= 80%.
 - [ ] **Linting & Formatting**: `ruff check .` and `ruff format --check .` report 0 errors.

@@ -1,196 +1,157 @@
-from django.contrib.auth.models import (
-    AbstractBaseUser,
-    BaseUserManager,
-    Group,
-    Permission,
-    PermissionsMixin,
-)
-from django.core.validators import RegexValidator
+from django.contrib.auth.models import AbstractBaseUser, BaseUserManager
 from django.db import models
+from django.utils import timezone
+
+from apps.core.models import SoftDeleteManager, SoftDeleteModel, SoftDeleteQuerySet
 
 
-class AccountManager(BaseUserManager):
-    def create_user(self, username, password=None, **extra_fields):
-        if not username:
-            raise ValueError("The Username field must be set")
-        username = self.model.normalize_username(username)
-        user = self.model(username=username, **extra_fields)
+class AccountManager(BaseUserManager, SoftDeleteManager):
+    """
+    Manager cho Account với đăng nhập linh hoạt bằng email hoặc số điện thoại,
+    mặc định lọc bản ghi chưa bị xóa mềm và đồng bộ hành vi SoftDelete.
+    """
+
+    def get_queryset(self):
+        return SoftDeleteQuerySet(self.model, using=self._db).filter(
+            deleted_at__isnull=True
+        )
+
+    def with_deleted(self):
+        return SoftDeleteQuerySet(self.model, using=self._db).with_deleted()
+
+    def only_deleted(self):
+        return SoftDeleteQuerySet(self.model, using=self._db).only_deleted()
+
+    def restore(self):
+        return self.get_queryset().restore()
+
+    def soft_delete(self, user=None):
+        return self.get_queryset().soft_delete(user=user)
+
+    def create_user(
+        self, email=None, phone=None, password=None, role="EMPLOYEE", **extra_fields
+    ):
+        if not email and not phone:
+            raise ValueError("Bắt buộc phải cung cấp Email hoặc Số điện thoại.")
+        email = self.normalize_email(email) if email else None
+        user = self.model(email=email, phone=phone, role=role, **extra_fields)
         if password:
             user.set_password(password)
+        else:
+            user.set_unusable_password()
         user.save(using=self._db)
         return user
 
-    def create_superuser(self, username, password=None, **extra_fields):
-        extra_fields.setdefault("is_staff", True)
-        extra_fields.setdefault("is_superuser", True)
+    def create_superuser(self, email=None, phone=None, password=None, **extra_fields):
+        extra_fields.setdefault("role", "MANAGER")
         extra_fields.setdefault("is_active", True)
-
-        if extra_fields.get("is_staff") is not True:
-            raise ValueError("Superuser must have is_staff=True.")
-        if extra_fields.get("is_superuser") is not True:
-            raise ValueError("Superuser must have is_superuser=True.")
-        return self.create_user(username, password, **extra_fields)
+        return self.create_user(
+            email=email, phone=phone, password=password, **extra_fields
+        )
 
 
-class Account(AbstractBaseUser, PermissionsMixin):
-    # Username validation: no special characters per SRS 4.1-F01
-    username_validator = RegexValidator(
-        r"^[a-zA-Z0-9_.-]+$", "Tên đăng nhập không chứa ký tự đặc biệt", "invalid"
-    )
+class Account(AbstractBaseUser, SoftDeleteModel):
+    """
+    Tài khoản xác thực hệ thống (AUTH_USER_MODEL).
+    Không dùng PermissionsMixin để tránh phát sinh cột ảo ngoài CSDL Schema v2.
+    """
 
-    id = models.BigAutoField(primary_key=True)
-    username = models.CharField(
-        "Tên đăng nhập",
-        max_length=50,
-        unique=True,
-        validators=[username_validator],
-        help_text="Nhập tên đăng nhập được admin cấp điền vào để đăng nhập hệ thống. So sánh ở ACCOUNT.TenDangNhap. Không chứa ký tự đặc biệt.",
-    )
-    password_hash = models.CharField("Mật khẩu", max_length=255)
-    role_choices = [
+    ROLE_CHOICES = [
         ("MANAGER", "Quản lý"),
         ("EMPLOYEE", "Nhân viên"),
         ("CUSTOMER", "Khách hàng"),
     ]
-    role = models.CharField(
-        max_length=20,
-        choices=role_choices,
-        default="EMPLOYEE",
-        help_text="RBAC authorization role: MANAGER (Quản lý), EMPLOYEE (Nhân viên), CUSTOMER [PROPOSAL] (Khách hàng per OQ-03, OQ-54)",
-    )
-    is_active = models.BooleanField(
-        "Trạng thái kích hoạt",
-        default=True,
-        help_text="Account activation status: TRUE (Active), FALSE (Disabled) (SRS 4.1, ADR-0004)",
-    )
-    is_staff = models.BooleanField(
-        default=False,
-        help_text="Designates whether the user can log into this admin site.",
-    )
-    is_superuser = models.BooleanField(
-        default=False,
-        help_text="Designates that this user has all permissions without explicitly assigning them.",
-    )
-    last_login = models.DateTimeField(
-        null=True,
-        blank=True,
-        help_text="Timestamp of most recent successful authentication (SRS 4.1, ADR-0004)",
-    )
-    row_version = models.IntegerField(default=1)
-    created_at = models.DateTimeField(auto_now_add=True)
-    updated_at = models.DateTimeField(auto_now=True)
-    deleted_at = models.DateTimeField(null=True, blank=True)
-    deleted_by = models.ForeignKey(
-        "self",
-        on_delete=models.PROTECT,
-        null=True,
-        blank=True,
-        related_name="deleted_accounts",
-    )
 
-    # Override groups and user_permissions to avoid clashes with auth.User
-    groups: models.ManyToManyField[Group, Account] = models.ManyToManyField(  # type: ignore[assignment]
-        "auth.Group",
-        verbose_name="groups",
-        blank=True,
-        help_text="The groups this user belongs to. A user will get all permissions granted to each of their groups.",
-        related_name="account_set",
-        related_query_name="account",
-    )
-    user_permissions: models.ManyToManyField[Permission, Account] = (
-        models.ManyToManyField(  # type: ignore[assignment]
-            "auth.Permission",
-            verbose_name="user permissions",
-            blank=True,
-            help_text="Specific permissions for this user.",
-            related_name="account_set",
-            related_query_name="account",
-        )
-    )
+    id = models.BigAutoField(primary_key=True)
+    email = models.CharField(max_length=100, unique=True, null=True, blank=True)
+    phone = models.CharField(max_length=15, null=True, blank=True)
+    password = models.CharField(max_length=255, db_column="password_hash")
+    role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="EMPLOYEE")
+    is_active = models.BooleanField(default=True)
+    last_login = models.DateTimeField(null=True, blank=True, db_column="last_login_at")
+    row_version = models.IntegerField(default=1, editable=False)
 
-    objects = AccountManager()
+    objects = AccountManager()  # type: ignore[misc]
+    all_objects = SoftDeleteQuerySet.as_manager()  # type: ignore[misc]
 
-    USERNAME_FIELD = "username"
+    USERNAME_FIELD = "email"
     REQUIRED_FIELDS = []
 
     class Meta:
+        managed = False
         db_table = "account"
-        verbose_name = "Tài khoản"
-        verbose_name_plural = "Tài khoản"
-        indexes = [
-            models.Index(
-                fields=["username"],
-                name="uq_account_username_active",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-            models.Index(
-                fields=["role"],
-                name="idx_account_role",
-                condition=models.Q(deleted_at__isnull=True),
-            ),
-        ]
 
     def __str__(self):
-        return self.username
+        return self.email or self.phone or f"Account #{self.id}"
 
-    def clean(self):
-        # Ensure username doesn't contain special characters
-        if self.username and not self.username_validator.regex.search(self.username):
-            from django.core.exceptions import ValidationError
+    @property
+    def is_staff(self):
+        return self.role == "MANAGER"
 
-            raise ValidationError(
-                {"username": "Tên đăng nhập không chứa ký tự đặc biệt"}
-            )
+    @property
+    def is_superuser(self):
+        return self.role == "MANAGER"
 
-    def save(self, *args, **kwargs):
-        self.clean()
-        super().save(*args, **kwargs)
+    def has_perm(self, perm, obj=None):
+        return self.role == "MANAGER"
+
+    def has_module_perms(self, app_label):
+        return self.role == "MANAGER"
 
 
 class PersistentLoginToken(models.Model):
+    """
+    Token ghi nhớ đăng nhập (Remember-Me) theo chuẩn OWASP (ADR-0004 & TL-36).
+    Cho phép xóa cứng (plain delete) để hỗ trợ xoay vòng và thu hồi token.
+    """
+
     id = models.BigAutoField(primary_key=True)
-    account = models.ForeignKey(
-        Account, on_delete=models.PROTECT, related_name="persistent_tokens"
-    )
     series = models.CharField(max_length=64, unique=True)
     token_hash = models.CharField(max_length=255)
-    ip_address = models.GenericIPAddressField(null=True, blank=True)
-    user_agent = models.TextField(null=True, blank=True)
+    account = models.ForeignKey(
+        Account,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        db_column="account_id",
+        related_name="persistent_tokens",
+    )
+    ip_address = models.CharField(max_length=45, null=True, blank=True)
+    user_agent = models.CharField(max_length=255, null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
+    last_used_at = models.DateTimeField(default=timezone.now)
     expires_at = models.DateTimeField()
-    created_at = models.DateTimeField(auto_now_add=True)
-    last_used_at = models.DateTimeField(auto_now=True)
 
     class Meta:
+        managed = False
         db_table = "persistent_login_token"
-        verbose_name = "Token ghi nhớ đăng nhập"
-        verbose_name_plural = "Tokens ghi nhớ đăng nhập"
-        indexes = [
-            models.Index(fields=["account"], name="idx_persistent_token_account"),
-            models.Index(fields=["expires_at"], name="idx_persistent_token_expires"),
-        ]
 
     def __str__(self):
-        return f"{self.account.username} - {self.series}"
+        return f"Token series {self.series} for Account #{self.account_id}"
 
 
 class PasswordResetToken(models.Model):
+    """
+    Token đặt lại mật khẩu một lần (ADR-0004 & TL-36).
+    Cho phép xóa cứng (plain delete).
+    """
+
     id = models.BigAutoField(primary_key=True)
     account = models.ForeignKey(
-        Account, on_delete=models.PROTECT, related_name="password_reset_tokens"
+        Account,
+        on_delete=models.DO_NOTHING,
+        db_constraint=False,
+        db_column="account_id",
+        related_name="password_reset_tokens",
     )
-    token_hash = models.CharField(max_length=255, unique=True)
+    token_hash = models.CharField(max_length=255)
     expires_at = models.DateTimeField()
-    is_used = models.BooleanField(default=False)
     used_at = models.DateTimeField(null=True, blank=True)
-    created_at = models.DateTimeField(auto_now_add=True)
+    requested_ip = models.CharField(max_length=45, null=True, blank=True)
+    created_at = models.DateTimeField(default=timezone.now, editable=False)
 
     class Meta:
+        managed = False
         db_table = "password_reset_token"
-        verbose_name = "Token đặt lại mật khẩu"
-        verbose_name_plural = "Tokens đặt lại mật khẩu"
-        indexes = [
-            models.Index(fields=["account"], name="idx_password_reset_account"),
-        ]
 
     def __str__(self):
-        return f"{self.account.username} - reset token"
+        return f"ResetToken #{self.id} for Account #{self.account_id}"

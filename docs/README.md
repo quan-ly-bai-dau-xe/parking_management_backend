@@ -1,21 +1,19 @@
 # Documentation Index — Car Parking Lot Management System Backend
 
-This directory contains the verified requirements specifications, Architecture Decision Records (ADRs), and API usage guides for `parking_management_backend`.
-
-## 0. API Reference & Usage
-
-- [`api-endpoints.md`](api-endpoints.md): Current API inventory, request/response examples, and instructions for running the local server, opening Swagger UI at `/api/docs/`, trying endpoints, and retrieving the OpenAPI schema. The guide distinguishes implemented endpoints from modules whose routes are still empty.
+This directory contains the verified requirements specifications and Architecture Decision Records (ADRs) for `parking_management_backend`.
 
 ## 1. Requirements Specifications (`docs/requirements/`)
 
-The single source of truth for functional and non-functional requirements extracted and verified from the SRS:
+Requirements specifications under the Frontend-First (`FE-First`) hierarchy, where the Frontend design ([`06-frontend-srs-db-alignment.md`](requirements/06-frontend-srs-db-alignment.md)) is the primary source of truth and the SRS ([`00-srs-catalog.md`](requirements/00-srs-catalog.md)) is authoritative for the SRS content and secondary to the Frontend design (`TL-19`, `TL-22`):
 
-- [`00-srs-catalog.md`](requirements/00-srs-catalog.md): Comprehensive SRS requirements catalog and field-level traceability matrix.
-- [`01-open-questions.md`](requirements/01-open-questions.md): Prioritized open questions (OQ-01 to OQ-51) and proposed default assumptions.
+- [`00-srs-catalog.md`](requirements/00-srs-catalog.md): Authoritative catalog of the SRS v4.1 content (secondary to the Frontend design).
+- [`01-decision-log.md`](requirements/01-decision-log.md): Compact decision log (`OQ-01` to `OQ-84`) recording decided outcomes and deferrals (`TL-22`).
 - [`02-scope-additions-from-plan.md`](requirements/02-scope-additions-from-plan.md): Scope additions verified from project plan and wireframes.
 - [`03-delete-rules-catalog.md`](requirements/03-delete-rules-catalog.md): Complete entity deletion governance, immutability, and dependency guard matrix.
 - [`04-dod-and-quality-check.md`](requirements/04-dod-and-quality-check.md): Definition of Done (DoD) criteria and quality verification gates.
 - [`05-proposed-messages.md`](requirements/05-proposed-messages.md): Canonical error, warning, and confirmation message inventory.
+- [`06-frontend-srs-db-alignment.md`](requirements/06-frontend-srs-db-alignment.md): Frontend-first specification, Team Lead decisions (`TL-01`–`TL-47`), and Schema v2 alignment record.
+- [`07-fe-srs-traceability.md`](requirements/07-fe-srs-traceability.md): Bidirectional Frontend (11 UI screens) and SRS v4.1 requirements traceability matrix and `TL-28` SQL proof queries.
 
 ## 2. Architecture Decision Records (`docs/adr/`)
 
@@ -26,6 +24,7 @@ Formal architectural decisions governing backend technology, security, and data 
 - [`0003-data-deletion-soft-delete-protect-and-audit.md`](adr/0003-data-deletion-soft-delete-protect-and-audit.md): Soft delete architecture, `models.PROTECT`, service-layer guards, and audit trail.
 - [`0004-authentication-session-and-remember-token.md`](adr/0004-authentication-session-and-remember-token.md): Session authentication with CSRF for SPA and persistent remember token design.
 - [`0005-local-docker-compose-for-postgresql.md`](adr/0005-local-docker-compose-for-postgresql.md): Local PostgreSQL 18.6 container environment and volume mount specification (`/var/lib/postgresql`).
+- [`0006-django-skeleton-v2-schema-authority.md`](adr/0006-django-skeleton-v2-schema-authority.md): PostgreSQL Schema v2 authority, unmanaged Django models (`managed = False`), `RunSQL` initial migration, and 3-tier API foundation.
 
 ## 3. Database Catalog & Physical Schema (`db/`)
 
@@ -33,6 +32,12 @@ Physical PostgreSQL 18.6 schema definitions, seed catalog, and execution guides:
 
 - [`00-README.md`](../db/00-README.md): Database architecture guide, entity directory, execution instructions, and design decisions.
 - [`01-schema.sql`](../db/01-schema.sql): Canonical PostgreSQL 18.6 DDL script with surrogate identity keys, natural business codes, btree_gist exclusion constraints, soft-delete partial indexes, and statistical views.
-- [`02-seed.sql`](../db/02-seed.sql): Production-safe lookup and reference seed data for positions, vehicle types, ticket types, and administrative boundaries.
-- [`03-erd.puml`](../db/03-erd.puml): PlantUML enterprise Entity-Relationship Diagram (ERD) source with Crow's Foot notation across 19 tables and 4 analytical views.
-- [`04-erd.png`](../db/04-erd.png): High-resolution rendered ERD diagram (3838 x 3194 px, >= 3000px width) covering full PostgreSQL 18.6 schema.
+- [`02-seed.sql`](../db/02-seed.sql): Idempotent two-part seed script containing Part 1 reference lookup catalogs (`CAR`/`EV` car-only vehicle types, positions, ticket types, administrative units, parking lot) and Part 2 removable synthetic operational sample data.
+- [`03-erd.asta`](../db/03-erd.asta): Native Astah UML 12.0.0 Entity-Relationship Diagram (ERD) model across `28` tables and `8` analytical views.
+- [`04-erd.png`](../db/04-erd.png): High-resolution rendered Master ERD overview (`4486 x 1997 px`, `400` DPI) accompanied by module diagrams [`05-erd-account-staff.png`](../db/05-erd-account-staff.png)–[`09-erd-reference-views.png`](../db/09-erd-reference-views.png).
+
+## 4. Developer & Integration Guides (`docs/guides/`)
+
+Integration and development guides for client applications:
+
+- [`01-frontend-api-guide.md`](guides/01-frontend-api-guide.md): Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
