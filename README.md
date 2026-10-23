@@ -27,7 +27,7 @@ To align the skeleton with the finalized PostgreSQL 18.6 Schema v2 (`db/01-schem
 
 Per Team Lead decision **TL-48**, this branch provides only the skeleton foundation (unmanaged models, soft-delete base layer, health check, OpenAPI/Swagger, quality gates, and CI workflow). The following features are intentionally excluded and will be implemented by the assigned team members:
 
-- **Authentication & Session Management**: Login by email or phone (`TL-01`) with the persistent "Remember-Me" token rotation of [ADR-0004](docs/adr/0004-authentication-session-and-remember-token.md), logout, and current user (`/api/auth/me/`).
+- **Authentication & Session Management**: *(Delivered in Round 43 via TL-52 & ADR-0004)* Login by email or phone (`TL-01`) with Argon2 password hashing, persistent "Remember-Me" token rotation with 30s grace window (`OQ-87`), dual-key brute-force rate limiting (`PROP-4.1-P01`), CSRF handshake, logout, and current user profile (`/api/v1/auth/*`).
 - **Lookup Reference Endpoints**: Administrative divisions (provinces, districts, wards), positions, vehicle types, and ticket types (`/api/lookups/*`).
 - **Domain Business Modules**: Full CRUD and business workflows across all modules (`customers`, `employees`, `vehicles`, `tickets`, `parking`, `reports`, `content`, `audit`).
 
@@ -243,13 +243,70 @@ Access the interactive API documentation and health endpoints:
 - **ReDoc**: [http://127.0.0.1:8000/api/redoc/](http://127.0.0.1:8000/api/redoc/)
 - **OpenAPI 3.0 Schema**: [http://127.0.0.1:8000/api/schema/](http://127.0.0.1:8000/api/schema/)
 - **System Health Check**: [http://127.0.0.1:8000/api/health/](http://127.0.0.1:8000/api/health/)
+- **Frontend API Integration Guide**: [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md)
 
-#### Session Authentication & CSRF Handling
+#### 3.8.1 Authentication & Session Architecture (TL-52, ADR-0004)
 
-The backend implements `SessionAuthentication` per ADR-0004. For all unsafe state-changing requests (`POST`, `PUT`, `PATCH`, `DELETE`):
+The backend provides stateful session authentication with OWASP persistent login token rotation and Argon2 password hashing under `/api/v1/auth/`:
 
-1. The client must supply an active `sessionid` cookie.
-2. The client must include the **`X-CSRFToken`** header matching the value of the `csrftoken` cookie.
+| Endpoint | Method | Access | Description & Request/Response Summary |
+|---|:---:|:---:|---|
+| `/api/v1/auth/csrf/` | `GET` | Public (`AllowAny`) | Bootstraps the double-submit CSRF cookie (`csrftoken`, `SameSite=Lax`, `HttpOnly=False`) required for SPA mutation handshakes. Returns `{"detail": "Khởi tạo cookie CSRF thành công."}` per catalog `PROP-4.1-P02`. |
+| `/api/v1/auth/login/` | `POST` | Public (`AllowAny`) | Authenticates via case-insensitive `email` (using `lower(email)` partial index) or normalized `phone` (`^[0-9]{9,15}$`) and `password`. Mandatory CSRF token enforcement via `X-CSRFToken` header. Issues a browser-session `sessionid` cookie (no `Max-Age` / `Expires`, bounded by `SESSION_COOKIE_AGE=43200` on the server). Supports optional `remember: true` issuing a persistent cookie (`parking_remember_token`, default 30 days via `REMEMBER_TOKEN_LIFETIME_DAYS`). Protected by atomic reserve-then-verify rate limiting. |
+| `/api/v1/auth/logout/` | `POST` | Authenticated / Public | Flushes the Django session, revokes the presented remember-me token series via plain `DELETE` (`TL-36`), and sets clearing expiration headers for `sessionid` and `parking_remember_token` cookies. Mandatory CSRF token enforcement. Returns `{"detail": "Đăng xuất thành công."}` per catalog `PROP-4.1-P03`. |
+| `/api/v1/auth/me/` | `GET` | `IsAuthenticated` | Returns authenticated account profile `{"id": ..., "email": "...", "phone": "...", "role": "..."}`. Unauthenticated requests without session automatically authenticate if a valid `parking_remember_token` cookie is present; otherwise returns the standard JSON error envelope (`MSG-4.1-M02`). |
+
+#### 3.8.2 Security Baseline & Password Hashing (Argon2)
+
+- **Argon2 Primary Hasher**: Configured as the primary password hasher in `config/settings/base.py` via Django's `Argon2PasswordHasher` backed by `argon2-cffi` (`m=102400, t=2, p=8`), with `PBKDF2PasswordHasher` fallback. Fast hashers (`PBKDF2PasswordHasher`, `PBKDF2SHA1PasswordHasher`, `Argon2PasswordHasher`) are configured exclusively in `config/settings/test.py` to preserve test runner velocity.
+- **Anti-Timing Defense**: Non-existent accounts execute a module-level pre-computed dummy password hash check, eliminating CPU timing side-channels between valid and invalid identifiers.
+- **Persistent Token Rotation Grace Window (OQ-87)**: Mitigates SPA parallel request race conditions at boot. Rotation state is stored directly in PostgreSQL via a composite hash string `f"{current_hash}:{previous_hash}"` in `persistent_login_token.token_hash VARCHAR(255)`. Requests arriving within the grace window (`REMEMBER_ROTATION_GRACE_SECONDS`, default 30s) skip rotation or accept the previous hash, preventing false-positive session revocations. Transient database errors (`django.db.Error`) preserve existing tokens and cookies without revoking the session.
+- **0-Query Middleware Invariant**: `PersistentRememberMeMiddleware` checks `request.COOKIES` in memory before evaluating `request.user`, guaranteeing zero SQL queries (`assertNumQueries(0)`) on standard traffic without remember cookies.
+- **Atomic Reserve-then-Verify Login Rate Limiting (`LoginAttemptLimiter`)**: Protects authentication endpoints against parallel brute-force attacks across three quota tiers: (1) normalized identifier and client IP pair (`AUTH_THROTTLE_PAIR_LIMIT`, default 5 attempts / 15m), (2) per-identifier ceiling (`AUTH_THROTTLE_IDENTIFIER_LIMIT`, default 20 attempts / 15m), and (3) per-IP failure ceiling (`AUTH_THROTTLE_IP_LIMIT`, default 30 attempts / 15m). Window is configured via `AUTH_THROTTLE_WINDOW_SECONDS` (default 900s). Counters track in-flight and failed attempts only; successful logins release their reservation, preventing false-positive lockouts on shared corporate networks. Client IP extraction respects DRF `NUM_PROXIES` semantics (default 0; behind a reverse proxy the operator MUST configure `NUM_PROXIES` or all clients share a single IP bucket, marked `UNVERIFIED-for-production`). When using the default in-memory `LocMemCache` in a multi-worker environment (e.g. 4 Gunicorn workers), cache counters are process-local, allowing up to 4x total attempts across distinct workers before all buckets saturate. A shared distributed cache such as Redis (`django-redis`) is recommended for production environments (marked `UNVERIFIED-for-production`; requires ADR and Owner approval).
+
+#### 3.8.3 Authentication Management Commands
+
+##### 1. Set Account Password (`set_account_password`)
+
+Safely sets or updates the Argon2 password for any active `Account` record. Passwords are never accepted via command-line arguments to prevent shell history leaks:
+
+```bash
+# Option A: Set via environment variable (ideal for automated setup or scripts):
+ACCOUNT_PASSWORD="StrongPassword123!" python manage.py set_account_password --identifier hoang.dinh.khang@example.com
+
+# Or inside Docker web container:
+docker compose exec -e ACCOUNT_PASSWORD="StrongPassword123!" web python manage.py set_account_password --identifier hoang.dinh.khang@example.com
+
+# Option B: Set via interactive hidden prompt (no echo to terminal):
+python manage.py set_account_password --identifier 0880721788
+```
+
+##### 2. Purge Expired Login Tokens (`purge_expired_login_tokens`)
+
+Performs maintenance cleanup of expired tokens from the `persistent_login_token` table (`TL-36` plain DELETE):
+
+```bash
+# 1. Dry-run inspection (default, counts expired tokens without deleting):
+python manage.py purge_expired_login_tokens
+
+# Or inside Docker web container:
+docker compose exec web python manage.py purge_expired_login_tokens
+
+# 2. Execute actual deletion of expired tokens:
+python manage.py purge_expired_login_tokens --no-dry-run
+
+# Or inside Docker web container:
+docker compose exec web python manage.py purge_expired_login_tokens --no-dry-run
+```
+
+#### 3.8.4 Session Authentication & CSRF Handling
+
+The backend implements `SessionAuthentication` per ADR-0004. In addition to standard protected endpoints, mutating authentication endpoints (`POST /api/v1/auth/login/` and `POST /api/v1/auth/logout/`) enforce CSRF validation for both anonymous and authenticated callers via `@method_decorator(csrf_protect)`:
+
+1. The client must obtain the `csrftoken` cookie by invoking `GET /api/v1/auth/csrf/`.
+2. The client must include the **`X-CSRFToken`** header matching the cookie on mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`).
+3. If CSRF validation fails, `CSRF_FAILURE_VIEW` (`apps.accounts.views.csrf.custom_csrf_failure_view`) returns HTTP 403 Forbidden with the standard JSON error envelope (`PROP-4.1-P06`: `"Mã CSRF không hợp lệ hoặc bị thiếu."`) instead of Django's default HTML 403 page.
+4. For protected business endpoints, the client must supply an active `sessionid` cookie along with the matching `X-CSRFToken` header.
 
 #### Minting an Authenticated Session for Swagger "Try it out"
 
@@ -595,6 +652,8 @@ To maintain production stability and prevent untested code merges, the **Reposit
 
 ## 5. Documentation & AI Operating System
 
+- **Developer & Integration Guides**:
+  - [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md) — Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
 - **Requirements & Specifications**:
   - [`docs/requirements/06-frontend-srs-db-alignment.md`](docs/requirements/06-frontend-srs-db-alignment.md) — Primary FE-first decisions (`TL-01`–`TL-51`).
   - [`docs/requirements/07-fe-srs-traceability.md`](docs/requirements/07-fe-srs-traceability.md) — Bidirectional traceability matrix.

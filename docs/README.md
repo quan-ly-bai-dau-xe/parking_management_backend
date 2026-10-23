@@ -35,3 +35,9 @@ Physical PostgreSQL 18.6 schema definitions, seed catalog, and execution guides:
 - [`02-seed.sql`](../db/02-seed.sql): Idempotent two-part seed script containing Part 1 reference lookup catalogs (`CAR`/`EV` car-only vehicle types, positions, ticket types, administrative units, parking lot) and Part 2 removable synthetic operational sample data.
 - [`03-erd.asta`](../db/03-erd.asta): Native Astah UML 12.0.0 Entity-Relationship Diagram (ERD) model across `28` tables and `8` analytical views.
 - [`04-erd.png`](../db/04-erd.png): High-resolution rendered Master ERD overview (`4486 x 1997 px`, `400` DPI) accompanied by module diagrams [`05-erd-account-staff.png`](../db/05-erd-account-staff.png)–[`09-erd-reference-views.png`](../db/09-erd-reference-views.png).
+
+## 4. Developer & Integration Guides (`docs/guides/`)
+
+Integration and development guides for client applications:
+
+- [`01-frontend-api-guide.md`](guides/01-frontend-api-guide.md): Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
