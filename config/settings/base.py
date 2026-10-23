@@ -365,6 +365,16 @@ SPECTACULAR_SETTINGS = {
     "TITLE": "Parking Management API",
     "DESCRIPTION": (
         "Backend REST API for Car Parking Lot Management System per SRS 4.5.1 and ADR-0004.\n\n"
+        "### Hướng dẫn xác thực & CSRF Token trong Swagger UI\n"
+        "Trình duyệt không cho phép Swagger UI thiết lập thủ công cookie `sessionid` (HttpOnly), "
+        "do đó phiên làm việc được thiết lập tự động bằng cách gọi `POST /api/v1/auth/login/` ngay trên "
+        "giao diện Swagger UI (Swagger UI đã kích hoạt `withCredentials: True` để tự động gửi kèm cookie). "
+        "Chỉ cần dán mã CSRF token vào hộp thoại **Authorize**:\n"
+        "1. Gọi `GET /api/v1/auth/csrf/` để nhận và thiết lập cookie `csrftoken`.\n"
+        "2. Sao chép giá trị cookie `csrftoken` từ phản hồi hoặc trình duyệt.\n"
+        "3. Nhấn nút **Authorize** ở góc trên Swagger UI, nhập token vào trường `csrfAuth` (`X-CSRFToken`) rồi bấm Authorize.\n"
+        "4. Gọi `POST /api/v1/auth/login/` với thông tin đăng nhập để xác thực và tự động nhận cookie `sessionid`.\n"
+        "5. Thực hiện các API nghiệp vụ: các thao tác đọc (GET) chỉ cần cookie phiên; các thao tác thay đổi dữ liệu (POST, PUT, PATCH, DELETE) yêu cầu đồng thời cookie phiên và header `X-CSRFToken`.\n\n"
         "### Authentication & CSRF Protection\n"
         "- This API uses **SessionAuthentication** (`sessionid` cookie).\n"
         "- All unsafe HTTP methods (`POST`, `PUT`, `PATCH`, `DELETE`) require the **`X-CSRFToken`** header "
@@ -384,6 +394,26 @@ SPECTACULAR_SETTINGS = {
     "SWAGGER_UI_DIST": "SIDECAR",
     "SWAGGER_UI_FAVICON_HREF": "SIDECAR",
     "REDOC_DIST": "SIDECAR",
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "csrfAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "X-CSRFToken",
+                "description": (
+                    "Mã CSRF token lấy từ cookie `csrftoken` (sau khi gọi `GET /api/v1/auth/csrf/`). "
+                    "Bắt buộc truyền trong header cho các phương thức thay đổi dữ liệu (POST, PUT, PATCH, DELETE)."
+                ),
+            }
+        }
+    },
+    "SECURITY": [
+        {"cookieAuth": [], "csrfAuth": []},
+    ],
+    "POSTPROCESSING_HOOKS": [
+        "drf_spectacular.hooks.postprocess_schema_enums",
+        "apps.core.openapi.postprocess_schema_descriptions",
+    ],
     "ENUM_NAME_OVERRIDES": {
         "RecognitionSourceEnum": "apps.parking.models.VehicleEntryExitLog.RECOGNITION_SOURCE_CHOICES",
         "VehicleEntryExitReviewStatusEnum": "apps.parking.models.VehicleEntryExitLog.REVIEW_STATUS_CHOICES",
