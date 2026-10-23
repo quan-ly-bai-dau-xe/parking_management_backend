@@ -170,5 +170,5 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 ## 3. Governance and Implementation Protocol
 
 1. Backend developers and AI coding agents **MUST NOT** modify the strings above without authorization.
-2. In API serializers, exception handlers, and PostgreSQL triggers (`fn_guard_soft_delete_and_restore`), reference centralized constants (e.g. `apps.common.messages.PROPOSAL_MESSAGES`), explicitly marking `[PROPOSAL]` and referencing `PROP-` IDs.
+2. In API serializers, exception handlers, and PostgreSQL triggers (`fn_guard_soft_delete_and_restore`), reference centralized constants (e.g. `apps.core.messages.PROPOSAL_MESSAGES`), explicitly marking `[PROPOSAL]` and referencing `PROP-` IDs.
 3. All proposed message strings in this catalog are decided by the Team Lead (`TL-19`, `TL-22`, `TL-25`) and linked to [`docs/requirements/01-decision-log.md`](01-decision-log.md) and [`docs/requirements/06-frontend-srs-db-alignment.md`](06-frontend-srs-db-alignment.md).

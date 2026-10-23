@@ -243,6 +243,7 @@ Access the interactive API documentation and health endpoints:
 - **ReDoc**: [http://127.0.0.1:8000/api/redoc/](http://127.0.0.1:8000/api/redoc/)
 - **OpenAPI 3.0 Schema**: [http://127.0.0.1:8000/api/schema/](http://127.0.0.1:8000/api/schema/)
 - **System Health Check**: [http://127.0.0.1:8000/api/health/](http://127.0.0.1:8000/api/health/)
+- **Frontend API Integration Guide**: [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md)
 
 #### 3.8.1 Authentication & Session Architecture (TL-52, ADR-0004)
 
@@ -304,7 +305,7 @@ The backend implements `SessionAuthentication` per ADR-0004. In addition to stan
 
 1. The client must obtain the `csrftoken` cookie by invoking `GET /api/v1/auth/csrf/`.
 2. The client must include the **`X-CSRFToken`** header matching the cookie on mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`).
-3. If CSRF validation fails, `CSRF_FAILURE_VIEW` (`apps.core.exceptions.custom_csrf_failure_view`) returns HTTP 403 Forbidden with the standard JSON error envelope (`PROP-4.1-P06`: `"Mã CSRF không hợp lệ hoặc bị thiếu."`) instead of Django's default HTML 403 page.
+3. If CSRF validation fails, `CSRF_FAILURE_VIEW` (`apps.accounts.views.csrf.custom_csrf_failure_view`) returns HTTP 403 Forbidden with the standard JSON error envelope (`PROP-4.1-P06`: `"Mã CSRF không hợp lệ hoặc bị thiếu."`) instead of Django's default HTML 403 page.
 4. For protected business endpoints, the client must supply an active `sessionid` cookie along with the matching `X-CSRFToken` header.
 
 #### Minting an Authenticated Session for Swagger "Try it out"
@@ -651,6 +652,8 @@ To maintain production stability and prevent untested code merges, the **Reposit
 
 ## 5. Documentation & AI Operating System
 
+- **Developer & Integration Guides**:
+  - [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md) — Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
 - **Requirements & Specifications**:
   - [`docs/requirements/06-frontend-srs-db-alignment.md`](docs/requirements/06-frontend-srs-db-alignment.md) — Primary FE-first decisions (`TL-01`–`TL-51`).
   - [`docs/requirements/07-fe-srs-traceability.md`](docs/requirements/07-fe-srs-traceability.md) — Bidirectional traceability matrix.

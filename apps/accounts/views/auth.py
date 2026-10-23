@@ -8,7 +8,12 @@ from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect
 from django.views.decorators.debug import sensitive_post_parameters
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import (
+    OpenApiExample,
+    OpenApiParameter,
+    OpenApiResponse,
+    extend_schema,
+)
 from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.request import Request
@@ -28,7 +33,7 @@ from apps.accounts.services.auth import (
 )
 from apps.accounts.services.throttling import LoginAttemptLimiter
 from apps.core.exceptions import BusinessAPIException
-from apps.core.messages import get_prop_message
+from apps.core.messages import ALL_MESSAGES, get_prop_message
 from apps.core.serializers.envelope import ErrorEnvelopeSerializer
 
 
@@ -49,6 +54,7 @@ class CSRFBootstrapView(APIView):
                 description="CSRF cookie đã được thiết lập thành công",
             )
         },
+        auth=[],
         tags=["Authentication"],
     )
     def get(self, request: Request) -> Response:
@@ -81,6 +87,15 @@ class LoginView(APIView):
         "Khi đăng nhập thành công, khởi tạo session cookie (HttpOnly, SameSite=Lax) "
         "và optional remember token bền 30 ngày nếu chọn ghi nhớ đăng nhập.",
         request=LoginSerializer,
+        parameters=[
+            OpenApiParameter(
+                name="Retry-After",
+                type=int,
+                location=OpenApiParameter.HEADER,
+                description="Số giây cần chờ trước khi thử đăng nhập lại khi bị giới hạn tần suất",
+                response=[429],
+            ),
+        ],
         responses={
             200: OpenApiResponse(
                 response=UserResponseSerializer,
@@ -94,11 +109,28 @@ class LoginView(APIView):
                 response=ErrorEnvelopeSerializer,
                 description="Thông tin đăng nhập không hợp lệ hoặc tài khoản bị khóa (MSG-4.1-M02)",
             ),
+            403: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Mã CSRF không hợp lệ hoặc bị thiếu (PROP-4.1-P06)",
+                examples=[
+                    OpenApiExample(
+                        "Lỗi CSRF Token (PROP-4.1-P06)",
+                        value={
+                            "code": "PROP-4.1-P06",
+                            "message": ALL_MESSAGES["PROP-4.1-P06"],
+                            "details": {},
+                        },
+                        response_only=True,
+                        status_codes=["403"],
+                    )
+                ],
+            ),
             429: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
                 description="Quá nhiều lần đăng nhập thất bại (PROP-4.1-P01)",
             ),
         },
+        auth=[{"csrfAuth": []}],  # type: ignore[list-item]
         tags=["Authentication"],
     )
     def post(self, request: Request) -> Response:
@@ -151,8 +183,25 @@ class LogoutView(APIView):
             200: OpenApiResponse(
                 response=DetailResponseSerializer,
                 description="Đăng xuất thành công",
-            )
+            ),
+            403: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Mã CSRF không hợp lệ hoặc bị thiếu (PROP-4.1-P06)",
+                examples=[
+                    OpenApiExample(
+                        "Lỗi CSRF Token (PROP-4.1-P06)",
+                        value={
+                            "code": "PROP-4.1-P06",
+                            "message": ALL_MESSAGES["PROP-4.1-P06"],
+                            "details": {},
+                        },
+                        response_only=True,
+                        status_codes=["403"],
+                    )
+                ],
+            ),
         },
+        auth=[{"csrfAuth": []}],  # type: ignore[list-item]
         tags=["Authentication"],
     )
     def post(self, request: Request) -> Response:
@@ -185,6 +234,7 @@ class CurrentUserView(APIView):
                 description="Yêu cầu chưa được xác thực (MSG-4.1-M02)",
             ),
         },
+        auth=[{"cookieAuth": []}],  # type: ignore[list-item]
         tags=["Authentication"],
     )
     def get(self, request: Request) -> Response:
