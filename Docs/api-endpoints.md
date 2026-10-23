@@ -16,21 +16,21 @@ Tài liệu này mô tả các route đang được khai báo trong `config/urls
 
 ### Đăng nhập
 
-| Thuộc tính | Giá trị |
-|---|---|
-| Method | `POST` |
-| URL | `/api/v1/login/` |
-| Xác thực | Không yêu cầu đăng nhập trước (`AllowAny`) |
-| Content-Type | `application/json` |
-| CSRF | View được gắn `ensure_csrf_cookie`; với client dùng session/CSRF, lấy và gửi CSRF token theo cấu hình Django. |
+| Thuộc tính | Giá trị                                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------- |
+| Method       | `POST`                                                                                                                   |
+| URL          | `/api/v1/login/`                                                                                                         |
+| Xác thực   | Không yêu cầu đăng nhập trước (`AllowAny`)                                                                       |
+| Content-Type | `application/json`                                                                                                       |
+| CSRF         | View được gắn `ensure_csrf_cookie`; với client dùng session/CSRF, lấy và gửi CSRF token theo cấu hình Django. |
 
 **Request body**
 
-| Trường | Kiểu | Bắt buộc | Mô tả |
-|---|---|---:|---|
-| `username` | string | Có | Tên đăng nhập; được trim khoảng trắng ở đầu và cuối. Chỉ chấp nhận chữ cái ASCII, chữ số, `_`, `.`, `-`. |
-| `password` | string | Có | Mật khẩu. |
-| `remember_me` | boolean | Không | Mặc định `false`. Khi `true`, tạo persistent-login-token record có hạn dùng 30 ngày. Token bí mật không được trả trong response. |
+| Trường        | Kiểu   | Bắt buộc | Mô tả                                                                                                                                             |
+| --------------- | ------- | ---------: | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `username`    | string  |        Có | Tên đăng nhập; được trim khoảng trắng ở đầu và cuối. Chỉ chấp nhận chữ cái ASCII, chữ số, `_`, `.`, `-`.                 |
+| `password`    | string  |        Có | Mật khẩu.                                                                                                                                         |
+| `remember_me` | boolean |     Không | Mặc định `false`. Khi `true`, tạo persistent-login-token record có hạn dùng 30 ngày. Token bí mật không được trả trong response. |
 
 **Ví dụ request**
 
@@ -66,13 +66,13 @@ Django session được thiết lập ở response; client cần lưu/gửi cook
 
 **Các lỗi được xử lý trong view**
 
-| HTTP | `error.code` | Điều kiện | `error.message` |
-|---:|---|---|---|
-| `400` | `VALIDATION_ERROR` | Thiếu username hoặc password | `Xin nhập đầy đủ Tên đăng nhập và Mật khẩu` |
-| `400` | `VALIDATION_ERROR` | Username chứa ký tự ngoài tập cho phép | `Tên đăng nhập không chứa ký tự đặc biệt` |
-| `401` | `INVALID_CREDENTIALS` | Sai username hoặc password | `Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu` |
-| `403` | `ACCOUNT_DISABLED` | Tài khoản không hoạt động | `Tài khoản đã được vô hiệu hóa` |
-| `500` | `SERVER_ERROR` | Lỗi không xử lý khác trong view | `Lỗi hệ thống` |
+|    HTTP | `error.code`          | Điều kiện                                 | `error.message`                                               |
+| ------: | ----------------------- | -------------------------------------------- | --------------------------------------------------------------- |
+| `400` | `VALIDATION_ERROR`    | Thiếu username hoặc password               | `Xin nhập đầy đủ Tên đăng nhập và Mật khẩu`       |
+| `400` | `VALIDATION_ERROR`    | Username chứa ký tự ngoài tập cho phép | `Tên đăng nhập không chứa ký tự đặc biệt`          |
+| `401` | `INVALID_CREDENTIALS` | Sai username hoặc password                  | `Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu` |
+| `403` | `ACCOUNT_DISABLED`    | Tài khoản không hoạt động              | `Tài khoản đã được vô hiệu hóa`                     |
+| `500` | `SERVER_ERROR`        | Lỗi không xử lý khác trong view         | `Lỗi hệ thống`                                             |
 
 Các lỗi trên có cấu trúc chung:
 
@@ -96,11 +96,11 @@ Các lỗi trên có cấu trúc chung:
 
 ## Route tài liệu API
 
-| Method | URL | Mô tả |
-|---|---|---|
-| `GET` | `/api/schema/` | Sinh OpenAPI schema qua drf-spectacular. |
-| `GET` | `/api/docs/` | Swagger UI, tải schema từ `/api/schema/`. |
-| `GET` | `/api/redoc/` | ReDoc, tải schema từ `/api/schema/`. |
+| Method  | URL              | Mô tả                                       |
+| ------- | ---------------- | --------------------------------------------- |
+| `GET` | `/api/schema/` | Sinh OpenAPI schema qua drf-spectacular.      |
+| `GET` | `/api/docs/`   | Swagger UI, tải schema từ `/api/schema/`. |
+| `GET` | `/api/redoc/`  | ReDoc, tải schema từ `/api/schema/`.      |
 
 Đây là route tài liệu/schema, không phải endpoint nghiệp vụ. Nội dung schema chỉ phản ánh những route và metadata mà ứng dụng hiện khai báo.
 
@@ -143,13 +143,13 @@ python manage.py migrate
 python manage.py runserver
 ```
 
-### 2. Mở giao diện API
+### 2. Mở giao diện API từ manage.py runserver
 
 Khi server chạy local tại cổng mặc định, mở:
 
-- Swagger UI: <http://127.0.0.1:8000/api/docs/>
-- OpenAPI schema dạng JSON: <http://127.0.0.1:8000/api/schema/>
-- ReDoc: <http://127.0.0.1:8000/api/redoc/>
+- Swagger UI: [http://127.0.0.1:8000/api/docs/](http://127.0.0.1:8000/api/docs/)
+- OpenAPI schema dạng JSON: [http://127.0.0.1:8000/api/schema/](http://127.0.0.1:8000/api/schema/)
+- ReDoc: [http://127.0.0.1:8000/api/redoc/](http://127.0.0.1:8000/api/redoc/)
 
 Nếu chạy server trên host/cổng khác, thay `127.0.0.1:8000` bằng host/cổng đó. Nếu không mở được trang, kiểm tra server còn chạy, cấu hình database trong `.env`, và log của lệnh `runserver`.
 
@@ -163,7 +163,8 @@ Nếu chạy server trên host/cổng khác, thay `127.0.0.1:8000` bằng host/c
 
 Hiện Swagger chỉ có thể hiển thị endpoint nghiệp vụ đã được khai báo thực tế. Các module khách hàng, nhân viên, phương tiện, vé, bãi đỗ và báo cáo chưa có route, nên chúng sẽ không xuất hiện như API có thể gọi trong Swagger.
 
-### 4. Gọi endpoint đăng nhập ngoài Swagger
+
+### 4. Gọi endpoint đăng nhập ngoài Swagger cho hệ thống
 
 Ví dụ dùng `curl` từ terminal; thay placeholder bằng tài khoản local hợp lệ. Tùy shell, có thể cần gọi `curl.exe` trên Windows PowerShell.
 
@@ -185,22 +186,22 @@ Schema được tạo từ URL và metadata đang có trong ứng dụng; tải 
 
 ## Route ngoài API nghiệp vụ
 
-| Method | URL | Mô tả |
-|---|---|---|
+| Method        | URL         | Mô tả                                            |
+| ------------- | ----------- | -------------------------------------------------- |
 | Nhiều method | `/admin/` | Django Admin; không thuộc REST API `/api/v1/`. |
 
 ## Các module chưa có endpoint được nối
 
 Các URL configuration dưới đây hiện để trống hoặc chỉ có comment giữ chỗ; không nên coi đây là API đã triển khai:
 
-| Module | URL configuration |
-|---|---|
-| Khách hàng | `apps/customers/urls.py` |
-| Nhân viên | `apps/employees/urls.py` |
-| Phương tiện vào/ra | `apps/vehicles/urls.py` |
-| Vé | `apps/tickets/urls.py` |
-| Bãi đỗ/vị trí | `apps/parking/urls.py` |
-| Báo cáo/thống kê | `apps/reports/urls.py` |
+| Module                 | URL configuration          |
+| ---------------------- | -------------------------- |
+| Khách hàng           | `apps/customers/urls.py` |
+| Nhân viên            | `apps/employees/urls.py` |
+| Phương tiện vào/ra | `apps/vehicles/urls.py`  |
+| Vé                    | `apps/tickets/urls.py`   |
+| Bãi đỗ/vị trí     | `apps/parking/urls.py`   |
+| Báo cáo/thống kê   | `apps/reports/urls.py`   |
 
 Các path liên quan trong danh mục yêu cầu/SRS chỉ được thêm vào tài liệu endpoint đã triển khai sau khi có URL route và view thực tế.
 
