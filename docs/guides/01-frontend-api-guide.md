@@ -1,28 +1,28 @@
-# Cẩm Nang Tích Hợp API Frontend — Parking Management Backend
+# Frontend API Integration Guide — Parking Management Backend
 
-Tài liệu kỹ thuật chính thức dành cho lập trình viên Frontend tích hợp hệ thống Quản lý Bãi đỗ xe thông minh (**Parking Management Backend**). Toàn bộ ví dụ HTTP, JSON, SQL và TypeScript trong cẩm nang đều được trích xuất nguyên văn từ các cuộc gọi thực tế trên môi trường live stack (lưu tại `.agents/round47_guide_examples.log`, với mọi giá trị bí mật được che bằng `[MASKED]`).
+Official technical documentation for Frontend developers integrating the Intelligent Parking Management System (**Parking Management Backend**). All HTTP, JSON, SQL, and TypeScript examples in this guide are extracted verbatim from live stack executions (recorded in `.agents/round47_guide_examples.log`, with all secrets masked as `[MASKED]`).
 
 ---
 
-## 1. Tổng quan Backend & Danh mục URLs
+## 1. Backend Overview & URL Directory
 
-Hệ thống backend được xây dựng trên nền tảng **Django 6.1.2**, **Django REST Framework (DRF) 3.18.3**, cơ sở dữ liệu **PostgreSQL 18.6**, máy chủ ứng dụng **Gunicorn (4 workers, 6 threads)** và công cụ tự động sinh đặc tả OpenAPI **drf-spectacular 0.30.0**.
+The backend system is built on **Django 6.1.2**, **Django REST Framework (DRF) 3.18.3**, **PostgreSQL 18.6** database, **Gunicorn (4 workers, 6 threads)** application server, and **drf-spectacular 0.30.0** for automated OpenAPI specification generation.
 
-### 1.1 Danh mục URLs tài liệu và hạ tầng
+### 1.1 Documentation and Infrastructure URLs
 
-| Đường dẫn (URL) | Mục đích | Quyền truy cập | Định dạng |
+| URL Path | Purpose | Access Permission | Format |
 |---|---|:---:|:---:|
-| `http://127.0.0.1:8000/api/docs/` | Giao diện tương tác Swagger UI | Public | HTML / JS / CSS |
-| `http://127.0.0.1:8000/api/redoc/` | Giao diện tài liệu dạng ReDoc | Public | HTML / JS |
-| `http://127.0.0.1:8000/api/schema/` | Đặc tả kỹ thuật OpenAPI 3.0 Schema | Public | YAML / JSON |
-| `http://127.0.0.1:8000/api/health/` | Health check hạ tầng (Docker, K8s, Load Balancer) | Public | JSON |
-| `http://127.0.0.1:8000/api/v1/health/` | Health check phiên bản API v1 dành cho Frontend | Public | JSON |
+| `http://127.0.0.1:8000/api/docs/` | Interactive Swagger UI | Public | HTML / JS / CSS |
+| `http://127.0.0.1:8000/api/redoc/` | ReDoc API documentation UI | Public | HTML / JS |
+| `http://127.0.0.1:8000/api/schema/` | OpenAPI 3.0 specification schema | Public | YAML / JSON |
+| `http://127.0.0.1:8000/api/health/` | Infrastructure health check (Docker, K8s, Load Balancer) | Public | JSON |
+| `http://127.0.0.1:8000/api/v1/health/` | API v1 versioned health check for Frontend | Public | JSON |
 
-> **Lưu ý về thiết kế**: Hai đường dẫn `/api/health/` và `/api/v1/health/` đều được cung cấp có chủ đích. Đường dẫn `/api/health/` phục vụ các hệ thống giám sát hạ tầng tầng mạng (Load Balancer, Reverse Proxy, Docker compose healthcheck), trong khi `/api/v1/health/` phục vụ frontend gọi thăm dò trạng thái kết nối theo tiền tố định tuyến phiên bản (`/api/v1/*`).
+> **Architecture Note**: Both `/api/health/` and `/api/v1/health/` paths are provided deliberately. The `/api/health/` path serves network-level infrastructure monitoring (Load Balancer, Reverse Proxy, Docker Compose healthcheck), while `/api/v1/health/` serves frontend connection probing under the versioned routing prefix (`/api/v1/*`).
 
-### 1.2 Phản hồi Health Check thực tế từ Live Stack
+### 1.2 Live Stack Health Check Response
 
-Cả hai endpoint health check đều trả về trạng thái hoạt động của cơ sở dữ liệu PostgreSQL và cờ sẵn sàng của mô hình AI FastALPR OCR:
+Both health check endpoints return the operational status of the PostgreSQL database and the readiness flag of the FastALPR OCR model:
 
 ```http
 GET /api/health/ HTTP/1.1
@@ -39,9 +39,9 @@ Content-Type: application/json
 }
 ```
 
-> **Lưu ý**: Trường `ocr_ready` mang giá trị `true` sau khi Gunicorn worker chạy hook `post_fork` (`warmup_ocr()`), hoặc `false` khi mô hình OCR chưa thực hiện warm-up lần đầu.
+> **Note**: The `ocr_ready` field is `true` after a Gunicorn worker runs the `post_fork` hook (`warmup_ocr()`), or `false` when the OCR models have not yet completed their initial warm-up.
 
-Trường hợp cơ sở dữ liệu mất kết nối, hệ thống trả về HTTP `503 Service Unavailable`:
+When the database is unreachable, the system returns HTTP `503 Service Unavailable`:
 
 ```json
 {
@@ -53,22 +53,22 @@ Trường hợp cơ sở dữ liệu mất kết nối, hệ thống trả về 
 
 ---
 
-## 2. Khởi động môi trường phát triển trong 1 phút
+## 2. Quick Start Development Environment in 1 Minute
 
-Toàn bộ dịch vụ Backend và Cơ sở dữ liệu được đóng gói chuẩn hóa trong `docker-compose.yml`.
+All backend services and the database are containerized in `docker-compose.yml`.
 
-### 2.1 Lệnh khởi động
+### 2.1 Startup Command
 
-Mở terminal tại thư mục gốc của dự án và thực thi lệnh:
+Open a terminal at the project root directory and run:
 
 ```bash
 docker compose up --build
 ```
 
-### 2.2 Quy trình khởi động và nhật ký kỳ vọng (Expected Startup Log)
+### 2.2 Startup Flow and Expected Startup Log
 
-1. Container `db` (`postgres:18.6-alpine`) khởi tạo và tự động kiểm tra sức khỏe qua lệnh nội bộ `pg_isready`.
-2. Sau khi `db` chuyển sang trạng thái `healthy`, container `web` khởi động, tự động thực thi di chuyển dữ liệu (`RUN_MIGRATIONS=1` tương đương `python manage.py migrate --noinput`) và khởi chạy 4 tiến trình worker Gunicorn tại địa chỉ `http://127.0.0.1:8000`:
+1. The `db` container (`postgres:18.6-alpine`) initializes and automatically performs health checks via internal `pg_isready`.
+2. Once `db` reaches `healthy` status, the `web` container starts, automatically runs database migrations (`RUN_MIGRATIONS=1` equivalent to `python manage.py migrate --noinput`), and launches 4 Gunicorn worker processes at `http://127.0.0.1:8000`:
 
 ```text
 [INFO] Starting gunicorn 25.3.0
@@ -81,49 +81,49 @@ docker compose up --build
 FastAlprPlateRecognizer (Dual-OCR Ensemble) initialized successfully.
 ```
 
-### 2.3 Nạp dữ liệu mẫu ban đầu (Seed Data)
+### 2.3 Load Initial Seed Data
 
-Để nạp đầy đủ bãi xe, tầng, cổng barrier, ô đỗ và 20 tài khoản mẫu, thực thi:
+To populate parking lots, floors, barrier gates, parking slots, and 20 sample accounts, run:
 
 ```bash
 docker compose exec web python manage.py load_sample_data --force-production
 ```
 
-Nhật ký phản hồi thực tế:
+Actual response log:
 
 ```text
-Loading seed data from: D:\GitHub\codegym\parking_management_backend\db\02-seed.sql
+Loading seed data from: /app/db/02-seed.sql
 Executing seed SQL...
 Sample seed data loaded successfully.
 ```
 
-### 2.4 Kiểm tra trạng thái sẵn sàng
+### 2.4 Verify Readiness Status
 
-Kiểm tra hệ thống đã hoạt động bình thường bằng lệnh:
+Verify that the system is functioning properly using:
 
 ```bash
 curl -i http://127.0.0.1:8000/api/health/
 ```
 
-Khi nhận được mã trạng thái `HTTP/1.1 200 OK` cùng nội dung JSON `{"status": "healthy", ...}`, hệ thống đã sẵn sàng phục vụ frontend.
+When receiving status `HTTP/1.1 200 OK` with JSON content `{"status": "healthy", ...}`, the backend is ready to serve the frontend.
 
 ---
 
-## 3. Thiết lập mật khẩu phát triển & Danh sách tài khoản mẫu
+## 3. Development Password Setup & Sample Account Directory
 
-Nhằm tuân thủ tiêu chuẩn an toàn bảo mật nghiêm ngặt, 20 tài khoản mẫu được nạp từ `db/02-seed.sql` đều mang hash mật khẩu bị khóa không thể đăng nhập trực tiếp (tiền tố `!` theo chuẩn Django). Lập trình viên bắt buộc phải tự đặt mật khẩu phát triển thông qua lệnh quản trị CLI.
+To comply with strict security standards, all 20 sample accounts loaded from `db/02-seed.sql` have unusable password hashes (Django `!` prefix). Developers must set development passwords via the management CLI command.
 
-### 3.1 Lệnh đặt mật khẩu tài khoản phát triển
+### 3.1 Command to Set Development Account Passwords
 
-Lệnh quản trị `set_account_password` nhận mật khẩu độc quyền thông qua biến môi trường `ACCOUNT_PASSWORD` (tuyệt đối không truyền mật khẩu qua cờ dòng lệnh nhằm tránh lưu vết trong lịch sử terminal):
+The `set_account_password` management command accepts passwords exclusively via the `ACCOUNT_PASSWORD` environment variable (passwords must never be passed via CLI flags to avoid terminal history leaks):
 
-- **Trên máy chủ Docker**:
+- **In Docker**:
 
   ```bash
   docker compose exec -e ACCOUNT_PASSWORD="<your-dev-password>" web python manage.py set_account_password --identifier hoang.dinh.khang@example.com
   ```
 
-- **Khi chạy trực tiếp trên máy cục bộ**:
+- **Running directly on local host**:
 
   ```bash
   # Linux / macOS / Git Bash
@@ -134,7 +134,7 @@ Lệnh quản trị `set_account_password` nhận mật khẩu độc quyền th
   python manage.py set_account_password --identifier hoang.dinh.khang@example.com
   ```
 
-Kết quả phản hồi thực tế:
+Actual CLI execution output:
 
 ```text
 $ ACCOUNT_PASSWORD=[MASKED] python manage.py set_account_password --identifier hoang.dinh.khang@example.com
@@ -145,42 +145,42 @@ $ ACCOUNT_PASSWORD=[MASKED] python manage.py set_account_password --identifier t
 Successfully updated password for account #9 (trinh.xuan.truong@example.com).
 ```
 
-### 3.2 Bảng danh sách tài khoản mẫu trong hệ thống
+### 3.2 Sample Accounts Table in the System
 
-Hệ thống phân cấp 3 vai trò người dùng chính: **MANAGER** (Quản lý), **EMPLOYEE** (Nhân viên vận hành) và **CUSTOMER** (Khách hàng).
+The system establishes three main user roles: **MANAGER**, **EMPLOYEE**, and **CUSTOMER**.
 
-| ID | Email đăng nhập | Số điện thoại | Vai trò (`role`) | Trạng thái | Mục đích sử dụng thử nghiệm |
+| ID | Login Email | Phone Number | Role (`role`) | Status | Testing Purpose |
 |:---:|---|:---:|:---:|:---:|---|
-| 1 | `hoang.dinh.khang@example.com` | `0880721788` | `MANAGER` | `Active` | Toàn quyền quản trị, ghi đè xe trong blacklist, xem báo cáo |
-| 2 | `luong.mai.phuong@example.org` | `0385211625` | `EMPLOYEE` | `Active` | Trực cổng barrier: quét biển số, check-in, check-out, tra cứu xe |
-| 3 | `do.minh.quan@example.net` | `0760098704` | `EMPLOYEE` | `Active` | Nhân viên vận hành ca trực |
-| 4 | `truong.ngoc.bich@example.com` | `0374179898` | `EMPLOYEE` | `Inactive` | Kiểm thử tài khoản bị khóa (`is_active=False`, trả về 401 khi đăng nhập) |
-| 5 | `vu.quoc.hung@example.org` | `0361681236` | `EMPLOYEE` | `Active` | Nhân viên kiểm soát bãi đỗ |
-| 6 | `phan.thanh.thao@example.net` | `0356582610` | `EMPLOYEE` | `Active` | Nhân viên kiểm soát bãi đỗ |
-| 7 | `ngo.gia.bao@example.com` | `0864769738` | `EMPLOYEE` | `Active` | Nhân viên kiểm soát bãi đỗ |
-| 8 | `dinh.lan.anh@example.org` | `0707739639` | `EMPLOYEE` | `Active` | Nhân viên kiểm soát bãi đỗ |
-| 9 | `trinh.xuan.truong@example.com` | `0868851325` | `CUSTOMER` | `Active` | Chủ xe `43K-860.50`; kiểm thử quyền khách hàng (nhận 403 khi gọi API đỗ xe) |
-| 10 | `bui.khanh.doan@example.org` | `0348083802` | `CUSTOMER` | `Active` | Khách hàng sở hữu phương tiện cá nhân |
-| 11 | `lam.hoang.viet@example.net` | `0790226163` | `CUSTOMER` | `Active` | Khách hàng |
-| 12 | `doan.tuyet.mai@example.com` | `0779009950` | `CUSTOMER` | `Active` | Khách hàng |
-| 13 | `ho.trong.nghia@example.org` | `0789632200` | `CUSTOMER` | `Active` | Khách hàng |
-| 14 | `ta.minh.chau@example.net` | `0708960990` | `CUSTOMER` | `Active` | Khách hàng |
-| 15 | `cao.tien.dung@example.com` | `0327855040` | `CUSTOMER` | `Active` | Khách hàng |
-| 16 | `duong.hong.nhung@example.org` | `0332790866` | `CUSTOMER` | `Active` | Khách hàng |
-| 17 | `ha.manh.cuong@example.net` | `0861032661` | `CUSTOMER` | `Active` | Khách hàng |
-| 18 | `mai.phuong.thao@example.com` | `0781281571` | `CUSTOMER` | `Active` | Khách hàng |
-| 19 | `kieu.quoc.tuan@example.org` | `0392758924` | `CUSTOMER` | `Active` | Khách hàng |
-| 20 | `chu.kim.oanh@example.net` | `0387755825` | `CUSTOMER` | `Active` | Khách hàng |
+| 1 | `hoang.dinh.khang@example.com` | `0880721788` | `MANAGER` | `Active` | Full administrative access, override blacklisted vehicles, view reports |
+| 2 | `luong.mai.phuong@example.org` | `0385211625` | `EMPLOYEE` | `Active` | Barrier gate operator: plate scanning, check-in, check-out, vehicle lookup |
+| 3 | `do.minh.quan@example.net` | `0760098704` | `EMPLOYEE` | `Active` | Shift operations staff |
+| 4 | `truong.ngoc.bich@example.com` | `0374179898` | `EMPLOYEE` | `Inactive` | Test locked account (`is_active=False`, returns 401 on login) |
+| 5 | `vu.quoc.hung@example.org` | `0361681236` | `EMPLOYEE` | `Active` | Parking lot attendant |
+| 6 | `phan.thanh.thao@example.net` | `0356582610` | `EMPLOYEE` | `Active` | Parking lot attendant |
+| 7 | `ngo.gia.bao@example.com` | `0864769738` | `EMPLOYEE` | `Active` | Parking lot attendant |
+| 8 | `dinh.lan.anh@example.org` | `0707739639` | `EMPLOYEE` | `Active` | Parking lot attendant |
+| 9 | `trinh.xuan.truong@example.com` | `0868851325` | `CUSTOMER` | `Active` | Owner of vehicle `43K-860.50`; test customer permissions (receives 403 when invoking parking APIs) |
+| 10 | `bui.khanh.doan@example.org` | `0348083802` | `CUSTOMER` | `Active` | Customer owning personal vehicles |
+| 11 | `lam.hoang.viet@example.net` | `0790226163` | `CUSTOMER` | `Active` | Customer |
+| 12 | `doan.tuyet.mai@example.com` | `0779009950` | `CUSTOMER` | `Active` | Customer |
+| 13 | `ho.trong.nghia@example.org` | `0789632200` | `CUSTOMER` | `Active` | Customer |
+| 14 | `ta.minh.chau@example.net` | `0708960990` | `CUSTOMER` | `Active` | Customer |
+| 15 | `cao.tien.dung@example.com` | `0327855040` | `CUSTOMER` | `Active` | Customer |
+| 16 | `duong.hong.nhung@example.org` | `0332790866` | `CUSTOMER` | `Active` | Customer |
+| 17 | `ha.manh.cuong@example.net` | `0861032661` | `CUSTOMER` | `Active` | Customer |
+| 18 | `mai.phuong.thao@example.com` | `0781281571` | `CUSTOMER` | `Active` | Customer |
+| 19 | `kieu.quoc.tuan@example.org` | `0392758924` | `CUSTOMER` | `Active` | Customer |
+| 20 | `chu.kim.oanh@example.net` | `0387755825` | `CUSTOMER` | `Active` | Customer |
 
 ---
 
-## 4. Luồng xác thực chi tiết từng bước (Step-by-Step Auth Flow)
+## 4. Step-by-Step Authentication Flow
 
-Hệ thống xác thực kết hợp giữa **Django Session Cookie** (`sessionid`), cơ chế chống giả mạo **Double Submit CSRF** (`csrftoken` và header `X-CSRFToken`), và cơ chế ghi nhớ đăng nhập dài hạn **Persistent Remember-Me** (`parking_remember_token`).
+The authentication architecture combines **Django Session Cookie** (`sessionid`), **Double Submit CSRF** protection (`csrftoken` and `X-CSRFToken` header), and **Persistent Remember-Me** functionality (`parking_remember_token`).
 
-### 4.1 Bước 1: Khởi tạo cookie CSRF (CSRF Bootstrap)
+### 4.1 Step 1: CSRF Cookie Bootstrap
 
-Trước khi gửi bất kỳ yêu cầu đột biến dữ liệu nào (`POST`, `PUT`, `PATCH`, `DELETE`), Frontend bắt buộc phải thực hiện bước bắt tay CSRF để lấy cookie `csrftoken`:
+Before sending any state-mutating requests (`POST`, `PUT`, `PATCH`, `DELETE`), the Frontend must perform a CSRF handshake to obtain the `csrftoken` cookie:
 
 ```http
 GET /api/v1/auth/csrf/ HTTP/1.1
@@ -196,11 +196,11 @@ Set-Cookie: csrftoken=[MASKED]; expires=Thu, 21 Oct 2027 15:00:26 GMT; Max-Age=3
 }
 ```
 
-### 4.2 Bước 2: Đăng nhập (`POST /api/v1/auth/login/`)
+### 4.2 Step 2: Login (`POST /api/v1/auth/login/`)
 
-Yêu cầu đăng nhập phải đính kèm header `X-CSRFToken` mang giá trị đọc được từ cookie `csrftoken`:
+Login requests must include the `X-CSRFToken` header containing the value read from the `csrftoken` cookie:
 
-#### Trường hợp 1: Thiếu header `X-CSRFToken` (Lỗi 403 Forbidden)
+#### Case 1: Missing `X-CSRFToken` Header (403 Forbidden)
 
 ```http
 POST /api/v1/auth/login/ HTTP/1.1
@@ -223,7 +223,7 @@ Content-Type: application/json
 }
 ```
 
-#### Trường hợp 2: Sai mật khẩu hoặc tài khoản không tồn tại (Lỗi 401 Unauthorized)
+#### Case 2: Incorrect Password or Non-Existent Account (401 Unauthorized)
 
 ```http
 POST /api/v1/auth/login/ HTTP/1.1
@@ -245,7 +245,7 @@ Content-Type: application/json
 }
 ```
 
-#### Trường hợp 3: Để trống trường thông tin (Lỗi 400 Bad Request)
+#### Case 3: Empty Required Fields (400 Bad Request)
 
 ```http
 POST /api/v1/auth/login/ HTTP/1.1
@@ -267,9 +267,9 @@ Content-Type: application/json
 }
 ```
 
-#### Trường hợp 4: Đăng nhập thành công KHÔNG chọn Remember-Me (`remember: false`)
+#### Case 4: Successful Login WITHOUT Remember-Me (`remember: false`)
 
-Trình duyệt nhận được cookie phiên làm việc `sessionid` (không có `Max-Age` hay `expires`, tự xóa khi đóng trình duyệt) và một `csrftoken` mới đã được xoay vòng bảo mật:
+The browser receives the session cookie `sessionid` (no `Max-Age` or `expires`, automatically deleted when the browser closes) and a freshly rotated `csrftoken`:
 
 ```http
 POST /api/v1/auth/login/ HTTP/1.1
@@ -294,9 +294,9 @@ Set-Cookie: sessionid=[MASKED]; HttpOnly; Path=/; SameSite=Lax
 }
 ```
 
-#### Trường hợp 5: Đăng nhập thành công CÓ chọn Remember-Me (`remember: true`)
+#### Case 5: Successful Login WITH Remember-Me (`remember: true`)
 
-Khi bật `remember: true`, ngoài `sessionid`, Backend gửi thêm cookie dài hạn `parking_remember_token` (`Max-Age=2592000` = 30 ngày):
+When `remember: true` is enabled, in addition to `sessionid`, the backend sets a long-lived `parking_remember_token` cookie (`Max-Age=2592000` = 30 days):
 
 ```http
 POST /api/v1/auth/login/ HTTP/1.1
@@ -322,17 +322,17 @@ Set-Cookie: sessionid=[MASKED]; HttpOnly; Path=/; SameSite=Lax
 }
 ```
 
-### 4.3 Bảng đặc tính kỹ thuật các loại Cookies
+### 4.3 Technical Specifications of Cookies
 
-| Tên Cookie | Cờ `HttpOnly` | Cờ `SameSite` | Cờ `Secure` | Thời hạn sống (Lifetime) | Mục đích kỹ thuật |
+| Cookie Name | `HttpOnly` Flag | `SameSite` Flag | `Secure` Flag | Lifetime | Technical Purpose |
 |---|:---:|:---:|:---:|---|---|
-| `csrftoken` | **False** | `Lax` | False (dev) / True (prod) | 1 năm (31,449,600 giây) | Mã bảo vệ chống giả mạo request CSRF; JavaScript đọc được qua `document.cookie`. |
-| `sessionid` | **True** | `Lax` | False (dev) / True (prod) | Browser session (tối đa 12 giờ / 43,200 giây trên máy chủ) | Định danh phiên làm việc hiện thời của người dùng; lưu trong RAM trình duyệt, mất khi đóng trình duyệt. |
-| `parking_remember_token` | **True** | `Lax` | False (dev) / True (prod) | 30 ngày (2,592,000 giây) | Ghi nhớ đăng nhập dài hạn định dạng `<series>:<raw_token>`. Trình duyệt lưu vào ổ đĩa. |
+| `csrftoken` | **False** | `Lax` | False (dev) / True (prod) | 1 year (31,449,600 seconds) | CSRF protection token; readable by JavaScript via `document.cookie`. |
+| `sessionid` | **True** | `Lax` | False (dev) / True (prod) | Browser session (max 12 hours / 43,200 seconds server-side) | Identifies current user session; stored in browser memory, cleared on close. |
+| `parking_remember_token` | **True** | `Lax` | False (dev) / True (prod) | 30 days (2,592,000 seconds) | Long-term persistent login token formatted as `<series>:<raw_token>`. Stored on disk by browser. |
 
-### 4.4 Bước 3: Lấy thông tin người dùng (`GET /api/v1/auth/me/`)
+### 4.4 Step 3: Fetch Current User Info (`GET /api/v1/auth/me/`)
 
-Sau khi đăng nhập, Frontend gọi endpoint này để xác nhận danh tính hoặc lấy lại thông tin tài khoản khi khởi chạy ứng dụng:
+After authentication, the Frontend invokes this endpoint to verify identity or restore user state on application start:
 
 ```http
 GET /api/v1/auth/me/ HTTP/1.1
@@ -351,13 +351,13 @@ Content-Type: application/json
 }
 ```
 
-### 4.5 Bước 4: Tự động phục hồi phiên khi tải lại trang (Silent Re-authentication)
+### 4.5 Step 4: Automatic Session Recovery on Page Reload (Silent Re-authentication)
 
-Khi người dùng đóng trình duyệt rồi mở lại (làm mất `sessionid`), hoặc khi `sessionid` hết hạn 12 giờ:
+When a user reopens the browser (losing `sessionid`), or after the 12-hour session lifetime expires:
 
-1. Trình duyệt gửi request `GET /api/v1/auth/me/` chỉ với cookie `parking_remember_token`.
-2. Middleware `PersistentRememberMeMiddleware` tại backend tự động tra cứu hash SHA-256 theo chuỗi `series` trong bảng `persistent_login_token`.
-3. Khi hợp lệ, backend tự động đăng nhập người dùng, cấp phát `sessionid` mới, thực hiện xoay vòng token nguyên tử (`token rotation` sau cửa sổ ân hạn 30 giây) và gửi `Set-Cookie` mới về client mà không cần người dùng nhập lại mật khẩu:
+1. The browser sends `GET /api/v1/auth/me/` with only the `parking_remember_token` cookie.
+2. The backend `PersistentRememberMeMiddleware` looks up the SHA-256 hash matching the `series` key in the `persistent_login_token` table.
+3. Upon validation, the backend logs in the user automatically, issues a new `sessionid`, performs atomic token rotation (after a 30-second grace period), and returns fresh `Set-Cookie` headers without requiring password re-entry:
 
 ```http
 GET /api/v1/auth/me/ HTTP/1.1
@@ -379,9 +379,9 @@ Set-Cookie: sessionid=[MASKED]; HttpOnly; Path=/; SameSite=Lax
 }
 ```
 
-### 4.6 Bước 5: Đăng xuất (`POST /api/v1/auth/logout/`)
+### 4.6 Step 5: Logout (`POST /api/v1/auth/logout/`)
 
-Khi đăng xuất, backend thu hồi toàn bộ token ghi nhớ trong cơ sở dữ liệu và xóa sạch các cookies:
+On logout, the backend revokes all persistent tokens from the database and clears all cookies:
 
 ```http
 POST /api/v1/auth/logout/ HTTP/1.1
@@ -402,19 +402,19 @@ Set-Cookie: parking_remember_token=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Ma
 
 ---
 
-## 5. Mã mẫu chuẩn cho `fetch` và `axios` (Copy-Paste Ready)
+## 5. Reference Code for `fetch` and `axios` (Copy-Paste Ready)
 
-Toàn bộ các đoạn mã dưới đây đã được kiểm tra tính hợp lệ cú pháp nghiêm ngặt bằng trình phân giải `node --check` (Node.js v25.9.0, kết quả: `Exit code 0`).
+All code snippets below have been strictly validated with `node --check` (Node.js v25.9.0, result: `Exit code 0`).
 
-### 5.1 Đoạn mã mẫu sử dụng Native `fetch`
+### 5.1 Reference Implementation Using Native `fetch`
 
 ```javascript
 // File: src/services/apiFetch.js
 
 /**
- * Tiện ích trích xuất giá trị cookie theo tên từ document.cookie
- * @param {string} name - Tên cookie cần lấy
- * @returns {string|null} Giá trị cookie hoặc null nếu không tìm thấy
+ * Utility to extract cookie value by name from document.cookie
+ * @param {string} name - Name of the cookie to retrieve
+ * @returns {string|null} Cookie value or null if not found
  */
 export function getCookie(name) {
   if (typeof document === "undefined") return null;
@@ -427,17 +427,17 @@ export function getCookie(name) {
 }
 
 /**
- * Wrapper cho fetch tự động gắn CSRF token và tự động retry khi phiên hết hạn
- * @param {string} url - Đường dẫn API (ví dụ: '/api/v1/parking/gates/')
- * @param {RequestInit} options - Tùy chọn fetch
- * @param {boolean} isRetry - Cờ đánh dấu lượt gọi thử lại nội bộ
+ * Fetch wrapper that automatically attaches CSRF token and retries on session expiration
+ * @param {string} url - API path (e.g., '/api/v1/parking/gates/')
+ * @param {RequestInit} options - Fetch options
+ * @param {boolean} isRetry - Internal retry flag
  * @returns {Promise<Response>}
  */
 export async function apiFetch(url, options = {}, isRetry = false) {
   const method = (options.method || "GET").toUpperCase();
   const headers = new Headers(options.headers || {});
 
-  // Đính kèm CSRF token cho các thao tác thay đổi dữ liệu
+  // Attach CSRF token for state-mutating requests
   if (["POST", "PUT", "PATCH", "DELETE"].includes(method)) {
     const csrfToken = getCookie("csrftoken");
     if (csrfToken && !headers.has("X-CSRFToken")) {
@@ -449,26 +449,26 @@ export async function apiFetch(url, options = {}, isRetry = false) {
     ...options,
     method,
     headers,
-    credentials: "include", // Bắt buộc gửi kèm session cookie và remember token
+    credentials: "include", // Mandatory to send session cookie and remember token
   };
 
   const response = await fetch(url, mergedOptions);
 
-  // Xử lý tự động Silent Re-auth khi nhận HTTP 401 do hết hạn session
+  // Handle automatic silent re-auth when receiving HTTP 401 due to session expiration
   if (response.status === 401 && !isRetry && !url.includes("/api/v1/auth/login/")) {
     try {
-      // Gọi endpoint /api/v1/auth/me/ để kích hoạt middleware phục hồi session qua remember token
+      // Call /api/v1/auth/me/ to trigger session recovery via remember token middleware
       const reauthResp = await fetch("/api/v1/auth/me/", {
         method: "GET",
         credentials: "include",
       });
 
       if (reauthResp.ok) {
-        // Phục hồi phiên thành công: thử lại yêu cầu ban đầu duy nhất 1 lần
+        // Session recovered successfully: retry original request exactly once
         return await apiFetch(url, options, true);
       }
     } catch (err) {
-      console.error("Lỗi phục hồi phiên làm việc tự động:", err);
+      console.error("Automatic session re-auth failed:", err);
     }
   }
 
@@ -476,7 +476,7 @@ export async function apiFetch(url, options = {}, isRetry = false) {
 }
 ```
 
-### 5.2 Đoạn mã mẫu sử dụng thư viện `axios`
+### 5.2 Reference Implementation Using `axios`
 
 ```javascript
 // File: src/services/apiClient.js
@@ -484,22 +484,22 @@ import axios from "axios";
 
 export const apiClient = axios.create({
   baseURL: "/api/v1",
-  withCredentials: true, // Bắt buộc để gửi cookie xuyên origin hoặc qua dev proxy
-  xsrfCookieName: "csrftoken", // Tên cookie chứa CSRF token
-  xsrfHeaderName: "X-CSRFToken", // Tên header gửi CSRF token lên Django
+  withCredentials: true, // Mandatory to send cookies across origins or through dev proxy
+  xsrfCookieName: "csrftoken", // Name of cookie containing CSRF token
+  xsrfHeaderName: "X-CSRFToken", // Name of request header sent to Django
   headers: {
     "Accept": "application/json",
     "Content-Type": "application/json",
   },
 });
 
-// Response Interceptor xử lý phục hồi phiên tự động khi gặp lỗi 401
+// Response interceptor to handle automatic session recovery on 401 error
 apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
 
-    // Kiểm tra lỗi 401, tránh vòng lặp vô tận và không retry trên chính API đăng nhập
+    // Check for 401 error, avoid infinite loops, and do not retry the login request itself
     if (
       error.response &&
       error.response.status === 401 &&
@@ -509,14 +509,14 @@ apiClient.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        // Thử phục hồi phiên bằng cookie parking_remember_token qua endpoint /auth/me/
+        // Attempt session recovery using parking_remember_token via /auth/me/
         await apiClient.get("/auth/me/");
 
-        // Cập nhật lại CSRF token mới từ cookie trước khi gửi lại
+        // Re-send original request with fresh CSRF token from updated cookie
         return apiClient(originalRequest);
       } catch (reauthError) {
-        // Phục hồi thất bại (remember token đã hết hạn hoặc không tồn tại) -> Chuyển về màn hình login
-        console.warn("Phiên làm việc đã kết thúc. Vui lòng đăng nhập lại.", reauthError);
+        // Recovery failed (remember token expired or missing) -> redirect to login
+        console.warn("Session expired. Please log in again.", reauthError);
         if (typeof window !== "undefined") {
           window.location.href = "/login";
         }
@@ -531,51 +531,51 @@ apiClient.interceptors.response.use(
 
 ---
 
-## 6. Xử lý CORS & Cookie trong môi trường phát triển
+## 6. Handling CORS & Cookies in Development
 
-### 6.1 Biến môi trường Backend liên quan
+### 6.1 Relevant Backend Environment Variables
 
-Trong file `.env` của backend, các biến sau điều khiển chính sách CORS và CSRF:
+In the `.env` file at the backend root directory (read by Docker Compose on host to interpolate and forward to `web` container via `docker-compose.yml`, as `.dockerignore` excludes `.env` from image build), the following variables control CORS and CSRF policies:
 
 ```env
-# Danh sách origins được phép gọi API cross-origin
+# List of origins allowed to make cross-origin API calls
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173
 
-# Danh sách origins được Django tin cậy để duyệt CSRF token
+# List of origins trusted by Django for CSRF token validation
 CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000,http://localhost:5173,http://127.0.0.1:5173
 ```
 
-### 6.2 Bản chất kỹ thuật & Bảng quyết định Cookie Scoping (3 Trường hợp cấu hình)
+### 6.2 Technical Mechanics & Cookie Scoping Decision Matrix (3 Scenarios)
 
-Phạm vi truy cập Cookie giữa ứng dụng Frontend và API Backend được chi phối bởi hai tiêu chuẩn cốt lõi:
+Cookie scoping between Frontend applications and Backend APIs is governed by two core standards:
 
-1. **Phạm vi cổng mạng (Port Scoping theo [RFC 6265](https://www.rfc-editor.org/rfc/rfc6265.txt), Section 8.5 "Weak Confidentiality")**:
+1. **Port Scoping (per [RFC 6265](https://www.rfc-editor.org/rfc/rfc6265.txt), Section 8.5 "Weak Confidentiality")**:
    > "Cookies do not provide isolation by port."  
-   *(Ngày truy cập: 2026-10-22)*.
-2. **Quy tắc Same-Site (theo [HTML Standard](https://html.spec.whatwg.org/multipage/origin.html#same-site))**:
+   *(Accessed: 2026-10-22)*.
+2. **Same-Site Rules (per [HTML Standard](https://html.spec.whatwg.org/multipage/origin.html#same-site))**:
    > "Unlike the same origin and same origin-domain concepts, for schemelessly same site and same site, the port and domain components are ignored."  
-   *(Ngày truy cập: 2026-10-22)*.
+   *(Accessed: 2026-10-22)*.
 
-Kiểm tra trực tiếp phản hồi thực tế từ backend cho thấy các header `Set-Cookie` (`csrftoken` và `sessionid`) hoàn toàn **không mang thuộc tính `Domain`** (`Domain: ''`), đồng nghĩa với việc cookie mang tính chất host-only gắn liền với host của request.
+Direct inspection of actual backend HTTP responses confirms that `Set-Cookie` headers (`csrftoken` and `sessionid`) **do not specify a `Domain` attribute** (`Domain: ''`), meaning cookies are host-only and strictly tied to the request host.
 
-#### Bảng quyết định cấu hình Frontend & Cookie
+#### Frontend & Cookie Configuration Decision Matrix
 
-| Trường hợp | Ngữ cảnh kiến trúc | Cơ chế Cookie & Same-Site | Khả năng đọc `csrftoken` từ JS | Giải pháp kỹ thuật bắt buộc |
+| Scenario | Architecture Context | Cookie & Same-Site Mechanism | JavaScript `csrftoken` Readability | Mandatory Technical Solution |
 |---|---|---|:---:|---|
-| **(a) Cùng host, khác port** | Frontend: `http://localhost:3000`<br>Backend: `http://localhost:8000` | Cùng host `localhost`. Cổng mạng bị bỏ qua trong tính toán same-site; cookie scoped theo host không bị cô lập theo port (RFC 6265). | **Đọc được**<br>(vì `HttpOnly=False` và cùng host `localhost`) | **Không cần Dev Proxy**.<br>Chỉ cần cấu hình `CORS_ALLOWED_ORIGINS` và `CSRF_TRUSTED_ORIGINS` chứa origin frontend, đồng thời frontend gọi API với cờ credentials (`credentials: "include"` hoặc `withCredentials: true`). |
-| **(b) Khác host** | Frontend: `http://localhost:3000`<br>Backend: `http://127.0.0.1:8000`<br>*(hoặc 2 tên miền máy ảo khác nhau)* | Khác host (`localhost` != `127.0.0.1`). Cookie của backend không gắn với host của frontend. | **Không thể đọc**<br>(bị chặn bởi Same-Origin Policy) | **Bắt buộc dùng Same-Origin Dev Proxy**.<br>Cấu hình dev proxy trên Vite/Next.js/Webpack (xem mục 6.3) để chuyển hướng `/api/*` sang backend, biến các request thành cùng origin. |
-| **(c) Khác registrable domain khi triển khai** | Frontend: `https://app.example.com`<br>Backend: `https://api.anotherdomain.net` | Khác registrable domain (Cross-Site hoàn toàn). Trình duyệt cô lập cookie và chặn cookie bên thứ ba. | **Tuyệt đối không thể đọc** | **Bắt buộc dùng Same-Origin Reverse Proxy** (Nginx/Caddy định tuyến cùng domain) **hoặc thay đổi kiến trúc API** (trả CSRF token trong response body / dùng Bearer Token). Đây là quyết định kiến trúc thuộc thẩm quyền Owner và hiện chưa được triển khai. |
+| **(a) Same host, different ports** | Frontend: `http://localhost:3000`<br>Backend: `http://localhost:8000` | Same host `localhost`. Ports are ignored in same-site calculation; host-scoped cookies are not isolated by port (RFC 6265). | **Readable**<br>(since `HttpOnly=False` and same host `localhost`) | **No Dev Proxy Required**.<br>Configure `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` with frontend origin, and make API calls with credentials flag (`credentials: "include"` or `withCredentials: true`). |
+| **(b) Different hosts** | Frontend: `http://localhost:3000`<br>Backend: `http://127.0.0.1:8000`<br>*(or two different VM domain names)* | Different hosts (`localhost` != `127.0.0.1`). Backend cookies are not attached to frontend host. | **Cannot Read**<br>(blocked by Same-Origin Policy) | **Mandatory Same-Origin Dev Proxy**.<br>Configure dev proxy in Vite/Next.js/Webpack (see Section 6.3) to forward `/api/*` requests to backend, converting them to same-origin requests. |
+| **(c) Different registrable domains in production** | Frontend: `https://app.example.com`<br>Backend: `https://api.anotherdomain.net` | Different registrable domains (completely Cross-Site). Browsers isolate cookies and block third-party cookies. | **Strictly Unreadable** | **Mandatory Same-Origin Reverse Proxy** (Nginx/Caddy routing on same domain) **or API architecture change** (return CSRF token in response body / use Bearer Token). This is an Owner architectural decision and is currently not implemented. |
 
-> **Minh bạch hóa kiểm chứng**:
+> **Verification Transparency**:
 >
-> - **ĐÃ XÁC MINH**: Thuộc tính thực tế của `Set-Cookie` phát hành từ backend (không có `Domain`) và các trích dẫn chuẩn hóa quốc tế đã được kiểm chứng bằng công cụ tự động.
-> - **UNVERIFIED**: Hành vi thực tế của các trình duyệt thương mại (Chrome, Firefox, Safari) đối với việc chia sẻ cookie giữa hai port khác nhau trên môi trường thực tế chưa được kiểm chứng trực tiếp bằng headless browser trong đợt kiểm thử này.
+> - **VERIFIED**: Actual attributes of `Set-Cookie` issued by backend (no `Domain`) and international standards citations have been verified using automated tooling.
+> - **UNVERIFIED**: Real-world browser behavior (Chrome, Firefox, Safari) regarding cross-port cookie sharing in live environments was not directly probed with headless browsers during this test round.
 
-### 6.3 Giải pháp chuẩn: Cấu hình Same-Origin Dev Proxy
+### 6.3 Recommended Solution: Same-Origin Dev Proxy Configuration
 
-Giải pháp tối ưu và chuẩn mực nhất cho Frontend SPA là sử dụng **Reverse Proxy** tích hợp sẵn của công cụ phát triển. Mọi yêu cầu từ giao diện gửi tới đường dẫn cục bộ `/api/*` (cùng origin `localhost:3000`), sau đó Dev Server sẽ proxy ngầm sang backend `http://127.0.0.1:8000`:
+The most robust and standard solution for Frontend SPAs is leveraging the **Reverse Proxy** built into modern development servers. All UI requests target the local `/api/*` path (same-origin `localhost:3000`), and the Dev Server proxies them behind the scenes to `http://127.0.0.1:8000`:
 
-#### Cấu hình cho Vite (`vite.config.ts`)
+#### Vite Configuration (`vite.config.ts`)
 
 ```typescript
 import { defineConfig } from "vite";
@@ -601,7 +601,7 @@ export default defineConfig({
 });
 ```
 
-#### Cấu hình cho Next.js (`next.config.js`)
+#### Next.js Configuration (`next.config.js`)
 
 ```javascript
 /** @type {import('next').NextConfig} */
@@ -623,11 +623,11 @@ const nextConfig = {
 module.exports = nextConfig;
 ```
 
-#### Cấu hình cho Webpack Dev Server (`webpack.config.js`)
+#### Webpack Dev Server Configuration (`webpack.config.js`)
 
 ```javascript
 module.exports = {
-  // ... các cấu hình khác ...
+  // ... other configurations ...
   devServer: {
     port: 3000,
     proxy: [
@@ -642,66 +642,66 @@ module.exports = {
 };
 ```
 
-> **Minh bạch hóa kiểm chứng**:
+> **Verification Transparency**:
 >
-> - **ĐÃ XÁC MINH**: Cơ chế CORS, CSRF handshake và cấp phát cookie của Backend đã được kiểm thử trực tiếp trên live stack.
-> - **UNVERIFIED**: Các tệp cấu hình proxy mẫu cho Vite, Next.js và Webpack nêu trên là hướng dẫn quy chuẩn cho phía Frontend; máy chủ kiểm thử hiện tại không khởi chạy một tiến trình Frontend Dev Server cụ thể.
+> - **VERIFIED**: CORS mechanism, CSRF handshake, and backend cookie issuance were tested directly on the live stack.
+> - **UNVERIFIED**: Proxy configuration examples for Vite, Next.js, and Webpack above are standard guidelines for Frontend; the test server did not run a dedicated Frontend Dev Server process.
 
 ---
 
-## 7. Cấu trúc lỗi chuẩn (Error Envelope) & Bảng mã lỗi toàn diện
+## 7. Standard Error Envelope & Comprehensive Error Code Table
 
-Toàn bộ các phản hồi lỗi từ hệ thống API đều tuân thủ cấu trúc đóng gói **Error Envelope**:
+All error responses from the API adhere to the standardized **Error Envelope** structure:
 
 ```json
 {
   "code": "MSG-...",
-  "message": "Thông điệp lỗi chi tiết bằng tiếng Việt.",
+  "message": "<detailed error message, in Vietnamese>",
   "details": {}
 }
 ```
 
-- `code`: Mã định danh lỗi duy nhất (dạng `MSG-*` trích từ SRS v4.1 hoặc `PROP-*` từ bảng đề xuất mở rộng).
-- `message`: Thông điệp tiếng Việt nguyên văn được quy định tại `apps/core/messages.py`.
-- `details`: Đối tượng bổ sung chi tiết lỗi (ví dụ: các trường vi phạm validation, lỗi ràng buộc cơ sở dữ liệu).
+- `code`: Unique error identifier (in `MSG-*` format from SRS v4.1 or `PROP-*` from proposed extensions).
+- `message`: Verbatim Vietnamese error message defined in `apps/core/messages.py`.
+- `details`: Object containing supplementary error details (e.g., field-level validation errors, database constraint violations).
 
-### 7.1 Bảng tra cứu toàn bộ 27 Mã Lỗi của Phân hệ Auth và Parking
+### 7.1 Lookup Table of All 27 Error Codes in Auth and Parking Modules
 
-Bảng dưới đây trích dẫn nguyên văn 100% các chuỗi thông báo từ danh mục `apps/core/messages.py`:
+The table below quotes 100% verbatim message strings from the `apps/core/messages.py` catalog:
 
-| Mã lỗi (`code`) | HTTP Status | Thông điệp tiếng Việt nguyên văn (`apps/core/messages.py`) | Điều kiện kích hoạt | Hành động xử lý đề xuất cho UI Frontend |
+| Error Code (`code`) | HTTP Status | Verbatim Vietnamese Message (`apps/core/messages.py`) | Trigger Condition | Recommended UI Action |
 |---|:---:|---|---|---|
-| `PROP-4.1-P01` | 429 | `Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.` | Vượt ngưỡng đăng nhập sai: 5 lần/cặp tài khoản+IP, 20 lần/tài khoản, 30 lần/IP. | Đọc header `Retry-After`, vô hiệu hóa form và hiển thị đồng hồ đếm ngược chờ thử lại. |
-| `PROP-4.1-P02` | 200 | `Khởi tạo cookie CSRF thành công.` | Gọi `GET /api/v1/auth/csrf/` thành công. | Ghi nhận khởi tạo thành công, sẵn sàng cho các request đột biến. |
-| `PROP-4.1-P03` | 200 | `Đăng xuất thành công.` | Gọi `POST /api/v1/auth/logout/` thành công. | Xóa sạch state người dùng trong Store (Redux/Pinia) và chuyển về màn hình đăng nhập. |
-| `PROP-4.1-P06` | 403 | `Mã CSRF không hợp lệ hoặc bị thiếu.` | Request đột biến thiếu header `X-CSRFToken` hoặc token không khớp cookie `csrftoken`. | Tự động gọi lại `GET /api/v1/auth/csrf/` để lấy token mới, sau đó thử lại request. |
-| `MSG-4.1-M02` | 401 | `Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu` | Sai tên đăng nhập/mật khẩu, tài khoản bị khóa (`is_active=False`), hoặc phiên hết hạn. | Đánh dấu viền đỏ trường đăng nhập/mật khẩu; nếu đang thao tác thì chuyển hướng về Login. |
-| `MSG-4.1-M03` | 400 | `Xin nhập đầy đủ Tên đăng nhập và Mật khẩu` | Người dùng bỏ trống trường `identifier` hoặc `password` khi gửi form đăng nhập. | Hiển thị thông báo validation trực tiếp dưới các ô nhập liệu còn thiếu. |
-| `MSG-4.2-M01` | 403 | `Thông báo lỗi hệ thống` *(hoặc `Bạn không có quyền thực hiện thao tác này.`)* | Tài khoản không đủ quyền (ví dụ vai trò `CUSTOMER` cố tình truy cập API bãi xe). | Hiển thị thông báo từ chối truy cập "403 Forbidden", ẩn các nút tính năng nội bộ. |
-| `PROP-4.5.1-P01` | 400 | `Định dạng biển số xe không hợp lệ.` | Chuỗi biển số truyền vào rỗng hoặc sai quy cách biển số xe cơ giới. | Yêu cầu người dùng kiểm tra và nhập đúng biển số xe (ví dụ: `43K-860.50`). |
-| `PROP-4.5.1-P02` | 400 | `Tệp hình ảnh biển số xe không được để trống.` | Không đính kèm tệp tin trong trường `image` khi gọi `POST /api/v1/parking/plate-scans/`. | Bắt buộc chọn tệp ảnh trước khi cho phép ấn nút "Quét biển số". |
-| `PROP-4.5.1-P03` | 400 | `Kích thước tệp hình ảnh vượt quá giới hạn cho phép.` | Dung lượng tệp ảnh vượt quá giới hạn 5MB (`MAX_IMAGE_SIZE_MB`). | Báo lỗi dung lượng, hướng dẫn người dùng nén ảnh hoặc chụp ở độ phân giải phù hợp. |
-| `PROP-4.5.1-P04` | 400 | `Định dạng tệp hình ảnh không được hỗ trợ.` | Tệp tải lên không phải định dạng JPEG, PNG hoặc WebP. | Báo lỗi định dạng, chỉ chấp nhận tệp có phần mở rộng `.jpg`, `.jpeg`, `.png`, `.webp`. |
-| `PROP-4.5.1-P05` | 400 | `Tệp hình ảnh bị hỏng hoặc không thể xử lý an toàn.` | Tệp ảnh lỗi cấu trúc nhị phân hoặc kích thước giải nén vượt ngưỡng an toàn. | Báo tệp ảnh lỗi, yêu cầu chụp lại ảnh rõ nét hoặc kiểm tra lại file. |
-| `PROP-4.5.1-P06` | 422 | `Không nhận diện được biển số xe từ hình ảnh đã cung cấp.` | Mô hình AI OCR chạy xong nhưng không phát hiện được biển số xe nào trong ảnh. | Hiển thị thông báo, mở hộp thoại cho phép nhân viên vận hành nhập biển số thủ công. |
-| `PROP-4.5.1-P07` | 409 | `Biển số xe đã có phiên đỗ xe đang mở chưa hoàn thành.` | Xe này đã check-in vào bãi trước đó và chưa check-out. | Cảnh báo xe đang trong bãi, mở màn hình xem chi tiết phiên đỗ hiện tại. |
-| `PROP-4.5.1-P08` | 409 | `Biển số xe nằm trong danh sách đen, không được phép vào bãi.` | Xe thuộc danh sách đen và không được phép vào bãi khi không có xác nhận của Quản lý. | Bật còi/cảnh báo an ninh màu đỏ, yêu cầu Quản lý xác nhận ghi đè (`override_blacklist`). |
-| `PROP-4.5.1-P09` | 400 | `Yêu cầu chọn phương thức thanh toán hợp lệ khi cước phí đỗ xe lớn hơn 0.` | Xe vãng lai phát sinh cước phí đỗ xe nhưng không gửi trường `payment_method`. | Bắt buộc nhân viên chọn phương thức thanh toán (`CASH` hoặc `VIETQR`) trên màn hình. |
-| `PROP-4.5.1-P10` | 409 | `Phiên đỗ xe này đã được kết thúc trước đó.` | Thực hiện check-out trên một phiên đỗ xe đã đóng. | Tải lại thông tin phiên, thông báo phiên xe đã hoàn tất thanh toán trước đó. |
-| `PROP-4.5.1-P11` | 400 | `Yêu cầu cung cấp chính xác một trong hai tiêu chí: mã phiên đỗ xe hoặc biển số xe.` | Gửi cả 2 hoặc không gửi tiêu chí nào trong `session_code` và `license_plate`. | Kiểm tra lại logic form check-out, chỉ gửi duy nhất 1 trong 2 tiêu chí. |
-| `PROP-4.5.1-P12` | 400 | `Cổng ra không hợp lệ hoặc không phải cổng có hướng ra (OUT).` | Chọn nhầm cổng vào (direction=`IN`) để thực hiện check-out xe ra. | Khóa danh sách chọn cổng, chỉ hiển thị các cổng có thuộc tính `direction="OUT"`. |
-| `PROP-4.5.1-P13` | 400 | `Đường dẫn hình ảnh không hợp lệ hoặc tệp không tồn tại.` | Đường dẫn ảnh `entry_image_url` hoặc `exit_image_url` không hợp lệ. | Kiểm tra lại URL trả về từ API upload ảnh. |
-| `PROP-4.5.1-P14` | 403 | `Nhân viên không có quyền ghi đè danh sách đen.` | Nhân viên vận hành cố tình bật cờ `override_blacklist=True`. | Chỉ kích hoạt và hiển thị tùy chọn ghi đè cho tài khoản có vai trò `MANAGER`. |
-| `PROP-4.5.1-P15` | 503 | `Hệ thống nhận diện biển số xe đang quá tải, vui lòng thử lại sau.` | Hàng đợi OCR quá tải (hết semaphore xử lý đồng thời). | Đọc header `Retry-After` (thường là 3s), hiển thị thông báo "Hệ thống bận, đang thử lại...". |
-| `PROP-4.5.1-P16` | 400 | `Biển số xe có định dạng chưa được định nghĩa trong danh mục quy chuẩn hoặc thuộc nhóm cần xác minh thủ công.` | Mẫu biển số lạ hoặc không khớp quy chuẩn quốc gia. | Chuyển sang luồng rà soát thủ công (`NEEDS_REVIEW`). |
-| `PROP-4.5.2-P01` | 409 | `Vị trí này đang bảo trì.` | Chỉ định ô đỗ xe đang ở trạng thái bảo trì (`MAINTENANCE`). | Hiển thị ô đỗ màu xám trên sơ đồ bãi xe, yêu cầu chọn vị trí đỗ khác. |
-| `MSG-4.5.1-M01` | 404 | `Không tìm thấy dữ liệu trùng khớp` | Không tìm thấy xe trong `vehicle-lookup` hoặc phiên mở trong checkout. | Báo không tìm thấy xe, gợi ý tạo lượt đỗ mới hoặc kiểm tra lại biển số. |
-| `MSG-4.4.1-M01` | 404 | `Không tìm thấy dữ liệu` | Không tìm thấy chi tiết phiên đỗ xe theo ID được yêu cầu. | Hiển thị màn hình 404 hoặc quay về danh sách phiên đỗ xe. |
-| `PROP-GEN-P01` | 400 | `Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu` | Lỗi kiểm tra dữ liệu đầu vào (ví dụ từ khóa tìm kiếm `< 2` ký tự). | Đọc đối tượng `details` để hiển thị lỗi chi tiết cạnh từng ô nhập liệu. |
+| `PROP-4.1-P01` | 429 | `Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.` <br>*(Too many failed login attempts, please try again later.)* | Exceeded failed login threshold: 5 attempts per username+IP pair, 20 attempts per username, 30 attempts per IP. | Read `Retry-After` header, disable login form, and display countdown timer. |
+| `PROP-4.1-P02` | 200 | `Khởi tạo cookie CSRF thành công.` <br>*(CSRF cookie initialized successfully.)* | Successful call to `GET /api/v1/auth/csrf/`. | Acknowledge successful bootstrap and proceed with state-mutating requests. |
+| `PROP-4.1-P03` | 200 | `Đăng xuất thành công.` <br>*(Logged out successfully.)* | Successful call to `POST /api/v1/auth/logout/`. | Clear user state in Store (Redux/Pinia) and redirect to login screen. |
+| `PROP-4.1-P06` | 403 | `Mã CSRF không hợp lệ hoặc bị thiếu.` <br>*(CSRF token missing or invalid.)* | State-mutating request missing `X-CSRFToken` header or token does not match `csrftoken` cookie. | Automatically re-fetch `GET /api/v1/auth/csrf/` to acquire a new token, then retry request. |
+| `MSG-4.1-M02` | 401 | `Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu` <br>*(Please re-enter your Username or Password.)* | Invalid credentials, locked account (`is_active=False`), or expired session. | Highlight username/password fields with red border; redirect to login if session expired. |
+| `MSG-4.1-M03` | 400 | `Xin nhập đầy đủ Tên đăng nhập và Mật khẩu` <br>*(Please enter both Username and Password.)* | User submitted form with empty `identifier` or `password`. | Display inline validation error messages directly beneath the corresponding empty input fields. |
+| `MSG-4.2-M01` | 403 | `Thông báo lỗi hệ thống` *(or `Bạn không có quyền thực hiện thao tác này.`)* <br>*(System error notification / You do not have permission to perform this action.)* | Insufficient permissions (e.g., `CUSTOMER` attempting to call parking management APIs). | Display a "403 Forbidden" alert and hide internal action buttons. |
+| `PROP-4.5.1-P01` | 400 | `Định dạng biển số xe không hợp lệ.` <br>*(Invalid license plate format.)* | License plate string is empty or fails motor vehicle standard format validation. | Prompt user to inspect and enter a valid vehicle license plate (e.g., `43K-860.50`). |
+| `PROP-4.5.1-P02` | 400 | `Tệp hình ảnh biển số xe không được để trống.` <br>*(License plate image file must not be empty.)* | No file attached in `image` field when calling `POST /api/v1/parking/plate-scans/`. | Require selecting an image file before enabling the "Scan Plate" button. |
+| `PROP-4.5.1-P03` | 400 | `Kích thước tệp hình ảnh vượt quá giới hạn cho phép.` <br>*(Image file size exceeds allowed limit.)* | Image file size exceeds 5MB limit (`MAX_IMAGE_SIZE_MB`). | Display file size error and advise user to compress or re-capture at appropriate resolution. |
+| `PROP-4.5.1-P04` | 400 | `Định dạng tệp hình ảnh không được hỗ trợ.` <br>*(Unsupported image file format.)* | Uploaded file is not JPEG, PNG, or WebP. | Show format error; only accept files with extensions `.jpg`, `.jpeg`, `.png`, `.webp`. |
+| `PROP-4.5.1-P05` | 400 | `Tệp hình ảnh bị hỏng hoặc không thể xử lý an toàn.` <br>*(Corrupted image file or cannot be processed safely.)* | Binary image data corrupted or decompressed dimensions exceed safety limits (decompression bomb). | Report corrupted image and ask user to retake a clear photo or check the file. |
+| `PROP-4.5.1-P06` | 422 | `Không nhận diện được biển số xe từ hình ảnh đã cung cấp.` <br>*(Failed to recognize license plate from the provided image.)* | AI OCR pipeline completed but detected no valid plate in the image. | Display notification and present a dialog allowing operator manual plate entry. |
+| `PROP-4.5.1-P07` | 409 | `Biển số xe đã có phiên đỗ xe đang mở chưa hoàn thành.` <br>*(Vehicle already has an ongoing active parking session.)* | Vehicle already checked in previously and has not checked out. | Warn that vehicle is currently parked inside; navigate to active session details. |
+| `PROP-4.5.1-P08` | 409 | `Biển số xe nằm trong danh sách đen, không được phép vào bãi.` <br>*(Vehicle is blacklisted and not allowed entry.)* | Vehicle is on security blacklist and prohibited from entry without manager authorization. | Trigger red security alert; require manager approval to override (`override_blacklist`). |
+| `PROP-4.5.1-P09` | 400 | `Yêu cầu chọn phương thức thanh toán hợp lệ khi cước phí đỗ xe lớn hơn 0.` <br>*(A valid payment method is required when parking fee is greater than 0.)* | Transient vehicle with parking fee > 0 submitted without `payment_method`. | Require operator to select a payment method (`CASH` or `VIETQR`) on screen. |
+| `PROP-4.5.1-P10` | 409 | `Phiên đỗ xe này đã được kết thúc trước đó.` <br>*(This parking session has already been completed.)* | Attempting to check out an already closed parking session. | Reload session info and notify operator that session payment and exit were already finalized. |
+| `PROP-4.5.1-P11` | 400 | `Yêu cầu cung cấp chính xác một trong hai tiêu chí: mã phiên đỗ xe hoặc biển số xe.` <br>*(Must provide exactly one criterion: session code or license plate.)* | Provided both or neither of `session_code` and `license_plate`. | Validate check-out form logic; send exactly one of the two parameters. |
+| `PROP-4.5.1-P12` | 400 | `Cổng ra không hợp lệ hoặc không phải cổng có hướng ra (OUT).` <br>*(Invalid exit gate or gate direction is not OUT.)* | Selected an entry gate (direction=`IN`) for vehicle check-out. | Filter gate selection list to only display gates with property `direction="OUT"`. |
+| `PROP-4.5.1-P13` | 400 | `Đường dẫn hình ảnh không hợp lệ hoặc tệp không tồn tại.` <br>*(Invalid image URL or file does not exist.)* | Provided `entry_image_url` or `exit_image_url` is invalid or missing on storage. | Verify image URL returned by the plate scan/upload API. |
+| `PROP-4.5.1-P14` | 403 | `Nhân viên không có quyền ghi đè danh sách đen.` <br>*(Operator lacks permission to override blacklist.)* | Non-manager operator attempted to set `override_blacklist=True`. | Only enable and display blacklist override controls for accounts with `MANAGER` role. |
+| `PROP-4.5.1-P15` | 503 | `Hệ thống nhận diện biển số xe đang quá tải, vui lòng thử lại sau.` <br>*(License plate recognition system is overloaded, please try again later.)* | OCR worker pool saturated (concurrency semaphore exhausted). | Read `Retry-After` header (default 3s) and show "System busy, retrying..." message. |
+| `PROP-4.5.1-P16` | 400 | `Biển số xe có định dạng chưa được định nghĩa trong danh mục quy chuẩn hoặc thuộc nhóm cần xác minh thủ công.` <br>*(Unrecognized license plate format or requires manual verification.)* | Unconventional plate format or does not match national vehicle standards. | Switch to manual operator review workflow (`NEEDS_REVIEW`). |
+| `PROP-4.5.2-P01` | 409 | `Vị trí này đang bảo trì.` <br>*(This parking space is currently under maintenance.)* | Assigned parking slot is in `MAINTENANCE` status. | Highlight slot in gray on parking map and request selecting another space. |
+| `MSG-4.5.1-M01` | 404 | `Không tìm thấy dữ liệu trùng khớp` <br>*(No matching records found.)* | Vehicle not found in `vehicle-lookup` or active session not found during checkout. | Indicate vehicle not found; offer option to initiate new session or recheck plate. |
+| `MSG-4.4.1-M01` | 404 | `Không tìm thấy dữ liệu` <br>*(Data not found.)* | Parking session details not found for requested ID. | Display 404 screen or return user to session list view. |
+| `PROP-GEN-P01` | 400 | `Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu` <br>*(Invalid data, please re-enter.)* | Request payload validation error (e.g. search keyword `< 2` characters). | Parse `details` object to display granular field errors next to input controls. |
 
-### 7.2 Cấu trúc phân trang chuẩn (Pagination Envelope)
+### 7.2 Standard Pagination Envelope
 
-Các endpoint trả về danh sách phân trang (như `/api/v1/parking/sessions/` và `/api/v1/parking/vehicle-search/`) đều áp dụng cấu trúc `StandardResultsSetPagination`:
+Endpoints returning paginated lists (such as `/api/v1/parking/sessions/` and `/api/v1/parking/vehicle-search/`) adhere to the `StandardResultsSetPagination` structure:
 
 ```json
 {
@@ -715,15 +715,15 @@ Các endpoint trả về danh sách phân trang (như `/api/v1/parking/sessions/
 }
 ```
 
-- `count`: Tổng số bản ghi thỏa mãn điều kiện lọc.
-- `total_pages`: Tổng số trang.
-- `current_page`: Trang hiện tại.
-- `page_size`: Số bản ghi trên mỗi trang (mặc định 20, tối đa 50).
-- `next` / `previous`: URL lấy trang tiếp theo hoặc trang trước đó (`null` nếu đang ở trang cuối/đầu).
+- `count`: Total number of records matching the filter criteria.
+- `total_pages`: Total number of pages.
+- `current_page`: Current page index.
+- `page_size`: Number of records per page (default 20, max 50).
+- `next` / `previous`: URL for next or previous page (`null` if on the last or first page).
 
-### 7.3 Cơ chế giới hạn tần suất (Rate Limiting)
+### 7.3 Rate Limiting Mechanism
 
-Hệ thống áp dụng giới hạn tần suất trên endpoint đăng nhập `POST /api/v1/auth/login/` (tối đa 5 lần đăng nhập sai liên tiếp cho mỗi cặp tài khoản + IP trong cửa sổ 900 giây). Khi vượt ngưỡng ở lần thứ 6, API trả về HTTP `429 Too Many Requests` kèm mã `PROP-4.1-P01` và header `Retry-After`:
+The system enforces rate limiting on the login endpoint `POST /api/v1/auth/login/` (maximum 5 consecutive failed login attempts per username + IP pair in a 900-second window). When exceeding the threshold on the 6th attempt, the API returns HTTP `429 Too Many Requests` with code `PROP-4.1-P01` and the `Retry-After` header:
 
 ```http
 POST /api/v1/auth/login/ HTTP/1.1
@@ -746,15 +746,15 @@ Retry-After: 900
 }
 ```
 
-Frontend cần đọc giá trị số nguyên trong header `Retry-After` (đơn vị: giây), khóa nút đăng nhập và hiển thị đồng hồ đếm ngược thông báo thời gian chờ cho người dùng.
+Frontend applications should parse the integer value from the `Retry-After` header (unit: seconds), disable the login button, and display a countdown timer indicating the wait duration to the user.
 
-> **Lưu ý về môi trường đa tiến trình (Multi-worker Gunicorn)**: Khi máy chủ chạy nhiều tiến trình worker (như trong Docker Compose với 4 Gunicorn workers sử dụng `LocMemCache` độc lập trên mỗi worker theo `docker/gunicorn.conf.py`), bộ đếm số lần đăng nhập sai được duy trì riêng rẽ trong bộ nhớ của từng tiến trình worker. Do các yêu cầu từ client được bộ lập lịch socket phân phối lần lượt tới các worker khác nhau, lần đăng nhập nhận phản hồi HTTP `429` có thể xuất hiện muộn hơn lần thứ 6 (thực nghiệm probe 40 lần đăng nhập sai liên tiếp với cùng tài khoản và IP trên stack 4-worker ghi nhận lần đầu tiên trả về HTTP `429` tại lượt thứ 9, với tổng phân bố 10 lần HTTP `401` và 30 lần HTTP `429`).
+> **Multi-worker Gunicorn Environment Note**: When running with multiple worker processes (such as Docker Compose with 4 Gunicorn workers using per-process `LocMemCache` per `docker/gunicorn.conf.py`), failed attempt counters are tracked independently in each worker's memory. Because client requests are distributed among workers by the socket scheduler, the HTTP `429` response may appear after more than 5 attempts (probing 40 consecutive failed attempts with the same account and IP on a 4-worker stack yielded the first HTTP `429` at the 9th attempt, with a total distribution of 10 HTTP `401` and 30 HTTP `429` responses).
 
 ---
 
-## 8. Chi tiết toàn bộ 8 Endpoints Đỗ Xe (Parking Endpoints)
+## 8. Details of All 8 Parking Endpoints
 
-Tất cả các endpoint thuộc phân hệ đỗ xe đều yêu cầu quyền xác thực của tài khoản nhân viên hoặc quản lý (`IsEmployeeOrManager`). Tài khoản khách hàng (`CUSTOMER`) truy cập sẽ nhận lỗi `403 Forbidden` (`MSG-4.2-M01`):
+All parking module endpoints require staff or manager authentication (`IsEmployeeOrManager`). Customer accounts (`CUSTOMER`) receive `403 Forbidden` (`MSG-4.2-M01`):
 
 ```http
 GET /api/v1/parking/gates/ HTTP/1.1
@@ -774,14 +774,14 @@ Content-Type: application/json
 }
 ```
 
-### 8.1 Lấy danh sách cổng barrier (`GET /api/v1/parking/gates/`)
+### 8.1 Retrieve Gate List (`GET /api/v1/parking/gates/`)
 
-- **Mục đích**: Lấy danh sách các cổng kiểm soát barrier của bãi xe để hiển thị lên dropdown chọn cổng vào/ra.
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER`.
+- **Purpose**: Retrieve barrier gate list to populate entry/exit gate dropdown selectors.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
 - **Query Parameters**:
-  - `direction` (tùy chọn): Lọc theo hướng cổng (`IN` hoặc `OUT`).
-  - `is_active` (tùy chọn): Lọc cổng đang hoạt động (`true` hoặc `false`).
-- **Ví dụ thực tế từ Live Stack**:
+  - `direction` (optional): Filter by gate direction (`IN` or `OUT`).
+  - `is_active` (optional): Filter active gates (`true` or `false`).
+- **Live Stack Example**:
 
   ```http
   GET /api/v1/parking/gates/?direction=IN HTTP/1.1
@@ -816,18 +816,18 @@ Content-Type: application/json
   ]
   ```
 
-### 8.2 Quét nhận diện biển số xe (`POST /api/v1/parking/plate-scans/`)
+### 8.2 License Plate Recognition Scan (`POST /api/v1/parking/plate-scans/`)
 
-- **Mục đích**: Nhận diện biển số xe từ ảnh chụp camera barrier hoặc tệp tải lên qua form, tự động áp dụng sửa lỗi ngữ cảnh vị trí (Position-Aware Corrections), đánh giá chính sách duyệt `AUTO` / `NEEDS_REVIEW`, tra cứu phương tiện đã đăng ký và gợi ý biển số gần giống (`suggestions`).
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER`.
-- **Định dạng gửi**: `multipart/form-data` (kèm header `X-CSRFToken`).
-- **Các trường dữ liệu Form**:
-  - `image` (bắt buộc): Tệp hình ảnh biển số (JPEG, PNG, WebP; dung lượng tối đa 5MB).
-  - `gate_id` (tùy chọn): ID cổng barrier gửi ảnh.
+- **Purpose**: Recognize license plates from camera feed or uploaded files, automatically apply Position-Aware Corrections, evaluate `AUTO` / `NEEDS_REVIEW` policy, look up registered vehicle records, and provide nearest plate `suggestions`.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Request Format**: `multipart/form-data` (with `X-CSRFToken` header).
+- **Form Fields**:
+  - `image` (required): Plate image file (JPEG, PNG, WebP; max size 5MB).
+  - `gate_id` (optional): ID of barrier gate submitting the scan.
 
-#### Ví dụ 1: Phản hồi thành công tự động duyệt (`review_status: "AUTO"`)
+#### Example 1: Successful Automatic Approval (`review_status: "AUTO"`)
 
-Khi độ tin cậy AI cao và khớp quy chuẩn biển số Việt Nam (`43K-860.50` thuộc khách hàng `Trịnh Xuân Trường`):
+When AI confidence is high and conforms to Vietnamese vehicle plate standards (`43K-860.50` owned by customer `Trịnh Xuân Trường`):
 
 ```http
 POST /api/v1/parking/plate-scans/ HTTP/1.1
@@ -961,9 +961,9 @@ X-Request-ID: 53b70530673b41b8a7a4d75de93bf5e2
 }
 ```
 
-#### Ví dụ 2: Phản hồi yêu cầu nhân viên rà soát (`review_status: "NEEDS_REVIEW"`)
+#### Example 2: Operator Review Required (`review_status: "NEEDS_REVIEW"`)
 
-Khi ảnh có độ tin cậy thấp hoặc đã áp dụng sửa ký tự theo vị trí (`43K-86O.59` được sửa ký tự `O` tại vị trí 5 thành `0` -> `43K86059` và gợi ý biển số đã đăng ký `43K-860.50`):
+When image has low confidence or positional character correction was applied (`43K-86O.59` with `O` at pos 5 corrected to `0` -> `43K86059`, suggesting registered plate `43K-860.50`):
 
 ```http
 POST /api/v1/parking/plate-scans/ HTTP/1.1
@@ -1056,7 +1056,7 @@ X-Request-ID: d50c117a75c14f67a35af4e14c93ffc5
 }
 ```
 
-#### Ví dụ 3: Không phát hiện được biển số trong ảnh (HTTP `422 Unprocessable Content`)
+#### Example 3: License Plate Not Detected in Image (HTTP `422 Unprocessable Content`)
 
 ```http
 POST /api/v1/parking/plate-scans/ HTTP/1.1
@@ -1079,35 +1079,35 @@ X-Request-ID: bb89b602b5694d7fb7c66f7158faf1ec
 }
 ```
 
-#### Bảng 9 Mã lý do duyệt (`ReviewReasonCode` trong `apps/parking/enums.py`)
+#### Table of 9 Review Reason Codes (`ReviewReasonCode` in `apps/parking/enums.py`)
 
-| Mã lý do (`review_reasons`) | Ý nghĩa kỹ thuật | Hành động đề xuất cho UI |
+| Reason Code (`review_reasons`) | Technical Meaning | Recommended UI Action |
 |---|---|---|
-| `MODEL_DISAGREEMENT` | Hai mô hình AI OCR cho ra kết quả biển số khác nhau. | Hiển thị cả 2 kết quả để nhân viên chọn kết quả đúng. |
-| `LOW_CHAR_CONFIDENCE` | Tồn tại ký tự có độ tin cậy dưới ngưỡng (dưới 90.0%). | Đánh dấu màu vàng các ký tự có độ tin cậy thấp trên màn hình. |
-| `INVALID_FORMAT` | Chuỗi ký tự nhận diện không khớp quy chuẩn biển số Việt Nam. | Yêu cầu nhân viên kiểm tra lại cấu trúc biển số. |
-| `UNKNOWN_PLATE_PATTERN` | Định dạng biển số lạ chưa định nghĩa trong danh mục quy chuẩn. | Mở ô cho nhân viên nhập tay xác nhận. |
-| `NO_DETECTION_RETRY` | Bộ nhận diện detector ban đầu không bắt được, phải crop fallback. | Cảnh báo góc chụp camera có thể bị lệch. |
-| `LOW_DETECTION_CONFIDENCE` | Hộp bao biển số (bounding box) có độ tin cậy `< 80.0%`. | Cảnh báo xe chưa vào đúng vị trí nhận diện tối ưu. |
-| `IRREGULAR_ASPECT_RATIO` | Tỷ lệ dài/rộng của biển số bất thường (`< 1.3` hoặc `> 6.0`). | Cảnh báo biển số chụp quá nghiêng. |
-| `LOW_IMAGE_SHARPNESS` | Độ sắc nét của ảnh thấp (phương sai Laplacian `< 30.0`, ảnh mờ). | Thông báo ảnh mờ do xe di chuyển nhanh hoặc trời mưa. |
-| `POSITION_CORRECTED` | Đã áp dụng quy tắc sửa ký tự theo vị trí ngữ pháp (ví dụ chữ `O` thành số `0`). | Hiển thị danh sách `corrections` để nhân viên xác nhận sửa đổi. |
+| `MODEL_DISAGREEMENT` | The two AI OCR models yielded differing plate recognition outputs. | Display both candidates side-by-side so operator can select correct plate. |
+| `LOW_CHAR_CONFIDENCE` | One or more characters fall below confidence threshold (< 90.0%). | Highlight low-confidence characters with yellow alert badge on UI. |
+| `INVALID_FORMAT` | Recognized plate string does not conform to Vietnamese motor vehicle standards. | Prompt operator to inspect and verify plate structure. |
+| `UNKNOWN_PLATE_PATTERN` | Unconventional plate format not cataloged in standard rules. | Provide manual text input field for operator verification. |
+| `NO_DETECTION_RETRY` | Primary detector missed plate, triggered fallback crop. | Alert that camera angle or lighting may be suboptimal. |
+| `LOW_DETECTION_CONFIDENCE` | License plate bounding box confidence is `< 80.0%`. | Warn that vehicle may not be aligned with optimal detection zone. |
+| `IRREGULAR_ASPECT_RATIO` | Plate aspect ratio is irregular (`< 1.3` or `> 6.0`). | Warn that plate angle is excessively skewed or distorted. |
+| `LOW_IMAGE_SHARPNESS` | Low image sharpness score (Laplacian variance `< 30.0`, blurry image). | Notify that image is blurry due to vehicle motion or adverse weather. |
+| `POSITION_CORRECTED` | Positional grammar rule correction applied (e.g., letter `O` corrected to digit `0`). | Display `corrections` list for operator confirmation. |
 
-#### Hướng dẫn xử lý trên giao diện cho `NEEDS_REVIEW`
+#### UI Handling Guidelines for `NEEDS_REVIEW`
 
-Khi `review_status === "NEEDS_REVIEW"`:
+When `review_status === "NEEDS_REVIEW"`:
 
-1. **Hiển thị Badge cảnh báo**: Đặt nhãn màu vàng/cam "Cần xác minh" cạnh biển số xe.
-2. **Cho phép chỉnh sửa**: Mở ô nhập liệu cho phép nhân viên trực cổng sửa lại biển số theo hình ảnh thực tế đang hiển thị trên màn hình.
-3. **Hiển thị gợi ý**: Render danh sách `suggestions` dưới dạng các nút bấm nhanh để nhân viên chọn một chạm.
-4. **Không tự động mở barrier**: Tuyệt đối không tự động kích hoạt barrier mở cho đến khi nhân viên nhấn nút "Xác nhận Check-in".
+1. **Warning Badge**: Display yellow/amber badge "Review Required" next to plate number.
+2. **Enable Editing**: Provide text input enabling gate operator to correct the plate based on camera image shown on screen.
+3. **Show Suggestions**: Render `suggestions` list as quick-selection action buttons for one-touch operator confirmation.
+4. **Do Not Open Barrier Automatically**: Never auto-trigger barrier gate opening until the operator clicks "Confirm Check-In".
 
-### 8.3 Tra cứu thông tin xe theo biển số (`GET /api/v1/parking/vehicle-lookup/`)
+### 8.3 Lookup Vehicle by Plate Number (`GET /api/v1/parking/vehicle-lookup/`)
 
-- **Mục đích**: Tra cứu tức thời thông tin phương tiện, chủ xe, vị trí đỗ cố định, vé tháng đang hoạt động, phiên đỗ đang mở và trạng thái blacklist khi xe tiến vào cổng.
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER`.
-- **Query Parameter**: `license_plate` (chuỗi biển số xe, bắt buộc).
-- **Ví dụ thực tế khi tìm thấy phương tiện đã đăng ký (`43K-860.50`)**:
+- **Purpose**: Instantly retrieve vehicle specifications, customer details, assigned slot, active monthly pass, active session, and blacklist status upon gate approach.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Query Parameter**: `license_plate` (license plate string, required).
+- **Live Stack Example When Vehicle Found (`43K-860.50`)**:
 
   ```http
   GET /api/v1/parking/vehicle-lookup/?license_plate=43K-860.50 HTTP/1.1
@@ -1168,7 +1168,7 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-- **Ví dụ thực tế khi không tìm thấy** (HTTP `404 Not Found` kèm mã `MSG-4.5.1-M01`):
+- **Live Stack Example When Not Found** (HTTP `404 Not Found` with code `MSG-4.5.1-M01`):
 
   ```http
   GET /api/v1/parking/vehicle-lookup/?license_plate=99Z-999.99 HTTP/1.1
@@ -1186,17 +1186,17 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-### 8.4 Tìm kiếm xe nâng cao đa tiêu chí (`GET /api/v1/parking/vehicle-search/`)
+### 8.4 Multi-Criteria Vehicle Search (`GET /api/v1/parking/vehicle-search/`)
 
-- **Mục đích**: Hỗ trợ nhân viên tìm xe cho khách quên vị trí đỗ hoặc tra cứu thông tin phương tiện theo nhiều tiêu chí.
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER`.
+- **Purpose**: Assist staff in locating parked vehicles for customers or looking up vehicle history across multiple search criteria.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
 - **Query Parameters**:
-  - `q` (tùy chọn): Từ khóa tìm kiếm hợp nhất (tự động so khớp họ tên, số điện thoại hoặc biển số xe; tối thiểu 2 ký tự).
-  - `customer_name` (tùy chọn): Lọc theo tên khách hàng.
-  - `phone` (tùy chọn): Lọc theo số điện thoại (hỗ trợ cả định dạng `+84` và `0`).
-  - `license_plate` (tùy chọn): Lọc theo biển số xe.
-  - `page` / `page_size`: Phân trang.
-- **Ví dụ 1: Tìm kiếm khớp kết quả (`?q=43K-860`)**:
+  - `q` (optional): Unified search keyword (automatically matches customer name, phone number, or plate; minimum 2 characters).
+  - `customer_name` (optional): Filter by customer name.
+  - `phone` (optional): Filter by phone number (supports `+84` and `0` formats).
+  - `license_plate` (optional): Filter by license plate.
+  - `page` / `page_size`: Pagination parameters.
+- **Example 1: Matching Search Results (`?q=43K-860`)**:
 
   ```http
   GET /api/v1/parking/vehicle-search/?q=43K-860 HTTP/1.1
@@ -1269,7 +1269,7 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-- **Ví dụ 2: Không có kết quả khớp (`200 OK` kèm `message`)**:
+- **Example 2: No Matching Results (`200 OK` with `message`)**:
 
   ```http
   GET /api/v1/parking/vehicle-search/?q=99Z-999 HTTP/1.1
@@ -1292,7 +1292,7 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-- **Ví dụ 3: Từ khóa ngắn hơn 2 ký tự (`400 Bad Request` kèm `PROP-GEN-P01`)**:
+- **Example 3: Search Keyword Shorter Than 2 Characters (`400 Bad Request` with `PROP-GEN-P01`)**:
 
   ```http
   GET /api/v1/parking/vehicle-search/?q=a HTTP/1.1
@@ -1314,13 +1314,13 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-### 8.5 Check-in phương tiện vào bãi (`POST /api/v1/parking/sessions/check-in/`)
+### 8.5 Vehicle Check-In (`POST /api/v1/parking/sessions/check-in/`)
 
-- **Mục đích**: Ghi nhận lượt xe vào bãi tại barrier cổng vào, sinh mã phiên `#PK-YYYYMMDD-NNN`.
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER` (cờ `override_blacklist=true` chỉ dành cho `MANAGER`).
-- **Headers bắt buộc**: `X-CSRFToken`.
-- **Các trường Body**: `license_plate` (bắt buộc), `entry_gate_id` (tùy chọn), `slot_id` (tùy chọn), `entry_image_url` (tùy chọn), `recognition_source` (`AI` hoặc `MANUAL`), `ai_confidence` (0–100), `review_status` (`AUTO` hoặc `NEEDS_REVIEW`), `override_blacklist` (`false` mặc định), `notes` (tùy chọn).
-- **Ví dụ thực tế từ Live Stack (HTTP `201 Created`)**:
+- **Purpose**: Record vehicle entry at the barrier gate, generating session code `#PK-YYYYMMDD-NNN`.
+- **Required Permission**: `EMPLOYEE` or `MANAGER` (`override_blacklist=true` flag restricted to `MANAGER`).
+- **Required Headers**: `X-CSRFToken`.
+- **Body Fields**: `license_plate` (required), `entry_gate_id` (optional), `slot_id` (optional), `entry_image_url` (optional), `recognition_source` (`AI` or `MANUAL`), `ai_confidence` (0–100), `review_status` (`AUTO` or `NEEDS_REVIEW`), `override_blacklist` (`false` default), `notes` (optional).
+- **Live Stack Example (HTTP `201 Created`)**:
 
   ```http
   POST /api/v1/parking/sessions/check-in/ HTTP/1.1
@@ -1371,16 +1371,16 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-### 8.6 Check-out phương tiện rời bãi (`POST /api/v1/parking/sessions/check-out/`)
+### 8.6 Vehicle Check-Out (`POST /api/v1/parking/sessions/check-out/`)
 
-- **Mục đích**: Kết thúc lượt đỗ xe tại cổng ra, tự động tính cước phí (0đ nếu có vé tháng `ACTIVE`, ngược lại tính theo block giờ: 10.000đ/giờ), ghi nhận hóa đơn thanh toán `payment`.
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER`.
-- **Headers bắt buộc**: `X-CSRFToken`.
-- **Quy tắc đầu vào**:
-  - Cung cấp chính xác **1 trong 2 tiêu chí**: `session_code` HOẶC `license_plate`.
-  - Cổng ra `exit_gate_id` bắt buộc phải là cổng có thuộc tính `direction="OUT"` (nếu chọn cổng `IN` sẽ bị từ chối `PROP-4.5.1-P12`).
-  - Nếu xe vãng lai phát sinh cước phí `> 0`, bắt buộc cung cấp `payment_method` (`CASH` hoặc `VIETQR`).
-- **Ví dụ thực tế từ Live Stack (HTTP `200 OK`)**:
+- **Purpose**: Conclude vehicle parking session at exit gate, automatically calculate parking fee (0 VND for `ACTIVE` monthly passes; otherwise calculated by hourly block: 10,000 VND/hour), and record payment record `payment`.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Required Headers**: `X-CSRFToken`.
+- **Input Rules**:
+  - Provide exactly **one of two criteria**: `session_code` OR `license_plate`.
+  - Exit gate `exit_gate_id` must have attribute `direction="OUT"` (selecting an `IN` gate returns error `PROP-4.5.1-P12`).
+  - If transient parking fee is `> 0`, `payment_method` is mandatory (`CASH` or `VIETQR`).
+- **Live Stack Example (HTTP `200 OK`)**:
 
   ```http
   POST /api/v1/parking/sessions/check-out/ HTTP/1.1
@@ -1439,12 +1439,12 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-### 8.7 Danh sách phiên đỗ xe (`GET /api/v1/parking/sessions/`)
+### 8.7 List Parking Sessions (`GET /api/v1/parking/sessions/`)
 
-- **Mục đích**: Hiển thị bảng nhật ký phiên xe ra vào phục vụ quản lý và thống kê.
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER`.
-- **Query Parameters**: `session_code`, `license_plate`, `status` (`open` hoặc `closed`), `entry_time_from`, `entry_time_to`, `page`, `page_size`.
-- **Ví dụ thực tế từ Live Stack**:
+- **Purpose**: Retrieve historical parking session log table for management and statistics.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Query Parameters**: `session_code`, `license_plate`, `status` (`open` or `closed`), `entry_time_from`, `entry_time_to`, `page`, `page_size`.
+- **Live Stack Example**:
 
   ```http
   GET /api/v1/parking/sessions/?status=open&page=1&page_size=2 HTTP/1.1
@@ -1513,11 +1513,11 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-### 8.8 Chi tiết một phiên đỗ xe (`GET /api/v1/parking/sessions/{id}/`)
+### 8.8 Parking Session Details (`GET /api/v1/parking/sessions/{id}/`)
 
-- **Mục đích**: Xem toàn bộ thông tin chi tiết của phiên đỗ xe theo ID số nguyên (thời gian vào/ra, ảnh chụp barrier, nhân viên xử lý, vị trí đỗ, cước phí).
-- **Quyền yêu cầu**: `EMPLOYEE` hoặc `MANAGER`.
-- **Ví dụ thực tế khi tìm thấy (`GET /api/v1/parking/sessions/51/`)**:
+- **Purpose**: View granular parking session details by integer ID (entry/exit timestamps, barrier camera photos, handling staff, slot assignment, billing).
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Live Stack Example When Found (`GET /api/v1/parking/sessions/51/`)**:
 
   ```http
   GET /api/v1/parking/sessions/51/ HTTP/1.1
@@ -1560,7 +1560,7 @@ Khi `review_status === "NEEDS_REVIEW"`:
   }
   ```
 
-- **Ví dụ thực tế khi không tìm thấy (`404 Not Found` kèm `MSG-4.4.1-M01`)**:
+- **Live Stack Example When Not Found (`404 Not Found` with `MSG-4.4.1-M01`)**:
 
   ```http
   GET /api/v1/parking/sessions/999999/ HTTP/1.1
@@ -1580,18 +1580,18 @@ Khi `review_status === "NEEDS_REVIEW"`:
 
 ---
 
-## 9. Tự động sinh Typed Client hoặc Postman Collection
+## 9. Automatically Generate Typed Client or Postman Collection
 
-### 9.1 Tự động sinh TypeScript Types với `openapi-typescript`
+### 9.1 Automatically Generate TypeScript Types with `openapi-typescript`
 
-Frontend có thể tự động trích xuất toàn bộ kiểu dữ liệu Type-Safe (TypeScript interfaces) cho mọi Request, Response và Schema trực tiếp từ endpoint đặc tả `/api/schema/`:
+The Frontend can automatically extract type-safe TypeScript interfaces for every Request, Response, and Schema directly from the `/api/schema/` endpoint:
 
 ```bash
-# Chạy trực tiếp đối với máy chủ đang chạy hoặc file schema.yaml đã tải về
+# Run directly against running server or downloaded schema.yaml
 npx --yes openapi-typescript@7.13.0 http://127.0.0.1:8000/api/schema/ -o src/types/api.d.ts
 ```
 
-#### Kết quả trích xuất thực tế (`openapi-typescript 7.13.0` — 1,553 dòng)
+#### Actual Extraction Output (`openapi-typescript 7.13.0` — 1,553 lines)
 
 ```text
 $ npx --yes openapi-typescript@7.13.0 schema.yaml -o src/types/api.d.ts
@@ -1600,7 +1600,7 @@ Exit code: 0
 🚀 schema.yaml → src/types/api.d.ts [61.2ms]
 ```
 
-Đoạn trích nguyên văn từ tệp `src/types/api.d.ts` được sinh ra:
+Verbatim excerpt from generated `src/types/api.d.ts`:
 
 ```typescript
 /**
@@ -1617,9 +1617,9 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Kiểm tra trạng thái sẵn sàng của hệ thống
-         * @description Kiểm tra trạng thái sẵn sàng của hệ thống, kết nối cơ sở dữ liệu PostgreSQL và mô hình OCR.
-         *     Cả hai đường dẫn `/api/health/` (hạ tầng hệ thống) và `/api/v1/health/` (API v1) đều được cung cấp có chủ đích để tương thích với các bộ kiểm tra sức khỏe hạ tầng (Docker/K8s/reverse proxy) và định tuyến phiên bản của frontend.
+         * System readiness status check
+         * @description Checks system readiness status, PostgreSQL database connectivity, and OCR model availability.
+         *     Both `/api/health/` (infrastructure monitoring) and `/api/v1/health/` (API v1) are intentionally provided for compatibility with infrastructure health checkers (Docker/K8s/reverse proxy) and frontend version routing.
          */
         get: operations["health_retrieve"];
         put?: never;
@@ -1638,8 +1638,8 @@ export interface paths {
             cookie?: never;
         };
         /**
-         * Khởi tạo CSRF cookie
-         * @description Endpoint công khai khởi tạo và trả về cookie csrftoken phục vụ cơ chế bảo vệ CSRF hai lớp của SPA.
+         * Initialize CSRF cookie
+         * @description Public endpoint initializing and returning the csrftoken cookie for SPA double-submit CSRF protection.
          */
         get: operations["v1_auth_csrf_retrieve"];
         put?: never;
@@ -1653,39 +1653,39 @@ export interface paths {
 }
 ```
 
-### 9.2 Nhập vào Postman (Postman Collection Import)
+### 9.2 Import into Postman (Postman Collection Import)
 
-1. Mở Postman, chọn **Import** ở góc trên bên trái.
-2. Chọn tab **Link** và dán địa chỉ URL: `http://127.0.0.1:8000/api/schema/`.
-3. Nhấn **Continue** và chọn **Import as API with a Collection**.
-4. Toàn bộ danh mục API và ví dụ request/response sẽ được tự động đồng bộ vào Postman.
+1. Open Postman, select **Import** in the upper-left corner.
+2. Select the **Link** tab and paste the URL: `http://127.0.0.1:8000/api/schema/`.
+3. Click **Continue** and select **Import as API with a Collection**.
+4. The full API catalog and request/response examples will synchronize automatically into Postman.
 
 ---
 
-## 10. Bảng xử lý sự cố thường gặp & Các tính năng chưa phát triển
+## 10. Troubleshooting Table & Unavailable Features
 
-### 10.1 Bảng xử lý 8 sự cố thường gặp (Troubleshooting Table)
+### 10.1 8 Common Troubleshooting Scenarios (Troubleshooting Table)
 
-| STT | Triệu chứng sự cố | Nguyên nhân gốc rễ (Root Cause) | Giải pháp khắc phục triệt để |
+| No. | Issue Symptom | Root Cause | Definitive Solution |
 |:---:|---|---|---|
-| 1 | **Swagger UI / ReDoc trắng trang (Blank Page)** | Trong môi trường `DEBUG=True`, Gunicorn không tự động phục vụ static assets của `drf-spectacular-sidecar` nếu thiếu route `staticfiles_urlpatterns`. | Đảm bảo `config/urls.py` đã gắn `staticfiles_urlpatterns()` khi `settings.DEBUG` là True. Kiểm tra console trình duyệt để xác nhận các file `.css` và `.js` không bị mã lỗi 404. |
-| 2 | **Lỗi HTTP 403 `PROP-4.1-P06`** (`Mã CSRF không hợp lệ hoặc bị thiếu`) | Request đột biến (`POST`, `PUT`, `DELETE`) không gửi kèm header `X-CSRFToken` hoặc token không khớp với cookie `csrftoken`. | Gọi `GET /api/v1/auth/csrf/` trước khi gửi request; đọc giá trị từ cookie `csrftoken` và gán vào request header `X-CSRFToken`. Nếu chạy cross-origin, sử dụng Dev Proxy. |
-| 3 | **Lỗi HTTP 401 `MSG-4.1-M02`** (`Xin vui lòng nhập lại Tên đăng nhập...`) | Phiên làm việc đã hết hạn, hoặc cookie `sessionid` bị thiếu, hoặc thông tin đăng nhập không chính xác. | Kiểm tra xem cookie `parking_remember_token` còn tồn tại không để thực hiện silent re-auth qua `GET /api/v1/auth/me/`. Nếu thất bại, chuyển hướng người dùng về trang Login. |
-| 4 | **Lỗi HTTP 429 `PROP-4.1-P01`** (`Quá nhiều lần đăng nhập không thành công...`) | Người dùng đã nhập sai mật khẩu quá 5 lần liên tiếp trong cửa sổ 15 phút. | Đọc giá trị header `Retry-After` trong response (số giây cần chờ), vô hiệu hóa nút đăng nhập và hiển thị đồng hồ đếm ngược chờ thử lại. |
-| 5 | **Lỗi CORS Console** (`No 'Access-Control-Allow-Origin' header...`) | Domain của Frontend SPA (ví dụ `localhost:3000`) chưa được khai báo trong backend. | Thêm domain frontend vào biến môi trường `CORS_ALLOWED_ORIGINS` và `CSRF_TRUSTED_ORIGINS` trong file `.env` của backend, hoặc sử dụng Same-Origin Dev Proxy. |
-| 6 | **Cookie không được lưu trong trình duyệt** | Request gọi từ Frontend thiếu cấu hình gửi/nhận cookie xuyên nguồn. | Thêm cấu hình `credentials: "include"` khi dùng `fetch` hoặc `withCredentials: true` khi dùng `axios`. Tuyệt đối không để mặc định `credentials: "same-origin"`. |
-| 7 | **Lỗi `"Invalid HTTP_HOST header: ..."`** (DisallowedHost) | Header `Host` gửi lên không nằm trong danh sách `ALLOWED_HOSTS` của Django. | Khai báo bổ sung hostname của frontend hoặc máy phát triển vào biến môi trường `ALLOWED_HOSTS` trong backend (ví dụ: `ALLOWED_HOSTS=localhost,127.0.0.1,web`). |
-| 8 | **Lỗi HTTP 503 `PROP-4.5.1-P15`** (`Hệ thống nhận diện biển số xe đang quá tải...`) | Số lượng yêu cầu quét biển số đồng thời vượt quá giới hạn hàng đợi OCR (`PARKING_OCR_CONCURRENCY_LIMIT=4`). | Đọc header `Retry-After` trong response (mặc định 3 giây), hiển thị thông báo "Hệ thống bận, đang thử lại..." và tự động gửi lại request sau thời gian chỉ định. |
+| 1 | **Swagger UI / ReDoc Blank Page** | In `DEBUG=True`, Gunicorn does not automatically serve static assets for `drf-spectacular-sidecar` if `staticfiles_urlpatterns` route is omitted. | Ensure `config/urls.py` appends `staticfiles_urlpatterns()` when `settings.DEBUG` is True. Inspect browser console to confirm `.css` and `.js` files do not return 404 errors. |
+| 2 | **HTTP 403 `PROP-4.1-P06`** (`Mã CSRF không hợp lệ hoặc bị thiếu` - Invalid or missing CSRF token) | State-mutating request (`POST`, `PUT`, `DELETE`) sent without `X-CSRFToken` header or token does not match `csrftoken` cookie. | Call `GET /api/v1/auth/csrf/` before sending mutations; read value from `csrftoken` cookie and set into `X-CSRFToken` header. If running cross-origin, configure a Dev Proxy. |
+| 3 | **HTTP 401 `MSG-4.1-M02`** (`Xin vui lòng nhập lại Tên đăng nhập hoặc Mật khẩu` - Please re-enter your Username or Password) | Session expired, `sessionid` cookie missing, or credentials invalid. | Check whether `parking_remember_token` cookie is present to perform silent re-auth via `GET /api/v1/auth/me/`. If re-auth fails, redirect user to the login screen. |
+| 4 | **HTTP 429 `PROP-4.1-P01`** (`Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.` - Too many failed login attempts, please try again later) | User entered incorrect password more than 5 consecutive times within a 15-minute window. | Read `Retry-After` response header (seconds to wait), disable login button, and display a countdown timer before allowing retry. |
+| 5 | **Browser Console CORS Error** (`No 'Access-Control-Allow-Origin' header...`) | Frontend SPA domain (e.g. `localhost:3000`) is not declared in backend configuration. | Add frontend domain to `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in backend `.env`, or configure a Same-Origin Dev Proxy. |
+| 6 | **Cookies Not Saved in Browser** | Request sent from Frontend lacks cross-origin cookie configuration. | Add `credentials: "include"` when using `fetch` or `withCredentials: true` when using `axios`. Do not leave default `credentials: "same-origin"`. |
+| 7 | **Error `"Invalid HTTP_HOST header: ..."`** (DisallowedHost) | Received `Host` header is not included in Django `ALLOWED_HOSTS` list. | Add frontend hostname or dev machine host to `ALLOWED_HOSTS` in backend `.env` (e.g., `ALLOWED_HOSTS=localhost,127.0.0.1,web`). |
+| 8 | **HTTP 503 `PROP-4.5.1-P15`** (`Hệ thống nhận diện biển số xe đang quá tải, vui lòng thử lại sau.` - License plate recognition system is overloaded, please try again later) | Number of concurrent plate scan requests exceeds OCR queue capacity (`PARKING_OCR_CONCURRENCY_LIMIT=4`). | Read `Retry-After` response header (default 3 seconds), display "System busy, retrying..." message, and retry automatically after specified delay. |
 
-### 10.2 Các tính năng chưa phát triển (What Is Not Available Yet)
+### 10.2 Features Not Implemented Yet (What Is Not Available Yet)
 
-Nhằm giúp lập trình viên Frontend không mất thời gian tìm kiếm hoặc chờ đợi các API chưa tồn tại, hệ thống Backend ghi nhận rõ ràng các phạm vi tính năng hiện **chưa được hiện thực**:
+To prevent frontend developers from spending time searching for or awaiting APIs that do not currently exist, the backend team explicitly documents the following features that **are not currently implemented**:
 
-1. **Đăng ký tài khoản tự phục vụ (Self-service User Registration)**:
-   - Hệ thống hiện tại không cung cấp API tự đăng ký tài khoản công khai. Mọi tài khoản người dùng được tạo sẵn thông qua tệp nạp dữ liệu mẫu ban đầu (`db/02-seed.sql`) hoặc do Quản lý khởi tạo.
-2. **Quên mật khẩu / Đặt lại mật khẩu tự phục vụ (Self-service Password Reset)**:
-   - Chưa cung cấp API gửi mã OTP hoặc đường dẫn khôi phục mật khẩu qua Email/SMS. Mật khẩu phát triển được cấp phát lại bằng lệnh quản trị máy chủ `set_account_password`.
-3. **Các phân hệ quản trị CRUD độc lập khác**:
-   - Các phân hệ Khách hàng (`customers`), Nhân viên (`employees`), Phương tiện (`vehicles`), Vé xe (`tickets`), Báo cáo (`reports`) hiện mới chỉ hoàn thiện mô hình dữ liệu (Database Models) và kiểm soát toàn vẹn ràng buộc; các endpoint API quản lý CRUD riêng biệt của các phân hệ này chưa được kích hoạt định tuyến. Các thông tin liên quan chỉ được truy xuất gián tiếp qua các API đỗ xe (`/api/v1/parking/*`).
-4. **Phục vụ Static Files trong môi trường Production**:
-   - Cơ chế phục vụ static assets của Swagger UI trực tiếp qua Django (`staticfiles_urlpatterns`) chỉ áp dụng trong môi trường phát triển (`DEBUG=True`). Trong môi trường Production (`DEBUG=False`), việc phục vụ static files là quyết định thuộc thẩm quyền của Chủ sở hữu hệ thống (sử dụng Reverse Proxy Nginx/Caddy hoặc WhiteNoise, hiện ghi nhận trạng thái `UNVERIFIED`).
+1. **Self-service User Registration**:
+   - The system does not provide a public user self-registration API. All user accounts are provisioned via the initial seed script (`db/02-seed.sql`) or created by Managers.
+2. **Self-service Password Reset**:
+   - No public API is provided for OTP or password reset links via Email/SMS. Development passwords are reset using the administrative server command `set_account_password`.
+3. **Other Standalone Management CRUD Modules**:
+   - Customer (`customers`), Employee (`employees`), Vehicle (`vehicles`), Ticket (`tickets`), and Report (`reports`) modules currently have their database models and relational constraints established; however, standalone CRUD management API endpoints for these modules are not currently exposed in routing. Associated data is accessed indirectly through parking APIs (`/api/v1/parking/*`).
+4. **Static File Serving in Production**:
+   - Direct serving of Swagger UI static assets via Django (`staticfiles_urlpatterns`) applies exclusively to development (`DEBUG=True`). In production (`DEBUG=False`), static file serving is an architectural decision reserved for the System Owner (using Nginx/Caddy reverse proxy or WhiteNoise, currently marked `UNVERIFIED`).
