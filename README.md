@@ -70,13 +70,338 @@ Per Team Lead decision **TL-48**, this branch provides only the skeleton foundat
 
 ## 3. Quick Start (Development & Operations)
 
-### Step 1: Environment Configuration
+### Choose how to run the backend
 
-Copy the template and configure local environment variables:
+The backend provides two independent startup options depending on developer workflow preference and workstation setup:
+
+| Feature | Option 1: Run with Docker | Option 2: Run locally with Python (no Docker) |
+|---|---|---|
+| **Target Audience** | Developers who want a turnkey full-stack environment without installing database services on the host machine. | Developers who prefer running without Docker Desktop, using local Python and PostgreSQL (with pgAdmin for database inspection). |
+| **Prerequisites** | Docker Desktop or Docker Engine & Docker Compose. | Python 3.14.7 (Python 3.15 is unsupported), PostgreSQL 18.x (with pgAdmin 4). |
+| **Advantages** | Self-contained packaging, automatic network/volume provisioning, and automatic PostgreSQL extension loading. | Lower RAM/CPU consumption, direct local debugging, and visual data inspection via pgAdmin 4. |
+| **Disadvantages** | Requires host resources for container virtualization. | Requires manual PostgreSQL service installation, role provisioning, and Python virtual environment management. |
+
+---
+
+### Option 1: run with Docker
+
+Launch the complete system consisting of a PostgreSQL 18.6 database and a Python 3.14.7 application server (Gunicorn & ONNX Runtime) via pre-configured container services.
+
+#### 1. Clone repository and create environment file
+
+Clone the repository to your local machine:
 
 ```bash
-cp .env.example .env
+git clone https://github.com/quan-ly-bai-dau-xe/parking_management_backend.git
+cd parking_management_backend
 ```
+
+Create the `.env` configuration file from `.env.example`:
+
+```bash
+# On Linux / macOS:
+cp .env.example .env
+
+# On Windows (PowerShell):
+Copy-Item .env.example .env
+```
+
+Configure required environment variables in `.env`:
+
+```env
+DEBUG=True
+SECRET_KEY=your_secret_key_here
+POSTGRES_PASSWORD=your_password_here
+```
+
+`DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404.
+
+Generate a secure random `SECRET_KEY`:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(50))"
+```
+
+#### Docker Compose Environment Note
+
+The `.env` file is read by Docker Compose on the host machine to interpolate `${...}` variables and is NOT copied into the container image (`.dockerignore`). Any environment variable required by the application inside the container must be explicitly declared and forwarded under `services.web.environment` in `docker-compose.yml`. This requirement is verified by `tests/core/test_compose_env_forwarding.py`.
+
+Other configuration variables have built-in defaults in `docker-compose.yml`, so a minimal `.env` file containing only the required variables is sufficient.
+
+#### 2. Start all services
+
+Build images and launch all services:
+
+```bash
+# Build images and start services in the foreground:
+docker compose up --build
+
+# Or build images and start in detached mode:
+docker compose up --build -d
+```
+
+*Security note*: Host ports are bound exclusively to the loopback interface `127.0.0.1` (`127.0.0.1:${WEB_PORT:-8000}` and `127.0.0.1:${POSTGRES_PORT:-5432}`).
+
+#### 3. Seed sample data and set credentials
+
+By default, `LOAD_SAMPLE_DATA` is set to `0` to prevent overwriting existing data. To automatically seed sample data on container startup, set `LOAD_SAMPLE_DATA=1` in `.env` or start with:
+
+```bash
+# On Linux / macOS:
+LOAD_SAMPLE_DATA=1 docker compose up --build
+
+# On Windows (PowerShell):
+$env:LOAD_SAMPLE_DATA="1"; docker compose up --build
+```
+
+Alternatively, seed sample data manually while containers are running:
+
+```bash
+docker compose exec web python manage.py load_sample_data
+```
+
+*Production note*: In production (`DEBUG=False`), `load_sample_data` is blocked to prevent accidental data contamination unless the `--force-production` flag is explicitly provided.
+
+Sample accounts loaded from `db/02-seed.sql` do not contain usable passwords (password hashes use the unusable prefix `!`). Set account passwords using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
+
+```bash
+# Interactive password entry via prompt:
+docker compose exec web python manage.py set_account_password --identifier hoang.dinh.khang@example.com
+
+# Or pass password via ACCOUNT_PASSWORD environment variable:
+docker compose exec -e ACCOUNT_PASSWORD="NewPassword123!" web python manage.py set_account_password --identifier hoang.dinh.khang@example.com
+```
+
+Sample test accounts extracted from `db/02-seed.sql`:
+
+| Role | Email | Phone |
+|---|---|---|
+| `MANAGER` | `hoang.dinh.khang@example.com` | `0880721788` |
+| `EMPLOYEE` | `luong.mai.phuong@example.org` | `0385211625` |
+| `CUSTOMER` | `trinh.xuan.truong@example.com` | `0868851325` |
+
+#### 4. Stop and update configuration
+
+To stop services while preserving database volume data:
+
+```bash
+docker compose stop
+```
+
+- **Data loss warning**: Running `docker compose down -v` permanently deletes the database volume `parking_postgres_data`. Use `docker compose down` (without the `-v` flag) to preserve persistent data.
+- **Password changes**: Modifying `POSTGRES_PASSWORD` in `.env` after the database volume has already been initialized does not update the password inside PostgreSQL (causing authentication failures). Retain the initial password or remove the development volume to reinitialize from scratch.
+- **Environment updates**: After editing `.env`, run `docker compose up -d` to apply updated environment settings without rebuilding images (`--build`).
+- **Forwarding new variables**: Any new environment variable required by the web container must be declared under `services.web.environment` in `docker-compose.yml`.
+
+---
+
+### Option 2: run with Python and a locally installed PostgreSQL (no Docker)
+
+<!-- cspell:ignore createdb -->
+<!-- cspell:ignore NOSUPERUSER -->
+
+Run the application directly on a workstation with local Python and PostgreSQL installations.
+
+#### 1. Prerequisites
+
+- Python 3.14.7 (Python 3.15 is unsupported).
+- PostgreSQL 18.x from postgresql.org (Windows installer includes pgAdmin 4 GUI and contrib extensions). *(not verified: Windows native MSI installer and pgAdmin 4 GUI)*
+
+#### 2. Provision database and user role via pgAdmin
+
+Open pgAdmin 4, connect to the database server using the administrative `postgres` account, open the **Query Tool**, and execute:
+
+```sql
+CREATE ROLE parking_user WITH LOGIN CREATEDB PASSWORD 'your_password_here';
+CREATE DATABASE parking_db OWNER parking_user ENCODING 'UTF8';
+```
+
+*Note*: The `CREATEDB` privilege is required for the automated test suite (`pytest`) to create and tear down the transient `test_parking_db` database.
+
+*PostgreSQL Extensions*: The database schema requires two extensions: `btree_gist` and `pg_trgm`. In standard PostgreSQL 18 (and versions 13+ from postgresql.org), both extensions are trusted (`trusted = true`), allowing the database owner (`parking_user`) to create them automatically during `python manage.py migrate` without superuser privileges. On custom or hardened PostgreSQL installations where extensions are marked untrusted (`trusted = false`), running `python manage.py migrate` as a non-superuser fails with `permission denied to create extension "btree_gist"`. In addition, running `pytest` also fails when creating the test database because `db/01-schema.sql` issues extension creation statements, and pre-installing extensions in `template1` fails with duplicate object errors since `btree_gist` is created without `IF NOT EXISTS`. Therefore, on untrusted-extension installations, grant superuser privileges to the local development role before running migrations and keep it for the test runner: `ALTER ROLE parking_user WITH SUPERUSER;` (apply on local development workstations only, never in production).
+
+#### 3. Set up Python virtual environment and dependencies
+
+Open a terminal in the project directory:
+
+```bash
+git clone https://github.com/quan-ly-bai-dau-xe/parking_management_backend.git
+cd parking_management_backend
+```
+
+Create and activate a virtual environment:
+
+On Windows (PowerShell):
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+```
+
+On Linux / macOS:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+Install development dependencies:
+
+```bash
+pip install -r requirements/02-dev.txt
+```
+
+#### 4. Configure local environment variables
+
+Create `.env` from `.env.example`:
+
+```bash
+# On Linux / macOS:
+cp .env.example .env
+
+# On Windows (PowerShell):
+Copy-Item .env.example .env
+```
+
+Configure required environment variables in `.env` (including `DEBUG=True`, database connection settings with `POSTGRES_HOST=127.0.0.1`, `CORS_ALLOWED_ORIGINS`, and `CSRF_TRUSTED_ORIGINS`):
+
+```env
+DEBUG=True
+SECRET_KEY=your_secret_key_here
+POSTGRES_DB=parking_db
+POSTGRES_USER=parking_user
+POSTGRES_PASSWORD=your_password_here
+POSTGRES_HOST=127.0.0.1
+POSTGRES_PORT=5432
+CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+```
+
+`DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404. While the backend starts with minimal database and secret settings, a browser frontend accessing the API from another origin (such as `http://localhost:3000`) requires `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` to prevent HTTP 403 Forbidden CSRF rejection errors (`PROP-4.1-P06`).
+
+Generate a secure random `SECRET_KEY`:
+
+```bash
+python -c "import secrets; print(secrets.token_urlsafe(50))"
+```
+
+#### 5. Apply migrations, seed data, and set credentials
+
+Apply database schema migrations and load initial sample data:
+
+```bash
+python manage.py migrate
+python manage.py load_sample_data
+```
+
+Sample accounts from `db/02-seed.sql` do not contain usable passwords (password hashes use the unusable prefix `!`). Set account passwords using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
+
+```bash
+# Interactive password entry via prompt:
+python manage.py set_account_password --identifier hoang.dinh.khang@example.com
+```
+
+Or pass the password via `ACCOUNT_PASSWORD` on Windows (PowerShell):
+
+```powershell
+$env:ACCOUNT_PASSWORD="NewPassword123!"
+python manage.py set_account_password --identifier hoang.dinh.khang@example.com
+```
+
+Or on Linux / macOS:
+
+```bash
+ACCOUNT_PASSWORD="NewPassword123!" python manage.py set_account_password --identifier hoang.dinh.khang@example.com
+```
+
+Sample test accounts extracted from `db/02-seed.sql`:
+
+| Role | Email | Phone |
+|---|---|---|
+| `MANAGER` | `hoang.dinh.khang@example.com` | `0880721788` |
+| `EMPLOYEE` | `luong.mai.phuong@example.org` | `0385211625` |
+| `CUSTOMER` | `trinh.xuan.truong@example.com` | `0868851325` |
+
+#### 6. Run development server and tests
+
+Start the Django development server:
+
+```bash
+python manage.py runserver
+```
+
+Run the automated test suite to confirm end-to-end functionality:
+
+```bash
+pytest
+```
+
+#### 7. Technical notes
+
+- `DEBUG=True` is required when running with `runserver` so that the development server serves Swagger UI static CSS and JavaScript assets.
+- License plate recognition automatically downloads ONNX weight files from the network to `~/.cache` on the first scan request if `PARKING_OCR_MODELS_DIR` does not contain pre-baked weights (refer to `apps/parking/services/ocr.py`), requiring internet connectivity during the initial scan.
+- Native Windows PostgreSQL installer, pgAdmin 4 GUI configuration screens, and Windows service (`services.msc`) management are marked as `(not verified)` in automated headless test pipelines.
+
+If you prefer running the backend with Docker, see [Option 1: run with Docker](#option-1-run-with-docker). <!-- closing-docker-pointer -->
+
+---
+
+### Verify the backend and try a login (both options)
+
+After starting the backend using either option, verify operational status and test authentication:
+
+#### 1. Service health check
+
+- **Health Check Endpoint**: Access [http://127.0.0.1:8000/api/health/](http://127.0.0.1:8000/api/health/) (or `/api/v1/health/`).
+  - Under Docker with Gunicorn, worker initialization pre-warms OCR models via the `post_fork` hook, returning `{"status": "healthy", "database": "connected", "ocr_ready": true}`.
+  - Under `runserver`, OCR models load lazily upon first plate scan, returning `{"status": "healthy", "database": "connected", "ocr_ready": false}` before any scan request (verified: `ocr_ready` remains `false` under `runserver` as model warm-up is managed exclusively via Gunicorn `post_fork` in container deployments).
+- **Interactive API Documentation (Swagger UI)**: Access [http://127.0.0.1:8000/api/docs/](http://127.0.0.1:8000/api/docs/) to view the API catalog and execute requests via "Try it out".
+- **ReDoc Documentation**: Access [http://127.0.0.1:8000/api/redoc/](http://127.0.0.1:8000/api/redoc/).
+- **OpenAPI Schema**: Access [http://127.0.0.1:8000/api/schema/](http://127.0.0.1:8000/api/schema/).
+
+#### 2. CSRF authentication and login flow
+
+The backend protects session authentication with Double-Submit Cookie CSRF defense:
+
+- **Authoritative Login URL**: `/api/v1/auth/login/` (must include the `/auth/` subpath).
+
+**Step 1 — Retrieve CSRF Cookie**: Send a `GET` request to `/api/v1/auth/csrf/`:
+
+```http
+GET /api/v1/auth/csrf/ HTTP/1.1
+Host: 127.0.0.1:8000
+```
+
+The response sets the `csrftoken` cookie in the browser or HTTP client.
+
+**Step 2 — Submit Login Request**: Send a `POST` request to `/api/v1/auth/login/` with the CSRF token in the `X-CSRFToken` header:
+
+```http
+POST /api/v1/auth/login/ HTTP/1.1
+Host: 127.0.0.1:8000
+Content-Type: application/json
+X-CSRFToken: <received_csrftoken_value>
+Origin: http://localhost:3000
+
+{
+  "identifier": "hoang.dinh.khang@example.com",
+  "password": "NewPassword123!",
+  "remember": false
+}
+```
+
+Upon successful authentication, the server responds with HTTP `200 OK`, returning user profile details and setting the authenticated `sessionid` session cookie.
+
+#### 3. Frontend integration notes
+
+- **Frontend Integration Guide**: For comprehensive integration patterns, see [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md).
+- **Security & Authentication Architecture**: See [Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"](#step-8-interactive-api-documentation-csrf--swagger-try-it-out) for detailed cookie security, Argon2 password hashing, and token rotation specifications.
+- **Same Host Requirement**: Run the frontend and backend on the same host name (`127.0.0.1` or `localhost`) during local development to avoid cross-site cookie restrictions in modern browsers.
+- **Trusted Origins**: Default CORS and CSRF configurations (`CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`) permit cross-origin requests from `http://localhost:3000` and `http://127.0.0.1:3000`.
+
+---
+
+### Environment variables
 
 Key environment variables:
 
@@ -111,88 +436,27 @@ Key environment variables:
 
 ---
 
-### Option A: Launch Full Stack via Docker Compose (Recommended)
+### Troubleshooting
 
-Run both the PostgreSQL 18.6 database and the Python 3.14.7 backend container with a single command:
+#### Table 1: Troubleshooting Option 1 (Docker)
 
-```bash
-# Build images and start all services:
-docker compose up --build
+| Error Symptom | Root Cause | Remediation |
+|---|---|---|
+| `bind: address already in use` | Host port 8000 or 5432 is occupied by another local process. | Change `WEB_PORT` or `POSTGRES_PORT` to an available port in `.env` (e.g., `WEB_PORT=8015`, `POSTGRES_PORT=5445`). |
+| `FATAL: password authentication failed` | `POSTGRES_PASSWORD` was changed in `.env` after the database volume was already initialized. | Restore the original password in `.env`, update the password in PostgreSQL via `ALTER ROLE`, or recreate the volume in development. |
+| New variables in `.env` have no effect | The variable was not forwarded into the container. | Declare the variable under `services.web.environment` in `docker-compose.yml`. |
+| Missing required variables when running compose | `SECRET_KEY` or `POSTGRES_PASSWORD` is not set. | Provide values for both required variables in `.env`. |
 
-# Or run in detached background mode:
-docker compose up -d --build
-```
+#### Table 2: Troubleshooting Option 2 (Local Python & PostgreSQL)
 
-*Operational Details*:
-
-- **Automated Readiness**: The `web` container entrypoint automatically waits for PostgreSQL health checks and runs `python manage.py migrate --noinput` (controlled by `RUN_MIGRATIONS: "1"`). By default, `LOAD_SAMPLE_DATA` is set to `0` (`${LOAD_SAMPLE_DATA:-0}`) in `docker-compose.yml` to prevent accidental seed data ingestion into existing databases.
-- **Enabling Sample Data**: To automatically seed sample data on container startup, set `LOAD_SAMPLE_DATA=1` in your `.env` file or run:
-
-  ```bash
-  LOAD_SAMPLE_DATA=1 docker compose up --build
-  ```
-
-- **Production Fail-Loud Protection**: When running with `DEBUG=False` (production/staging), enabling `LOAD_SAMPLE_DATA=1` will fail loudly: `python manage.py load_sample_data` raises `CommandError` and halts the container immediately (`set -eu` in `entrypoint.sh`), preventing accidental production data pollution unless `--force-production` is explicitly passed manually.
-- **Manual Data Loading**: If needed, sample data can be re-loaded manually via:
-
-  ```bash
-  docker compose exec web python manage.py load_sample_data
-  ```
-
-- **Security Boundary**: Ports are strictly bound to local loopback interface `127.0.0.1:${WEB_PORT:-8000}`.
-- **Media Storage**: Uploaded captures are mounted via bind mount (`./media:/app/media`). Zero named volumes are allocated for media to preserve host Docker volume safety.
-- **Check Status**: Run `docker compose ps` to inspect container health.
+| Error Symptom | Root Cause | Remediation |
+|---|---|---|
+| `connection to server at "127.0.0.1", port 5432 failed` | Local PostgreSQL service is not running. | Verify PostgreSQL service status in Windows Services (`services.msc`) or run `sudo systemctl start postgresql` on Linux. |
+| `permission denied to create database` during `pytest` | Role `parking_user` lacks the `CREATEDB` attribute. | Connect via pgAdmin as `postgres` and execute `ALTER ROLE parking_user CREATEDB;`. |
+| Swagger UI missing CSS/JS styling | Development server started with `DEBUG=False`. | Set `DEBUG=True` in `.env` so Django serves static assets in development. |
+| First license plate scan is slow or fails | OCR engine is downloading ONNX weights to `~/.cache`. | Ensure active internet connectivity during the first plate scan request. |
 
 ---
-
-### Option B: Local Python Development Setup
-
-#### Step 2: Start PostgreSQL 18.6 Database Standalone
-
-Launch the official PostgreSQL 18.6 container via Docker Compose:
-
-```bash
-docker compose up -d db
-```
-
-*Verification*: PostgreSQL binds to `127.0.0.1:${POSTGRES_PORT:-5432}`. Persistent data volume is named `parking_postgres_data`.
-
-### Step 3: Python Environment & Dependencies
-
-Activate Python 3.14.7 virtual environment and install dependencies:
-
-```bash
-python -m venv .venv
-
-# On Windows (PowerShell):
-.venv\Scripts\Activate.ps1
-
-# On Linux / macOS:
-source .venv/bin/activate
-
-# Install development dependencies:
-pip install -r requirements/02-dev.txt
-```
-
-### Step 4: Initialize Database (RunSQL Ingestion)
-
-Execute initial migration to ingest Schema v2 directly from `db/01-schema.sql`:
-
-```bash
-python manage.py migrate
-```
-
-*Architecture Note*: `apps/core/migrations/0001_initial.py` reads `db/01-schema.sql` directly from disk (`atomic=False`, `reverse_sql=RunSQL.noop`). It provisions all 28 tables, 8 views, 69 foreign keys, and 87 triggers without automated Django DDL.
-
-### Step 5: Seed Sample Data Safely
-
-Load initial catalog and operational seed data:
-
-```bash
-python manage.py load_sample_data
-```
-
-*Production Protection*: In production/staging (`DEBUG=False`), the command is locked by default and requires the `--force-production` flag to execute.
 
 ### Step 5.1: Purge Orphan Scan Images (`purge_orphan_scans`)
 
@@ -218,22 +482,6 @@ docker compose exec web python manage.py purge_orphan_scans --no-dry-run --older
 - `--older-than-hours <N>`: Only considers files modified earlier than $N$ hours ago (default: `24.0`). Prevents deleting scan images from active uploads or ongoing check-in sessions.
 - Preserves 100% of referenced image files and never mutates or drops database log rows.
 - Automatically cleans up empty `YYYY/MM/DD` date subdirectories.
-
-### Step 6: Create Administrative Superuser
-
-Create an administrative account interactively:
-
-```bash
-python manage.py createsuperuser
-```
-
-*Usage*: When prompted, provide your **Email** (or Phone), Full Name, and a strong password. This creates an `Account` record with role `MANAGER` and access privileges. Never commit hardcoded credential scripts to Git.
-
-### Step 7: Launch Development Server
-
-```bash
-python manage.py runserver
-```
 
 ### Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"
 
