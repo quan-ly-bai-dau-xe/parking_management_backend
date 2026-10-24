@@ -2,6 +2,8 @@
 
 This directory contains the verified requirements specifications and Architecture Decision Records (ADRs) for `parking_management_backend`.
 
+> **Documentation Language**: Project documentation is maintained in English. Vietnamese is preserved exclusively for verbatim system/API messages (from `apps/core/messages.py` and SRS v4.1) and source specification material in `docs/requirements/` (per `OQ-44` in [`01-decision-log.md`](requirements/01-decision-log.md)).
+
 ## 1. Requirements Specifications (`docs/requirements/`)
 
 Requirements specifications under the Frontend-First (`FE-First`) hierarchy, where the Frontend design ([`06-frontend-srs-db-alignment.md`](requirements/06-frontend-srs-db-alignment.md)) is the primary source of truth and the SRS ([`00-srs-catalog.md`](requirements/00-srs-catalog.md)) is authoritative for the SRS content and secondary to the Frontend design (`TL-19`, `TL-22`):
