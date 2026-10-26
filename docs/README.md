@@ -43,3 +43,4 @@ Physical PostgreSQL 18.6 schema definitions, seed catalog, and execution guides:
 Integration and development guides for client applications:
 
 - [`01-frontend-api-guide.md`](guides/01-frontend-api-guide.md): Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
+- [`api-endpoints.md`](api-endpoints.md): Compact index of currently registered routes; use the integration guide for detailed examples and workflows.

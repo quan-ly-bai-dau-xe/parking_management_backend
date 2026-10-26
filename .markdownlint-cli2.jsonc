@@ -4,7 +4,9 @@
   ],
   "ignores": [
     ".agents/**",
-    ".git/**"
+    ".git/**",
+    ".venv/**",
+    "venv/**"
   ],
   "config": {
     "default": true,
