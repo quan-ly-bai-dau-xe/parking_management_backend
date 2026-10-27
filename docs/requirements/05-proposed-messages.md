@@ -54,6 +54,17 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 
 ---
 
+### 2.2.1. Vehicle Management Module (SRS 4.4 / FE `Quản lý xe`, Round 63)
+
+| Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
+| :---: | :--- | :--- | :--- | :--- | :---: | :---: |
+| **PROP-DEL-03-OPEN-SES** | `Quản lý xe` (`DELETE /api/v1/vehicles/{id}/`) | Vehicle currently has an open parking session in lot (`exit_time IS NULL`) | Database trigger `trg_guard_soft_delete_and_restore_vehicle` check violation (DEL-03 Guard 1) | `Phương tiện đang đỗ trong bãi xe (có phiên đỗ đang mở), không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
+| **PROP-DEL-03-ACTIVE-TKT** | `Quản lý xe` (`DELETE /api/v1/vehicles/{id}/`) | Vehicle currently linked to an active unexpired subscription ticket | Database trigger `trg_guard_soft_delete_and_restore_vehicle` check violation (DEL-03 Guard 2) | `Phương tiện đang có vé đỗ xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
+| **PROP-DEL-03-ACTIVE-RSV** | `Quản lý xe` (`DELETE /api/v1/vehicles/{id}/`) | Vehicle currently holds an active advance slot reservation | Database trigger `trg_guard_soft_delete_and_restore_vehicle` check violation (DEL-03 Guard 3) | `Phương tiện đang có đặt trước vị trí đỗ xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
+| **PROP-VEH-OWNER-CHANGE-CONFLICT** | `Quản lý xe` (`PATCH /api/v1/vehicles/{id}/`) | Changing vehicle customer_id while vehicle is linked to tickets, open parking sessions, or active reservations | SRS 4.4 / FE Quản lý xe do not define owner reassignment guard | `Không thể thay đổi chủ sở hữu khi phương tiện đang có vé đỗ xe, phiên đỗ đang mở hoặc đặt chỗ còn hiệu lực.` | 409 Conflict | **TL-25**, **OQ-61** |
+
+---
+
 ### 2.3. Vehicle In/Out & Parking Map Module (SRS 4.5 & FE `Sơ đồ bãi đậu xe`)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
@@ -146,9 +157,9 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-DEL-01-SELF-EMP** | `employee` (`DEL-01`) | Self-deletion of authenticated employee profile (`NEW.deleted_by = OLD.account_id`) | `Nhân viên đang đăng nhập không được phép tự xóa hồ sơ của chính mình.` | 400 Bad Request | **OQ-10**, **TL-25** |
 | **PROP-DEL-01-LAST-MGR-EMP** | `employee` (`DEL-01`) | Deleting employee linked to the last active `MANAGER` account | `Không thể xóa nhân viên gắn với tài khoản Quản lý hoạt động cuối cùng.` | 400 Bad Request | **OQ-10**, **TL-25** |
 | **PROP-DEL-02-ACTIVE-VEH** | `customer` (`DEL-02`) | Customer still owns active (`deleted_at IS NULL`) vehicles | `Khách hàng đang có phương tiện hoạt động trong hệ thống, không được phép xóa.` | 400 Bad Request | **OQ-40**, **TL-25** |
-| **PROP-DEL-03-OPEN-SES** | `vehicle` (`DEL-03`) | Vehicle has an open parking session (`exit_time IS NULL`) | `Phương tiện đang đỗ trong bãi xe (có phiên đỗ đang mở), không được phép xóa.` | 400 Bad Request | **OQ-41**, **TL-25** |
-| **PROP-DEL-03-ACTIVE-TKT** | `vehicle` (`DEL-03`) | Vehicle holds an active unexpired ticket | `Phương tiện đang có vé đỗ xe còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-41**, **TL-25** |
-| **PROP-DEL-03-ACTIVE-RSV** | `vehicle` (`DEL-03`) | Vehicle holds an active advance slot reservation | `Phương tiện đang có đặt trước vị trí đỗ xe còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-41**, **TL-25** |
+| **PROP-DEL-03-OPEN-SES** | `vehicle` (`DEL-03`) | Vehicle has an open parking session (`exit_time IS NULL`) | `Phương tiện đang đỗ trong bãi xe (có phiên đỗ đang mở), không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
+| **PROP-DEL-03-ACTIVE-TKT** | `vehicle` (`DEL-03`) | Vehicle holds an active unexpired ticket | `Phương tiện đang có vé đỗ xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
+| **PROP-DEL-03-ACTIVE-RSV** | `vehicle` (`DEL-03`) | Vehicle holds an active advance slot reservation | `Phương tiện đang có đặt trước vị trí đỗ xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
 | **PROP-DEL-04-OPEN-SES** | `ticket` (`DEL-04`) | Linked vehicle currently has an open parking session (`exit_time IS NULL`) | `Phương tiện liên kết với vé đang đỗ trong bãi xe, không được phép xóa vé.` | 400 Bad Request | **OQ-42**, **TL-25** |
 | **PROP-DEL-05-OCCUPIED** | `parking_slot` (`DEL-05`) | Slot status is `'OCCUPIED'`/`'CHARGING'` or has an open parking session | `Không thể xóa vị trí đỗ xe đang có phương tiện đỗ (trạng thái OCCUPIED).` | 400 Bad Request | **OQ-31**, **OQ-43**, **TL-25** |
 | **PROP-DEL-05-RESERVED** | `parking_slot` (`DEL-05`) | Slot has an active reservation (`slot_reservation`) or status `'RESERVED'` | `Vị trí đỗ xe đang được đặt trước còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-43**, **TL-25** |

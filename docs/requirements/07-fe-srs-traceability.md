@@ -185,22 +185,139 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 
 ---
 
+### 3.2. Detailed Traceability for Vehicle Management (Screen "Quản lý xe", TRC-FE-04-01..08, Round 63)
+
+#### A. Comprehensive 36-Element UI Contract Inventory
+
+The table below maps all 36 visual elements from the frontend mockup `Quản lý xe — Smart Mobility.png` to their backend REST endpoints, methods, and response fields.
+
+| # | Mockup Element | API Endpoint | HTTP Method | Request / Query Param | Response Field / Structure | Business Rule / Status |
+|:---:|---|---|:---:|---|---|:---:|
+| 1 | Logo & Brand Icon (`LOGO`) | SPA Shell / Static Asset | N/A | None | Client static asset | **COVERED** |
+| 2 | Navigation Menu (7 items, `Quản lý xe` active) | SPA Shell / Client Router | N/A | Route `/vehicles` | Visible to `EMPLOYEE` and `MANAGER` | **COVERED** |
+| 3 | Camera Button & User Badge ("Admin") | `GET /api/v1/auth/me/` | GET | Session Cookie `sessionid` | `UserResponse: { id, email, phone, role }` | **COVERED** |
+| 4 | Page Title & Subtitle (`Quản lý xe`) | Static UI Header | N/A | None | Client static header text | **COVERED** |
+| 5 | Primary CTA `+ Thêm xe` | `POST /api/v1/vehicles/` | POST | Header: `X-CSRFToken`<br>Body: Vehicle payload | `201 Created`<br>`VehicleDetailResponse` | **COVERED** (RBAC: `IsManager` only) |
+| 6 | KPI Card 1: `Tổng phương tiện` (6) | `GET /api/v1/vehicles/summary/` | GET | Optional: `customer`, `vehicle_type` | `total_vehicles: int` | **COVERED** (Global non-deleted count) |
+| 7 | KPI Card 2: `Đang hoạt động` (4) | `GET /api/v1/vehicles/summary/` | GET | Optional: `customer`, `vehicle_type` | `active_vehicles: int` | **DERIVED** (Active ticket or in-lot) |
+| 8 | KPI Card 3: `Vé sắp hết hạn` (2) | `GET /api/v1/vehicles/summary/` | GET | Optional: `customer`, `vehicle_type` | `expiring_soon_tickets: int` | **DERIVED** (Active ticket <= 7 days) |
+| 9 | KPI Card 4: `Vé đã hết hạn` (1) | `GET /api/v1/vehicles/summary/` | GET | Optional: `customer`, `vehicle_type` | `expired_tickets: int` | **DERIVED** (Expired ticket < now) |
+| 10 | Filter Input 1: `Mã xe` | `GET /api/v1/vehicles/` | GET | Query: `code=XE0001` | Substring match on `vehicle.code` | **COVERED** |
+| 11 | Filter Input 2: `Biển số xe` | `GET /api/v1/vehicles/` | GET | Query: `plate=51K-992.14` | GIN trigram on `license_plate_norm` | **COVERED** |
+| 12 | Filter Input 3: `Khách hàng` | `GET /api/v1/vehicles/` | GET | Query: `customer=Nguyen` | Trigram on customer code / full name | **COVERED** |
+| 13 | Filter Dropdown 4: `Loại xe` | `GET /api/v1/vehicle-types/` | GET | Query: `vehicle_type=CAR` | Dropdown options: `CAR`, `EV` | **COVERED** (Car-only scope) |
+| 14 | Filter Dropdown 5: `Loại vé` | `GET /api/v1/vehicles/` | GET | Query: `ticket_type=MONTHLY` | Matches `ticket_type.code` via FK | **COVERED** |
+| 15 | Filter Dropdown 6: `Trạng thái` | `GET /api/v1/vehicles/` | GET | Query: `status=parked` | Runtime derived (`parked`, `active`, `left`) | **DERIVED** (TL-28.2) |
+| 16 | Filter Dropdown 7: `Tình trạng vé` | `GET /api/v1/vehicles/` | GET | Query: `ticket_state=expiring_soon` | Derived (`valid`, `expiring_soon`, `expired`) | **DERIVED** (TL-28.1) |
+| 17 | Filter Button: `Tìm kiếm` | `GET /api/v1/vehicles/` | GET | Combined filter query params | Paginated results matching all criteria | **COVERED** |
+| 18 | Filter Button: `Làm mới` | `GET /api/v1/vehicles/` | GET | Default pagination parameters | Unfiltered page 1 results | **COVERED** |
+| 19 | Table Title & Fleet Count ("6 phương tiện") | `GET /api/v1/vehicles/` | GET | Sourced from list envelope | `count: int` in pagination envelope | **COVERED** |
+| 20 | Table Action: `Xuất CSV` | `GET /api/v1/vehicles/export/` | GET | Inherits list query filters | Streamed CSV (UTF-8 BOM, anti-injection) | **COVERED** (Hard cap 5,000) |
+| 21 | Column 1: `STT` (Row index: 1, 2...) | Serializer / Client dynamic | N/A | None | `(page - 1) * page_size + index + 1` | **DERIVED** |
+| 22 | Column 2: `Mã xe` (`XE0001`) | `GET /api/v1/vehicles/` | GET | None | `row.code: str` | **COVERED** |
+| 23 | Column 3: `Ảnh` (Thumbnail) | `GET /api/v1/vehicles/` | GET | None | `row.image_url: str \| null` | **GAP** (Static URI; upload deferred) |
+| 24 | Column 4: `Biển số xe` (`51K-992.14`) | `GET /api/v1/vehicles/` | GET | None | `row.license_plate: str` | **COVERED** |
+| 25 | Column 5: `Khách hàng` (Name + Code) | `GET /api/v1/vehicles/` | GET | None | `row.customer: { id, code, full_name }` | **COVERED** (Zero N+1 select_related) |
+| 26 | Column 6: `Loại xe` (`Ô tô`, `Xe điện`) | `GET /api/v1/vehicles/` | GET | None | `row.vehicle_type: { id, code, name }` | **COVERED** (Car-only `CAR`, `EV`) |
+| 27 | Column 7: `Loại vé` (`Vé tháng`) | `GET /api/v1/vehicles/` | GET | None | `row.ticket: { ticket_type_code, name }` | **COVERED** |
+| 28 | Column 8: `Ngày hết hạn vé` (Date + Badge) | `GET /api/v1/vehicles/` | GET | None | `row.ticket: { expires_at, state, days }` | **DERIVED** (TL-28.1) |
+| 29 | Column 9: `Vị trí đỗ` (`Khu A · Slot 42`) | `GET /api/v1/vehicles/` | GET | None | `row.current_slot: str \| null` | **DERIVED** (Open session or assigned slot) |
+| 30 | Column 10: `Trạng thái` (Badge + Dot) | `GET /api/v1/vehicles/` | GET | None | `row.status`, `row.status_display` | **DERIVED** (TL-28.2) |
+| 31 | Column 11: `Thao tác` (Xem, Sửa, Xóa) | `GET/PATCH/DELETE /api/v1/vehicles/{id}/` | GET/PATCH/DEL | `id`, `X-CSRFToken`, `row_version` | Detail, Update, Soft-delete envelope | **COVERED** (OCC & DEL-03 guards) |
+| 32 | Pagination Dropdown & Navigation | `GET /api/v1/vehicles/` | GET | `page`, `page_size` | `StandardResultsSetPagination` envelope | **COVERED** |
+| 33 | Detail Panel 1: `Chi tiết xe` | `GET /api/v1/vehicles/{id}/` | GET | `id` | `VehicleDetailResponse` | **COVERED** |
+| 34 | Detail Panel 2: `Thông tin chủ xe` | `GET /api/v1/vehicles/{id}/` | GET | Sourced from `customer` in detail | Customer contact, registered vehicle count | **COVERED** (PII masked if anonymized) |
+| 35 | Detail Panel 3: `Trạng thái vé` | `GET /api/v1/vehicles/{id}/` | GET | Sourced from `ticket` in detail | Ticket duration, progress %, validity banner | **DERIVED** (TL-28.3) |
+| 36 | Add Vehicle via Customer Modal | `POST /api/v1/customers/{id}/vehicles/` | POST | Customer path param + vehicle body | Thin alias to create vehicle service | **GAP / DEFERRED** (Customer module unbuilt) |
+
+#### B. Architectural Decisions & Scope Boundary Analysis
+
+1. **Car-Only Fleet Scope & Exclusion of Motorbikes (GAP TRC-FE-04-04)**:
+   - **Mockup Anomaly**: Row 3 of mockup `Quản lý xe — Smart Mobility.png` depicts `"Xe máy"` with license plate `59P1-678.90` at slot `Khu B · Slot M12`.
+   - **Authoritative Rule**: Under SRS v4.1, `TL-09`, `TL-20`, `TL-35`, and `OQ-49`, the Owner confirmed in chat on 2026-10-26 that the lot is for cars only.
+   - **Implementation**: Database table `vehicle_type` contains exactly two records: `CAR` ("Ô tô") and `EV` ("Xe điện"). Endpoint `GET /api/v1/vehicle-types/` returns only `CAR` and `EV`. Registration (`POST`) and update (`PATCH`) reject any other vehicle type with HTTP 400 (`PROP-GEN-P01`). The motorbike row is formally classified as a **Known Designer Mockup Artifact (GAP TRC-FE-04-04)**.
+2. **Optimistic Concurrency Control (OCC)**:
+   - Table `vehicle` maintains `row_version INTEGER NOT NULL DEFAULT 1` with DB trigger `trg_vehicle_row_version`.
+   - `PATCH /api/v1/vehicles/{id}/` requires `row_version: int`. Mismatched versions immediately abort with HTTP 409 Conflict (`MSG-4.3.1-M03`), preventing lost updates between concurrent managers.
+3. **DEL-03 Database Soft-Delete Guards**:
+   - Soft-delete operations (`DELETE /api/v1/vehicles/{id}/`) set `deleted_at = now()` and `deleted_by = actor.id`.
+   - Database trigger function `fn_guard_soft_delete_and_restore()` enforces 3 guards, mapped to HTTP 409 Conflict:
+     - `PROP-DEL-03-OPEN-SES`: Vehicle currently parked in lot (`exit_time IS NULL`).
+     - `PROP-DEL-03-ACTIVE-TKT`: Vehicle holds an active, unexpired ticket.
+     - `PROP-DEL-03-ACTIVE-RSV`: Vehicle holds an active slot reservation.
+   - Plain SQL hard delete is blocked by trigger `trg_prevent_plain_delete_vehicle` with PostgreSQL SQLSTATE `55000`.
+4. **Summary KPI Cards Scope (TL-10, TL-28.1, TL-28.5)**:
+   - `GET /api/v1/vehicles/summary/` by default computes global metrics across all active non-deleted vehicles.
+   - Optional query filters (`customer`, `vehicle_type`) allow dynamic dashboard narrowing.
+   - Expiring soon threshold is strictly defined as 7 days (`TICKET_EXPIRING_SOON_DAYS = 7`).
+5. **Vehicle Thumbnail Gap (`image_url`)**:
+   - `image_url` is stored as a text/URI field referencing static assets (e.g., `"/media/vehicles/xe0001.jpg"`).
+   - Multipart vehicle photo upload is deferred as an unbuilt feature; no upload endpoint is exposed.
+6. **Customer Vehicle Alias Endpoint Deferral (SCO-06)**:
+   - `POST /api/v1/customers/{customer_id}/vehicles/` is deferred because `apps/customers` is unbuilt. Frontend creates vehicles via `POST /api/v1/vehicles/` with `customer_id` in the request body.
+
+---
+
 ## 4. SQL Proof Queries for Frontend Derived Values (TL-28)
 
 Six UI values are computed dynamically per **TL-28** to avoid redundancy:
 
-### 4.1. Expiring Tickets (TL-28.1)
+### 4.1. Expiring & Representative Ticket States (TL-28.1, OQ-52)
+
+Single Source of Truth (SOT) via **Representative Ticket** evaluated per vehicle:
+
+1. **Tier 1 (Active)**: `deleted_at IS NULL AND status IN ('ACTIVE', 'RENEWING') AND effective_to >= now()` ordered by `effective_to DESC, id DESC LIMIT 1`.
+2. **Tier 2 (Historical)**: If Tier 1 is absent, most recent ticket with `deleted_at IS NULL AND status != 'CANCELLED'` ordered by `effective_to DESC, id DESC LIMIT 1`.
+3. If no ticket or only `CANCELLED`, representative ticket is `NULL` (`state = 'none'`).
 
 ```sql
-SELECT t.code, c.full_name, v.license_plate, tt.name AS ticket_type, t.effective_to AS expires_at, t.status AS base_status,
-  CASE WHEN t.status = 'ACTIVE' AND t.effective_to BETWEEN '2026-10-17 00:00:00+07'::TIMESTAMPTZ AND '2026-10-17 00:00:00+07'::TIMESTAMPTZ + INTERVAL '7 days' THEN 'Sắp hết hạn'
-       WHEN t.status = 'ACTIVE' AND t.effective_to > '2026-10-17 00:00:00+07'::TIMESTAMPTZ + INTERVAL '7 days' THEN 'Đang hoạt động'
-       WHEN t.status = 'ACTIVE' THEN 'Đã hết hạn' ELSE t.status END AS fe_display_status,
-  GREATEST(0, CEIL(EXTRACT(EPOCH FROM (t.effective_to - '2026-10-17 00:00:00+07'::TIMESTAMPTZ)) / 86400))::INTEGER AS remaining_days
-FROM ticket t JOIN customer c ON c.id = t.customer_id AND c.deleted_at IS NULL
-JOIN vehicle v ON v.id = t.vehicle_id AND v.deleted_at IS NULL
-JOIN ticket_type tt ON tt.id = t.ticket_type_id AND tt.deleted_at IS NULL
-WHERE t.deleted_at IS NULL ORDER BY t.effective_to ASC;
+WITH rep_ticket AS (
+    SELECT v.id AS vehicle_id,
+           COALESCE(
+               (
+                   SELECT t.id
+                   FROM ticket t
+                   WHERE t.vehicle_id = v.id
+                     AND t.deleted_at IS NULL
+                     AND t.status IN ('ACTIVE', 'RENEWING')
+                     AND t.effective_to >= CURRENT_TIMESTAMP
+                   ORDER BY t.effective_to DESC, t.id DESC
+                   LIMIT 1
+               ),
+               (
+                   SELECT t.id
+                   FROM ticket t
+                   WHERE t.vehicle_id = v.id
+                     AND t.deleted_at IS NULL
+                     AND t.status != 'CANCELLED'
+                   ORDER BY t.effective_to DESC, t.id DESC
+                   LIMIT 1
+               )
+           ) AS ticket_id
+    FROM vehicle v
+    WHERE v.deleted_at IS NULL
+)
+SELECT v.code, v.license_plate, t.code AS ticket_code, tt.name AS ticket_type,
+       t.effective_to AS expires_at, t.status AS base_status,
+       CASE
+           WHEN t.id IS NULL THEN 'none'
+           WHEN t.effective_to < CURRENT_TIMESTAMP THEN 'expired'
+           WHEN t.effective_to <= CURRENT_TIMESTAMP + INTERVAL '7 days' THEN 'expiring_soon'
+           ELSE 'valid'
+       END AS ticket_state,
+       CASE
+           WHEN t.id IS NULL THEN NULL
+           WHEN t.effective_to < CURRENT_TIMESTAMP THEN 'Đã hết hạn'
+           WHEN t.effective_to <= CURRENT_TIMESTAMP + INTERVAL '7 days' THEN 'Sắp hết hạn'
+           ELSE 'Còn hạn'
+       END AS fe_display_status,
+       GREATEST(0, CEIL(EXTRACT(EPOCH FROM (t.effective_to - CURRENT_TIMESTAMP)) / 86400))::INTEGER AS remaining_days
+FROM vehicle v
+JOIN rep_ticket rt ON rt.vehicle_id = v.id
+LEFT JOIN ticket t ON t.id = rt.ticket_id
+LEFT JOIN ticket_type tt ON tt.id = t.ticket_type_id
+WHERE v.deleted_at IS NULL
+ORDER BY v.code ASC;
 ```
 
 ### 4.2. Derived Parking Status (TL-28.2)
@@ -216,15 +333,51 @@ JOIN vehicle_type vt ON vt.id = v.vehicle_type_id AND vt.deleted_at IS NULL
 WHERE v.deleted_at IS NULL ORDER BY v.code ASC;
 ```
 
-### 4.3. Remaining Days & Progress (TL-28.3)
+### 4.3. Remaining Days & Lifecycle Progress (TL-28.3)
+
+Derived from the vehicle's representative ticket:
+
+- `remaining_days`: `max(0, ceil(diff_seconds / 86400))` (0 for expired tickets).
+- `consumed_percentage`: `min(100.0, max(0.0, round(elapsed / total_duration * 100, 1)))`.
+- `is_valid`: `true` if `ticket_state IN ('valid', 'expiring_soon')`, `false` if `expired`.
+- `validity_message`: "Vé còn hiệu lực.", "Vé sắp hết hạn.", or "Vé đã hết hạn.".
 
 ```sql
+WITH rep_ticket AS (
+    SELECT v.id AS vehicle_id,
+           COALESCE(
+               (
+                   SELECT t.id
+                   FROM ticket t
+                   WHERE t.vehicle_id = v.id
+                     AND t.deleted_at IS NULL
+                     AND t.status IN ('ACTIVE', 'RENEWING')
+                     AND t.effective_to >= CURRENT_TIMESTAMP
+                   ORDER BY t.effective_to DESC, t.id DESC
+                   LIMIT 1
+               ),
+               (
+                   SELECT t.id
+                   FROM ticket t
+                   WHERE t.vehicle_id = v.id
+                     AND t.deleted_at IS NULL
+                     AND t.status != 'CANCELLED'
+                   ORDER BY t.effective_to DESC, t.id DESC
+                   LIMIT 1
+               )
+           ) AS ticket_id
+    FROM vehicle v
+    WHERE v.deleted_at IS NULL
+)
 SELECT t.code, v.license_plate, tt.name AS ticket_type, t.effective_from, t.effective_to,
-  GREATEST(0, CEIL(EXTRACT(EPOCH FROM (t.effective_to - '2026-10-17 00:00:00+07'::TIMESTAMPTZ)) / 86400))::INTEGER AS remaining_days,
-  ROUND((EXTRACT(EPOCH FROM (LEAST(t.effective_to, '2026-10-17 00:00:00+07'::TIMESTAMPTZ) - t.effective_from)) / NULLIF(EXTRACT(EPOCH FROM (t.effective_to - t.effective_from)), 0)) * 100, 1) AS consumed_percentage
-FROM ticket t JOIN vehicle v ON v.id = t.vehicle_id AND v.deleted_at IS NULL
-JOIN ticket_type tt ON tt.id = t.ticket_type_id AND tt.deleted_at IS NULL
-WHERE t.deleted_at IS NULL AND t.status = 'ACTIVE' ORDER BY remaining_days ASC;
+  GREATEST(0, CEIL(EXTRACT(EPOCH FROM (t.effective_to - CURRENT_TIMESTAMP)) / 86400))::INTEGER AS remaining_days,
+  ROUND((EXTRACT(EPOCH FROM (LEAST(t.effective_to, CURRENT_TIMESTAMP) - t.effective_from)) / NULLIF(EXTRACT(EPOCH FROM (t.effective_to - t.effective_from)), 0)) * 100, 1) AS consumed_percentage,
+  (t.effective_to >= CURRENT_TIMESTAMP AND t.status IN ('ACTIVE', 'RENEWING')) AS is_valid
+FROM vehicle v
+JOIN rep_ticket rt ON rt.vehicle_id = v.id
+JOIN ticket t ON t.id = rt.ticket_id
+JOIN ticket_type tt ON tt.id = t.ticket_type_id
+WHERE v.deleted_at IS NULL;
 ```
 
 ### 4.4. Session Duration (TL-28.4)
@@ -237,15 +390,65 @@ SELECT l.session_code, l.license_plate, l.entry_time, l.exit_time,
   l.fee_amount FROM vehicle_entry_exit_log l ORDER BY l.entry_time DESC LIMIT 10;
 ```
 
-### 4.5. Subscription Metrics (TL-28.5)
+### 4.5. Subscription Metrics & KPI Aggregation (TL-28.5)
+
+Evaluated via unified representative ticket annotations matching list filtering 100%:
+
+- Baseline seed (clean 30 vehicles): `total_vehicles: 30`, `active_vehicles: 15`, `expiring_soon_tickets: 0`, `expired_tickets: 12`, `valid_tickets: 10`, `none_tickets: 8`.
+- Excludes CANCELLED tickets (`VT0023`, `VT0024`, `VT0025`).
 
 ```sql
-WITH ref AS (SELECT '2026-10-17 00:00:00+07'::TIMESTAMPTZ AS now)
-SELECT COUNT(*)::BIGINT AS total_customers,
-  COUNT(DISTINCT c.id) FILTER (WHERE EXISTS (SELECT 1 FROM ticket t, ref WHERE t.customer_id = c.id AND t.status = 'ACTIVE' AND t.effective_to >= ref.now AND t.deleted_at IS NULL))::BIGINT AS active_subscribers,
-  COUNT(DISTINCT c.id) FILTER (WHERE EXISTS (SELECT 1 FROM ticket t, ref WHERE t.customer_id = c.id AND t.status = 'ACTIVE' AND t.effective_to BETWEEN ref.now AND ref.now + INTERVAL '7 days' AND t.deleted_at IS NULL))::BIGINT AS expiring_within_7_days,
-  COUNT(*) FILTER (WHERE c.status IN ('SUSPENDED', 'BLACKLISTED'))::BIGINT AS blacklisted_or_suspended
-FROM customer c WHERE c.deleted_at IS NULL;
+WITH rep_ticket AS (
+    SELECT v.id AS vehicle_id,
+           COALESCE(
+               (
+                   SELECT t.id
+                   FROM ticket t
+                   WHERE t.vehicle_id = v.id
+                     AND t.deleted_at IS NULL
+                     AND t.status IN ('ACTIVE', 'RENEWING')
+                     AND t.effective_to >= CURRENT_TIMESTAMP
+                   ORDER BY t.effective_to DESC, t.id DESC
+                   LIMIT 1
+               ),
+               (
+                   SELECT t.id
+                   FROM ticket t
+                   WHERE t.vehicle_id = v.id
+                     AND t.deleted_at IS NULL
+                     AND t.status != 'CANCELLED'
+                   ORDER BY t.effective_to DESC, t.id DESC
+                   LIMIT 1
+               )
+           ) AS ticket_id
+    FROM vehicle v
+    WHERE v.deleted_at IS NULL
+),
+vehicle_ticket_classification AS (
+    SELECT rt.vehicle_id,
+           t.id AS ticket_id,
+           CASE
+               WHEN t.id IS NULL THEN 'none'
+               WHEN t.effective_to < CURRENT_TIMESTAMP THEN 'expired'
+               WHEN t.effective_to <= CURRENT_TIMESTAMP + INTERVAL '7 days' THEN 'expiring_soon'
+               ELSE 'valid'
+           END AS ticket_state
+    FROM rep_ticket rt
+    LEFT JOIN ticket t ON t.id = rt.ticket_id
+)
+SELECT
+    COUNT(v.id) AS total_vehicles,
+    COUNT(v.id) FILTER (WHERE EXISTS (
+        SELECT 1 FROM vehicle_entry_exit_log l
+        WHERE l.vehicle_id = v.id AND l.exit_time IS NULL
+    ) OR vtc.ticket_state IN ('valid', 'expiring_soon')) AS active_vehicles,
+    COUNT(v.id) FILTER (WHERE vtc.ticket_state = 'expiring_soon') AS expiring_soon_tickets,
+    COUNT(v.id) FILTER (WHERE vtc.ticket_state = 'expired') AS expired_tickets,
+    COUNT(v.id) FILTER (WHERE vtc.ticket_state = 'valid') AS valid_tickets,
+    COUNT(v.id) FILTER (WHERE vtc.ticket_state = 'none') AS none_tickets
+FROM vehicle v
+JOIN vehicle_ticket_classification vtc ON vtc.vehicle_id = v.id
+WHERE v.deleted_at IS NULL;
 ```
 
 ### 4.6. Floor Occupancy Percentage Bars (TL-28.6)
