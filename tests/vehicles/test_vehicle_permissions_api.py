@@ -4,7 +4,7 @@ Exhaustive Role-Based Access Control (RBAC) Permissions Matrix Tests.
 Covers all 8 endpoints across 4 principal roles:
 - ANONYMOUS (unauthenticated): 401 Unauthorized (MSG-4.1-M02)
 - CUSTOMER: 403 Forbidden (MSG-4.2-M01)
-- EMPLOYEE: 200 OK on reads (GET), 403 Forbidden on writes (POST, PATCH, DELETE)
+- EMPLOYEE: 200/201 OK on all operations (reads and writes per Task V0)
 - MANAGER: 200/201 OK on all operations
 """
 
@@ -95,8 +95,14 @@ def test_create_endpoint_permissions_matrix(
 ):
     """Ma trận phân quyền trên POST /api/v1/vehicles/."""
     url = "/api/v1/vehicles/"
-    payload = {
+    payload_employee = {
         "license_plate": "51K-888.88",
+        "model_name": "VF7",
+        "vehicle_type_id": car_type.id,
+        "customer_id": active_customer.id,
+    }
+    payload_manager = {
+        "license_plate": "51K-888.89",
         "model_name": "VF7",
         "vehicle_type_id": car_type.id,
         "customer_id": active_customer.id,
@@ -104,22 +110,22 @@ def test_create_endpoint_permissions_matrix(
 
     # Anonymous -> 401
     assert (
-        anonymous_client.post(url, payload, format="json").status_code
+        anonymous_client.post(url, payload_employee, format="json").status_code
         == status.HTTP_401_UNAUTHORIZED
     )
     # Customer -> 403
     assert (
-        customer_client.post(url, payload, format="json").status_code
+        customer_client.post(url, payload_employee, format="json").status_code
         == status.HTTP_403_FORBIDDEN
     )
-    # Employee -> 403 (Ghi chỉ dành cho Manager)
+    # Employee -> 201 Created (Task V0: Employee được phép tạo xe)
     assert (
-        employee_client.post(url, payload, format="json").status_code
-        == status.HTTP_403_FORBIDDEN
+        employee_client.post(url, payload_employee, format="json").status_code
+        == status.HTTP_201_CREATED
     )
-    # Manager -> 201 Created
+    # Manager -> 201 Created (dùng payload riêng để tránh trùng lặp biển số)
     assert (
-        manager_client.post(url, payload, format="json").status_code
+        manager_client.post(url, payload_manager, format="json").status_code
         == status.HTTP_201_CREATED
     )
 
@@ -144,11 +150,17 @@ def test_update_endpoint_permissions_matrix(
         customer_client.patch(url, payload, format="json").status_code
         == status.HTTP_403_FORBIDDEN
     )
-    # Employee -> 403 (Ghi chỉ dành cho Manager)
+    # Employee -> 200 OK (Task V0: Employee được phép cập nhật)
     assert (
         employee_client.patch(url, payload, format="json").status_code
-        == status.HTTP_403_FORBIDDEN
+        == status.HTTP_200_OK
     )
+    # OCC: Khi Employee patch thành công, row_version tăng từ 1 -> 2
+    # Cần refresh_from_db để Manager không bị 409 Conflict do stale row_version
+    test_vehicle.refresh_from_db()
+    payload["row_version"] = test_vehicle.row_version
+    payload["color"] = "Xanh lục"
+
     # Manager -> 200 OK
     assert (
         manager_client.patch(url, payload, format="json").status_code
@@ -165,8 +177,8 @@ def test_delete_endpoint_permissions_matrix(
     active_customer,
 ):
     """Ma trận phân quyền trên DELETE /api/v1/vehicles/{id}/."""
-    # Tạo xe riêng để xóa
-    v = Vehicle.objects.create(
+    # Tạo 2 xe riêng để tránh xung đột đã bị xóa (404) khi Employee và Manager cùng test
+    v_emp = Vehicle.objects.create(
         code="XE-DEL-P01",
         license_plate="51K-666.66",
         license_plate_norm="51K66666",
@@ -174,13 +186,22 @@ def test_delete_endpoint_permissions_matrix(
         vehicle_type=car_type,
         customer=active_customer,
     )
-    url = f"/api/v1/vehicles/{v.id}/"
+    v_mgr = Vehicle.objects.create(
+        code="XE-DEL-P02",
+        license_plate="51K-666.67",
+        license_plate_norm="51K66667",
+        model_name="VF5",
+        vehicle_type=car_type,
+        customer=active_customer,
+    )
+    url_emp = f"/api/v1/vehicles/{v_emp.id}/"
+    url_mgr = f"/api/v1/vehicles/{v_mgr.id}/"
 
     # Anonymous -> 401
-    assert anonymous_client.delete(url).status_code == status.HTTP_401_UNAUTHORIZED
+    assert anonymous_client.delete(url_emp).status_code == status.HTTP_401_UNAUTHORIZED
     # Customer -> 403
-    assert customer_client.delete(url).status_code == status.HTTP_403_FORBIDDEN
-    # Employee -> 403 (Ghi chỉ dành cho Manager)
-    assert employee_client.delete(url).status_code == status.HTTP_403_FORBIDDEN
-    # Manager -> 200 OK
-    assert manager_client.delete(url).status_code == status.HTTP_200_OK
+    assert customer_client.delete(url_emp).status_code == status.HTTP_403_FORBIDDEN
+    # Employee -> 200 OK (Task V0: Employee được phép xóa)
+    assert employee_client.delete(url_emp).status_code == status.HTTP_200_OK
+    # Manager -> 200 OK (xóa trên xe riêng v_mgr)
+    assert manager_client.delete(url_mgr).status_code == status.HTTP_200_OK

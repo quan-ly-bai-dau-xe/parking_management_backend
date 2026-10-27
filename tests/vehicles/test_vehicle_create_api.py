@@ -11,7 +11,7 @@ Verifies:
 - Soft-deleted customer ID -> 400 (PROP-GEN-P01).
 - Invalid vehicle type (non-existent or not CAR/EV) -> 400 (PROP-GEN-P01).
 - Read-only fields (ticket_type_id, ticket_expires_at) ignored per OQ-52.
-- RBAC permissions: Anonymous -> 401, Customer -> 403, Employee -> 403, Manager -> 201.
+- RBAC permissions: Anonymous -> 401, Customer -> 403, Employee -> 201, Manager -> 201.
 - CSRF middleware enforcement: missing token -> 403 (PROP-4.1-P06).
 """
 
@@ -218,7 +218,7 @@ def test_vehicle_create_permissions(
     Quyền tạo xe:
     - Anonymous -> 401
     - Customer -> 403
-    - Employee -> 403 (chỉ Manager được tạo)
+    - Employee -> 201 (Task V0: Employee và Manager đều có quyền ghi)
     """
     payload = {
         "license_plate": "51K-999.09",
@@ -234,10 +234,9 @@ def test_vehicle_create_permissions(
         customer_client.post(ENDPOINT_URL, payload, format="json").status_code
         == status.HTTP_403_FORBIDDEN
     )
-    assert (
-        employee_client.post(ENDPOINT_URL, payload, format="json").status_code
-        == status.HTTP_403_FORBIDDEN
-    )
+    res_emp = employee_client.post(ENDPOINT_URL, payload, format="json")
+    assert res_emp.status_code == status.HTTP_201_CREATED
+    assert res_emp.json()["license_plate"] == "51K-999.09"
 
 
 def test_vehicle_create_csrf_enforcement(auth_manager, car_type, active_customer):

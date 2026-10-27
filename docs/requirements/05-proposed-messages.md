@@ -49,12 +49,35 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-4.4.4-P01** | 4.4.4 Edit Customer (Update) | Customer updated successfully | SRS describes: "Dữ liệu sẽ được cập nhật vào database..." | `Cập nhật thông tin khách hàng thành công.` | 200 OK | **OQ-15** |
 | **PROP-4.4.4-P02** | 4.4.4 Edit Customer (Update) | Customer record not found on update | SRS does not define 404 message | `Khách hàng không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-15** |
 | **PROP-4.4.5-P01** | 4.4.5 Delete Customer (Confirm) | Customer record not found on delete | SRS does not define 404 message | `Khách hàng không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-15** |
-| **PROP-4.4.5-P02** | 4.4.5 Delete Customer (Confirm) | Customer has vehicles parked in lot | SRS does not define guard rule (DEL-02) | `Khách hàng đang có phương tiện trong bãi, không được phép xóa.` | 400 Bad Request | **OQ-15**, **OQ-40** |
-| **PROP-4.4.5-P03** | 4.4.5 Delete Customer (Confirm) | Customer has active tickets | SRS does not define guard rule (DEL-02) | `Khách hàng đang có vé xe còn hiệu lực, không được phép xóa.` | 400 Bad Request | **OQ-15**, **OQ-40** |
+| **PROP-4.4.5-P02** | 4.4.5 Delete Customer (Confirm) | Customer has vehicles parked in lot | SRS does not define guard rule (DEL-02) | `Khách hàng đang có phương tiện trong bãi, không được phép xóa.` | 409 Conflict | **OQ-15**, **OQ-40**, **TL-25** |
+| **PROP-4.4.5-P03** | 4.4.5 Delete Customer (Confirm) | Customer has active tickets | SRS does not define guard rule (DEL-02) | `Khách hàng đang có vé xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-15**, **OQ-40**, **TL-25** |
+| **PROP-DEL-02-ACTIVE-VEH** | 4.4.5 Delete Customer (Confirm) | Customer still owns active (`deleted_at IS NULL`) vehicles | Database trigger `trg_guard_soft_delete_and_restore_customer` (DEL-02 Guard 3) | `Khách hàng đang có phương tiện hoạt động trong hệ thống, không được phép xóa.` | 409 Conflict | **OQ-40**, **TL-25** |
+
+#### 2.2.1. Customer Module SRS Verbatim & Concurrency Messages Reference (SRS 4.4.1–4.4.5)
+
+| Message ID | Screen & Trigger | SRS Verbatim Message / System Response | HTTP Status | Implementation Reference |
+| :---: | :--- | :--- | :---: | :--- |
+| **MSG-4.4.1-M01** | 4.4.1 Customer List | `Không tìm thấy dữ liệu` | 200 OK | Empty results list envelope (`count: 0, results: []`) |
+| **MSG-4.4.1-M02** | 4.4.1 Customer List | `Không tìm thấy dữ liệu` / `Lỗi không kết nối được Server` | 500 Internal Error | Handled by DRF exception handler |
+| **MSG-4.4.1-M03** | 4.4.1 Customer List | `Lỗi kết nối` | 500 Internal Error | Handled by DRF exception handler |
+| **MSG-4.4.2-M01** | 4.4.2 Customer Cars | `Lỗi kết nối` | Client SPA | Modal navigation / SPA close action |
+| **MSG-4.4.3-M01** | 4.4.3 Add Customer | `Lỗi hệ thống` | 500 Internal Error | Handled by DRF exception handler |
+| **MSG-4.4.3-M02** | 4.4.3 Add Customer | `Dữ liệu trên trường {item} không đúng định dạng …` | 400 Bad Request | Handled via `PROP-GEN-P01` with field details |
+| **MSG-4.4.3-M03** | 4.4.3 Add Customer | `Không kết nối được Server` | 500 Internal Error | Handled by DRF exception handler |
+| **MSG-4.4.3-M04** | 4.4.3 Add Customer | `Lỗi kết nối` | 500 Internal Error | Handled by DRF exception handler |
+| **MSG-4.4.3-M05** | 4.4.3 Add Customer | `Lỗi kế nối` | Client SPA | Modal close action |
+| **MSG-4.4.4-M01** | 4.4.4 Edit Customer | `Dữ liệu trên trường {item} không đúng định dạng …` | 400 Bad Request | Handled via `PROP-GEN-P01` with field details |
+| **MSG-4.4.4-M02** | 4.4.4 Edit Customer | `Không kết nối được Server` | 500 Internal Error | Handled by DRF exception handler |
+| **MSG-4.4.4-M03** | 4.4.4 Edit Customer | `Lỗi hệ thống` | 500 Internal Error | Handled by DRF exception handler |
+| **MSG-4.4.4-M04** | 4.4.4 Edit Customer | `Lỗi kế nối` | Client SPA | Modal close action |
+| **MSG-4.4.5-M01** | 4.4.5 Delete Customer | `Xóa thành công` | 200 OK | Verbatim success message on customer deletion |
+| **MSG-4.4.5-M02** | 4.4.5 Delete Customer | `Dữ liệu đang được xóa bởi người dùng khác` | 409 Conflict | Concurrency contention guard |
+| **MSG-4.3.1-M03** | 4.4.4 Edit Customer | `Dữ liệu hiện đang được cập nhật bởi user khác` | 409 Conflict | OCC `row_version` mismatch check |
+| **MSG-4.3.1-M05** | 4.4.3/4.4.4 Customer API | `Dữ liệu đã tồn tại trong hệ thống, không thể tạo trùng lặp.` | 409 Conflict | Unique collision on code, CCCD, phone, or email |
 
 ---
 
-### 2.2.1. Vehicle Management Module (SRS 4.4 / FE `Quản lý xe`, Round 63)
+### 2.2.2. Vehicle Management Module (SRS 4.4 / FE `Quản lý xe`, Round 63)
 
 | Proposal ID | Screen & Action | SRS Scenario / Behavior | Original SRS Status | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :--- | :---: | :---: |
@@ -156,7 +179,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-DEL-01-LAST-MGR** | `account` (`DEL-01`) | Deleting the last active `MANAGER` account | `Không thể xóa tài khoản Quản lý hoạt động cuối cùng trong hệ thống.` | 400 Bad Request | **OQ-10**, **TL-25** |
 | **PROP-DEL-01-SELF-EMP** | `employee` (`DEL-01`) | Self-deletion of authenticated employee profile (`NEW.deleted_by = OLD.account_id`) | `Nhân viên đang đăng nhập không được phép tự xóa hồ sơ của chính mình.` | 400 Bad Request | **OQ-10**, **TL-25** |
 | **PROP-DEL-01-LAST-MGR-EMP** | `employee` (`DEL-01`) | Deleting employee linked to the last active `MANAGER` account | `Không thể xóa nhân viên gắn với tài khoản Quản lý hoạt động cuối cùng.` | 400 Bad Request | **OQ-10**, **TL-25** |
-| **PROP-DEL-02-ACTIVE-VEH** | `customer` (`DEL-02`) | Customer still owns active (`deleted_at IS NULL`) vehicles | `Khách hàng đang có phương tiện hoạt động trong hệ thống, không được phép xóa.` | 400 Bad Request | **OQ-40**, **TL-25** |
+| **PROP-DEL-02-ACTIVE-VEH** | `customer` (`DEL-02`) | Customer still owns active (`deleted_at IS NULL`) vehicles | `Khách hàng đang có phương tiện hoạt động trong hệ thống, không được phép xóa.` | 409 Conflict | **OQ-40**, **TL-25** |
 | **PROP-DEL-03-OPEN-SES** | `vehicle` (`DEL-03`) | Vehicle has an open parking session (`exit_time IS NULL`) | `Phương tiện đang đỗ trong bãi xe (có phiên đỗ đang mở), không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
 | **PROP-DEL-03-ACTIVE-TKT** | `vehicle` (`DEL-03`) | Vehicle holds an active unexpired ticket | `Phương tiện đang có vé đỗ xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
 | **PROP-DEL-03-ACTIVE-RSV** | `vehicle` (`DEL-03`) | Vehicle holds an active advance slot reservation | `Phương tiện đang có đặt trước vị trí đỗ xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |

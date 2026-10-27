@@ -15,7 +15,7 @@ Verifies:
   - Record disappears from GET /api/v1/vehicles/.
   - Record disappears from GET /api/v1/parking/vehicle-search/.
   - Returns 404 in GET /api/v1/vehicles/{id}/ and GET /api/v1/parking/vehicle-lookup/.
-- Permission matrix: Anonymous -> 401, Customer -> 403, Employee -> 403, Manager -> 200.
+- Permission matrix: Anonymous -> 401, Customer -> 403, Employee -> 200, Manager -> 200.
 """
 
 from datetime import timedelta
@@ -163,11 +163,15 @@ def test_vehicle_delete_permissions(anonymous_client, customer_client, employee_
     Quyền xóa xe (DELETE):
     - Anonymous -> 401
     - Customer -> 403
-    - Employee -> 403 (chỉ Manager được xóa)
+    - Employee -> 200 (Task V0: Employee và Manager đều có quyền xóa xe)
     """
     v = Vehicle.objects.get(code="XE0030")
     url = f"{BASE_URL}{v.id}/"
 
     assert anonymous_client.delete(url).status_code == status.HTTP_401_UNAUTHORIZED
     assert customer_client.delete(url).status_code == status.HTTP_403_FORBIDDEN
-    assert employee_client.delete(url).status_code == status.HTTP_403_FORBIDDEN
+    res_emp = employee_client.delete(url)
+    assert res_emp.status_code == status.HTTP_200_OK
+    assert res_emp.json().get("code") == "MSG-4.3.1-M01"
+    v.refresh_from_db()
+    assert v.deleted_at is not None
