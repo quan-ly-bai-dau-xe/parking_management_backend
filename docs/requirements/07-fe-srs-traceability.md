@@ -45,12 +45,12 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-FE-02-06 | Floor Bars (B1 92%) | v_slot_occupancy_by_floor | DERIVED | Occupancy bar (TL-28.6,29) |
 | TRC-FE-02-07 | Traffic Chart 24h | v_traffic_by_hour | COVERED | Hourly traffic (TL-14) |
 | TRC-FE-02-08 | Emergency Alerts | system_alert, blacklist | COVERED | Alerts (TL-08,13) |
-| TRC-FE-03-01 | Total Customers | v_customer_status_summary | COVERED | Customer count (TL-08) |
-| TRC-FE-03-02 | Active Subscribers | ticket, customer | DERIVED | Active subscribers (TL-28.5) |
-| TRC-FE-03-03 | Expiring Soon (7d) | ticket, customer | DERIVED | Expiring 7d (TL-28.5) |
-| TRC-FE-03-04 | Blacklist/Suspended | customer.status | COVERED | Status filter (TL-08) |
-| TRC-FE-03-05 | Customer Filters | customer(code,name,phone,id) | COVERED | Trigram & prefix (TL-31,41) |
-| TRC-FE-03-06 | Customer Table | customer, vehicle summary | COVERED | Summary (TL-15) |
+| TRC-FE-03-01 | Total Customers | apps/customers/views/customers.py (`GET /api/v1/customers/summary/`) | COVERED | v_customer_status_summary count (TL-08) |
+| TRC-FE-03-02 | Active Subscribers | apps/customers/views/customers.py (`GET /api/v1/customers/summary/`) | DERIVED | Active subscription ticket holders (TL-28.5) |
+| TRC-FE-03-03 | Expiring Soon (7d) | apps/customers/views/customers.py (`GET /api/v1/customers/summary/`) | DERIVED | Expiring <= 7d subscription holders (TL-28.5) |
+| TRC-FE-03-04 | Blacklist/Suspended | apps/customers/views/customers.py (`GET /api/v1/customers/summary/`) | COVERED | customer.status IN ('SUSPENDED', 'BLACKLISTED') (TL-08) |
+| TRC-FE-03-05 | Customer Filters | apps/customers/views/customers.py (`GET /api/v1/customers/`) | COVERED | Trigram ILIKE & prefix filters: code, name, phone, idcard (TL-31, 41) |
+| TRC-FE-03-06 | Customer Table | apps/customers/views/customers.py (`GET /api/v1/customers/`) | COVERED | Paginated table envelope with vehicles_count, has_active_ticket, row_version, PII masking (TL-15, OQ-12) |
 | TRC-FE-04-01 | Vehicle Filters | vehicle, vehicle_type, ticket | COVERED | Indexed FKs (TL-31) |
 | TRC-FE-04-02 | Vehicle KPIs | vehicle, ticket | DERIVED | State/validity (TL-28) |
 | TRC-FE-04-03 | Vehicle Grid | vehicle, customer, ticket, slot | COVERED | Profile (TL-09) |
@@ -116,12 +116,12 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-SRS-03-03 | Edit Employee Profile (4.3.3) | employee, row_version trigger | COVERED | OCC row_version |
 | TRC-SRS-03-04 | Delete Employee (DEL-01, 4.3.4) | employee.deleted_at, trigger | COVERED | Soft delete (TL-25) |
 | TRC-SRS-03-05 | Employee Delete Msgs (4.3.4) | MSG-4.3.4-M01..M03 | COVERED | 'Xóa nhân viên thành công', 'Lỗi hệ thống' |
-| TRC-SRS-04-01 | Customer Search (4.4.1) | customer, summary view | COVERED | Search (TL-31,41) |
-| TRC-SRS-04-02 | View Customer Cars (4.4.2) | vehicle, vehicle_type | COVERED | Vehicles sub-grid |
-| TRC-SRS-04-03 | Add Customer & Cars (4.4.3) | customer, vehicle | COVERED | Tx create (TL-15) |
-| TRC-SRS-04-04 | Edit Customer Profile (4.4.4) | customer, vehicle | COVERED | RESTRICT FK |
-| TRC-SRS-04-05 | Delete Customer (DEL-02, 4.4.5) | customer.deleted_at, trigger | COVERED | Guarded delete (TL-25) |
-| TRC-SRS-04-06 | PII Anonymization (4.4.5) | customer(anonymized fields) | COVERED | PII anon (OQ-12) |
+| TRC-SRS-04-01 | Customer Search (4.4.1) | apps/customers/views/customers.py (`GET /api/v1/customers/`) | COVERED | Search by code, trigram name, phone, CCCD, status with standard pagination (TL-31, 41) |
+| TRC-SRS-04-02 | View Customer Cars (4.4.2) | apps/customers/views/customers.py (`GET /api/v1/customers/{id}/`) | COVERED | Customer profile, administrative hierarchy, vehicles sub-grid with representative tickets |
+| TRC-SRS-04-03 | Add Customer & Cars (4.4.3) | apps/customers/views/customers.py (`POST /api/v1/customers/`) | COVERED | Atomic creation of customer and optional vehicle array under KH%04d advisory lock |
+| TRC-SRS-04-04 | Edit Customer Profile (4.4.4) | apps/customers/views/customers.py (`PATCH /api/v1/customers/{id}/`) | COVERED | Partial update enforced by OCC row_version, blacklist status_reason guard |
+| TRC-SRS-04-05 | Delete Customer (DEL-02, 4.4.5) | apps/customers/views/customers.py (`DELETE /api/v1/customers/{id}/`) | COVERED | Guarded soft-delete (parked vehicles, active tickets, active vehicles) returning 409 (TL-25) |
+| TRC-SRS-04-06 | PII Anonymization (4.4.5) | apps/customers/serializers/customers.py | COVERED | Masking name, phone, CCCD when is_anonymized=True per Decree 13/2023/NĐ-CP (OQ-12) |
 | TRC-SRS-05-01 | Vehicle Entry Check-in (4.5.1) | vehicle_entry_exit_log, guard (`POST /api/v1/parking/sessions/check-in/`) | COVERED | Check-in, session_code, blacklist guard (Round 32) |
 | TRC-SRS-05-02 | Exit & Payment (4.5.1) | vehicle_entry_exit_log, payment (`POST /api/v1/parking/sessions/check-out/`) | COVERED | Check-out, TL-50 tariff Decimal, atomic payment (Round 32) |
 | TRC-SRS-05-03 | Entry Guard Msgs (4.5.1) | MSG-4.5.1-M01..M03, PROP-4.5.1-P01..P12 | COVERED | Verbatim M03 fix ('lỗi kết nối'), mapped trigger exceptions (Round 32) |
@@ -197,7 +197,7 @@ The table below maps all 36 visual elements from the frontend mockup `Quản lý
 | 2 | Navigation Menu (7 items, `Quản lý xe` active) | SPA Shell / Client Router | N/A | Route `/vehicles` | Visible to `EMPLOYEE` and `MANAGER` | **COVERED** |
 | 3 | Camera Button & User Badge ("Admin") | `GET /api/v1/auth/me/` | GET | Session Cookie `sessionid` | `UserResponse: { id, email, phone, role }` | **COVERED** |
 | 4 | Page Title & Subtitle (`Quản lý xe`) | Static UI Header | N/A | None | Client static header text | **COVERED** |
-| 5 | Primary CTA `+ Thêm xe` | `POST /api/v1/vehicles/` | POST | Header: `X-CSRFToken`<br>Body: Vehicle payload | `201 Created`<br>`VehicleDetailResponse` | **COVERED** (RBAC: `IsManager` only) |
+| 5 | Primary CTA `+ Thêm xe` | `POST /api/v1/vehicles/` | POST | Header: `X-CSRFToken`<br>Body: Vehicle payload | `201 Created`<br>`VehicleDetailResponse` | **COVERED** (RBAC: `IsEmployeeOrManager`) |
 | 6 | KPI Card 1: `Tổng phương tiện` (6) | `GET /api/v1/vehicles/summary/` | GET | Optional: `customer`, `vehicle_type` | `total_vehicles: int` | **COVERED** (Global non-deleted count) |
 | 7 | KPI Card 2: `Đang hoạt động` (4) | `GET /api/v1/vehicles/summary/` | GET | Optional: `customer`, `vehicle_type` | `active_vehicles: int` | **DERIVED** (Active ticket or in-lot) |
 | 8 | KPI Card 3: `Vé sắp hết hạn` (2) | `GET /api/v1/vehicles/summary/` | GET | Optional: `customer`, `vehicle_type` | `expiring_soon_tickets: int` | **DERIVED** (Active ticket <= 7 days) |
@@ -238,7 +238,7 @@ The table below maps all 36 visual elements from the frontend mockup `Quản lý
    - **Implementation**: Database table `vehicle_type` contains exactly two records: `CAR` ("Ô tô") and `EV` ("Xe điện"). Endpoint `GET /api/v1/vehicle-types/` returns only `CAR` and `EV`. Registration (`POST`) and update (`PATCH`) reject any other vehicle type with HTTP 400 (`PROP-GEN-P01`). The motorbike row is formally classified as a **Known Designer Mockup Artifact (GAP TRC-FE-04-04)**.
 2. **Optimistic Concurrency Control (OCC)**:
    - Table `vehicle` maintains `row_version INTEGER NOT NULL DEFAULT 1` with DB trigger `trg_vehicle_row_version`.
-   - `PATCH /api/v1/vehicles/{id}/` requires `row_version: int`. Mismatched versions immediately abort with HTTP 409 Conflict (`MSG-4.3.1-M03`), preventing lost updates between concurrent managers.
+   - `PATCH /api/v1/vehicles/{id}/` requires `row_version: int`. Mismatched versions immediately abort with HTTP 409 Conflict (`MSG-4.3.1-M03`), preventing lost updates between concurrent staff (EMPLOYEE or MANAGER).
 3. **DEL-03 Database Soft-Delete Guards**:
    - Soft-delete operations (`DELETE /api/v1/vehicles/{id}/`) set `deleted_at = now()` and `deleted_by = actor.id`.
    - Database trigger function `fn_guard_soft_delete_and_restore()` enforces 3 guards, mapped to HTTP 409 Conflict:
@@ -253,8 +253,77 @@ The table below maps all 36 visual elements from the frontend mockup `Quản lý
 5. **Vehicle Thumbnail Gap (`image_url`)**:
    - `image_url` is stored as a text/URI field referencing static assets (e.g., `"/media/vehicles/xe0001.jpg"`).
    - Multipart vehicle photo upload is deferred as an unbuilt feature; no upload endpoint is exposed.
-6. **Customer Vehicle Alias Endpoint Deferral (SCO-06)**:
-   - `POST /api/v1/customers/{customer_id}/vehicles/` is deferred because `apps/customers` is unbuilt. Frontend creates vehicles via `POST /api/v1/vehicles/` with `customer_id` in the request body.
+6. **Customer Vehicle Alias Endpoint (SCO-06)**:
+   - `POST /api/v1/customers/{customer_id}/vehicles/` is fully implemented in Round 66 as a RESTful sub-resource alias delegating directly to `create_vehicle(customer_id=customer_id, ...)` with identical permissions (`IsEmployeeOrManager`) and transaction guarantees.
+
+---
+
+### 3.3. Detailed Traceability for Customer Management (Screen "Khách hàng", TRC-FE-03-01..06, TRC-SRS-04-01..06, Round 66)
+
+#### A. Comprehensive UI Contract Inventory ("Khách hàng — Smart Mobility.png")
+
+The table below maps all visual elements from the frontend mockup `Khách hàng — Smart Mobility.png` to their backend REST endpoints, methods, parameters, and response structures.
+
+| # | Mockup Element | API Endpoint | HTTP Method | Request / Query Param | Response Field / Structure | Business Rule / Status |
+|:---:|---|---|:---:|---|---|:---:|
+| 1 | Logo & Navigation (`Khách hàng` active) | SPA Shell / Router | N/A | Route `/customers` | Visible to `EMPLOYEE` and `MANAGER` | **COVERED** |
+| 2 | Camera Icon & User Profile Badge ("Admin") | `GET /api/v1/auth/me/` | GET | Session Cookie `sessionid` | `UserResponse: { id, email, phone, role }` | **COVERED** |
+| 3 | Page Title: "Quản lý khách hàng" | Static UI Header | N/A | None | Client static text | **COVERED** |
+| 4 | KPI Card 1: `Tổng khách hàng` (1,420) | `GET /api/v1/customers/summary/` | GET | None | `total_customers: int` | **COVERED** (`v_customer_status_summary`) |
+| 5 | KPI Card 2: `Thuê bao kích hoạt` (1,280) | `GET /api/v1/customers/summary/` | GET | None | `active_subscribers: int` | **DERIVED** (Active ticket holders) |
+| 6 | KPI Card 3: `Sắp hết hạn (7 ngày)` (42) | `GET /api/v1/customers/summary/` | GET | None | `expiring_soon_subscribers: int` | **DERIVED** (Active ticket <= 7d, TL-28.5) |
+| 7 | KPI Card 4: `Blacklist/Tạm khoá` (15) | `GET /api/v1/customers/summary/` | GET | None | `blacklisted_or_suspended: int` | **COVERED** (`SUSPENDED` + `BLACKLISTED`) |
+| 8 | Filter Input 1: `Mã khách hàng` | `GET /api/v1/customers/` | GET | Query: `code=KH0001` | Prefix/substring on `customer.code` | **COVERED** (`uq_customer_code_active`) |
+| 9 | Filter Input 2: `Tên khách hàng` | `GET /api/v1/customers/` | GET | Query: `name=Nguyen` | PostgreSQL GIN trigram `idx_customer_full_name_trgm` | **COVERED** (`TL-41`) |
+| 10 | Filter Input 3: `Số điện thoại` | `GET /api/v1/customers/` | GET | Query: `phone=0905` | Substring match on `customer.phone` | **COVERED** (`TL-41`) |
+| 11 | Filter Input 4: `Số CCCD` | `GET /api/v1/customers/` | GET | Query: `identity_card=048` | Substring match on `identity_card_number` | **COVERED** (`TL-41`) |
+| 12 | Supplemental Filter: `Trạng thái` | `GET /api/v1/customers/` | GET | Query: `status=ACTIVE` | Exact match enum: `ACTIVE`, `SUSPENDED`, `BLACKLISTED` | **COVERED** |
+| 13 | Button: `Tìm kiếm` | `GET /api/v1/customers/` | GET | Combined filter params | Paginated list envelope | **COVERED** |
+| 14 | Button: `Reset` | `GET /api/v1/customers/` | GET | Default params (`page=1`) | Unfiltered default customer list | **COVERED** |
+| 15 | Primary CTA: `+ Thêm` | `POST /api/v1/customers/` | POST | Header: `X-CSRFToken`<br>Body: Customer payload | `201 Created`<br>`CustomerDetailResponse` | **COVERED** (RBAC: `IsEmployeeOrManager`) |
+| 16 | Column 1: `Mã khách hàng` (`KH0001`) | `GET /api/v1/customers/` | GET | None | `row.code: str` | **COVERED** (Immutable, `KH%04d`) |
+| 17 | Column 2: `Tên khách hàng` | `GET /api/v1/customers/` | GET | None | `row.full_name: str` | **COVERED** (Masked if anonymized, OQ-12) |
+| 18 | Column 3: `Số điện thoại` | `GET /api/v1/customers/` | GET | None | `row.phone: str` | **COVERED** (Masked if anonymized) |
+| 19 | Column 4: `Số CCCD` | `GET /api/v1/customers/` | GET | None | `row.identity_card_number: str` | **COVERED** (Masked if anonymized) |
+| 20 | Row Enrichment: `Trạng thái` | `GET /api/v1/customers/` | GET | None | `row.status`, `row.status_display` | **COVERED** |
+| 21 | Row Enrichment: `Số lượng xe` | `GET /api/v1/customers/` | GET | None | `row.vehicles_count: int` | **DERIVED** (Count active vehicles, zero N+1) |
+| 22 | Row Enrichment: `Vé hiệu lực` | `GET /api/v1/customers/` | GET | None | `row.has_active_ticket: bool` | **DERIVED** (Exists active ticket, zero N+1) |
+| 23 | OCC Token: `Phiên bản` | `GET /api/v1/customers/` | GET | None | `row.row_version: int` | **COVERED** (OCC concurrency token) |
+| 24 | Pagination Envelope | `GET /api/v1/customers/` | GET | Query: `page`, `page_size` | `count, total_pages, current_page, page_size, next, previous, results` | **COVERED** (`StandardResultsSetPagination`) |
+| 25 | Customer Profile Detail | `GET /api/v1/customers/{id}/` | GET | Path: `id` | Full profile + administrative units + vehicles sub-grid | **COVERED** (Zero duplicate logic) |
+| 26 | Edit Customer Action | `PATCH /api/v1/customers/{id}/` | PATCH | Header: `X-CSRFToken`<br>Body: Update payload + `row_version` | `200 OK`<br>`CustomerDetailResponse` | **COVERED** (Enforces OCC) |
+| 27 | Soft Delete Action | `DELETE /api/v1/customers/{id}/` | DELETE | Header: `X-CSRFToken`<br>Path: `id` | `200 OK`<br>`{"message": "Xóa thành công"}` | **COVERED** (DEL-02 guards) |
+| 28 | Customer Vehicle Sub-resource | `POST /api/v1/customers/{customer_id}/vehicles/` | POST | Header: `X-CSRFToken`<br>Path: `customer_id`<br>Body: Vehicle payload | `201 Created`<br>`VehicleDetailResponse` | **COVERED** (`SCO-06` alias) |
+
+#### B. Architectural Rules & Implementation Notes
+
+1. **Role-Based Access Control (RBAC)**:
+   - All customer operations (`GET`, `POST`, `PATCH`, `DELETE`) require `IsEmployeeOrManager` (`EMPLOYEE` and `MANAGER` roles).
+   - Customer accounts (`CUSTOMER`) receive HTTP `403 Forbidden` (`MSG-4.2-M01`).
+   - Unauthenticated callers receive HTTP `401 Unauthorized` (`MSG-4.1-M02`).
+2. **Double-Submit CSRF Protection**:
+   - Mutating operations (`POST`, `PATCH`, `DELETE`) enforce `X-CSRFToken` header validation matching the `csrftoken` session cookie (`PROP-4.1-P06`).
+3. **Atomic Customer Creation with Optional Vehicles Array**:
+   - `POST /api/v1/customers/` accepts an optional `vehicles: [...]` list.
+   - Entire payload executed inside `@transaction.atomic`. If any vehicle registration fails, the customer creation is completely rolled back (all-or-nothing atomicity).
+4. **Advisory Lock for Monotonic `KH%04d` Generation**:
+   - Auto-generated sequential code acquires PostgreSQL transaction-scoped advisory lock: `SELECT pg_advisory_xact_lock(hashtext('customer_code_sequence'));`.
+   - Guarantees zero race condition collisions (`uq_customer_code_active`) under high concurrency.
+5. **Optimistic Concurrency Control (OCC)**:
+   - `PATCH /api/v1/customers/{id}/` mandates `row_version`.
+   - Stale version returns HTTP `409 Conflict` with `MSG-4.3.1-M03`.
+6. **DEL-02 Soft-Delete Database Guards**:
+   - Intercepted by database trigger `trg_guard_soft_delete_and_restore_customer`:
+     - `PROP-4.4.5-P02`: Customer owns a vehicle currently in parking lot (`exit_time IS NULL`).
+     - `PROP-4.4.5-P03`: Customer holds an active, unexpired subscription ticket.
+     - `PROP-DEL-02-ACTIVE-VEH`: Customer owns active (`deleted_at IS NULL`) registered vehicles.
+   - Prohibits plain SQL `DELETE` via trigger `trg_prevent_plain_delete_customer` (SQLSTATE `55000`).
+7. **PII Anonymization & Data Protection (`OQ-12`, Decree 13/2023/NĐ-CP)**:
+   - When `is_anonymized = True`, customer profile returns masked PII (`full_name = "Khách hàng ẩn danh"`, `phone = "***"`, `identity_card_number = "***"`).
+   - Strict PII protection: raw PII is never echoed in error details or log messages.
+8. **Administrative Unit Dropdown Endpoints — Documented GAP (`TL-48`)**:
+   - Dropdown endpoints under `/api/v1/administrative-.../` in `apps/core` were excluded during skeleton reduction.
+   - Customer API accepts foreign keys (`province_id`, `district_id`, `ward_id`) and returns their IDs and names without violating the prohibition on modifying `apps/core/**`.
 
 ---
 

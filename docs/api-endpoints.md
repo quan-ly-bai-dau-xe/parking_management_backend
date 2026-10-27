@@ -39,16 +39,16 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
 |---|---|---|---|
 | `GET` | `/api/v1/vehicle-types/` | `EMPLOYEE`, `MANAGER` | List allowed vehicle types for filters and registration (strictly `CAR` and `EV` in Car-Only scope). |
 | `GET` | `/api/v1/vehicles/` | `EMPLOYEE`, `MANAGER` | List vehicles with multi-field filtering, search, pagination, and derived status/slot. |
-| `POST` | `/api/v1/vehicles/` | `MANAGER` + CSRF | Register a new vehicle. Auto-generates sequential code `XE%04d` if omitted. |
+| `POST` | `/api/v1/vehicles/` | `EMPLOYEE`, `MANAGER` + CSRF | Register a new vehicle. Auto-generates sequential code `XE%04d` if omitted. |
 | `GET` | `/api/v1/vehicles/{id}/` | `EMPLOYEE`, `MANAGER` | Retrieve granular vehicle specifications, owner contact block, and ticket lifecycle details. |
-| `PATCH` | `/api/v1/vehicles/{id}/` | `MANAGER` + CSRF | Partial update of vehicle details. Enforces OCC via `row_version`. |
-| `DELETE` | `/api/v1/vehicles/{id}/` | `MANAGER` + CSRF | Soft delete vehicle guarded by DEL-03 database triggers. |
+| `PATCH` | `/api/v1/vehicles/{id}/` | `EMPLOYEE`, `MANAGER` + CSRF | Partial update of vehicle details. Enforces OCC via `row_version`. |
+| `DELETE` | `/api/v1/vehicles/{id}/` | `EMPLOYEE`, `MANAGER` + CSRF | Soft delete vehicle guarded by DEL-03 database triggers. |
 | `GET` | `/api/v1/vehicles/summary/` | `EMPLOYEE`, `MANAGER` | Aggregate 4 KPI metrics (total, active, expiring soon <= 7d, expired) for dashboard cards. |
 | `GET` | `/api/v1/vehicles/export/` | `EMPLOYEE`, `MANAGER` | Stream CSV export with RFC 4180 formatting, UTF-8 BOM, and formula-injection neutralization. |
 
 ### Vehicle Management Integration Notes
 
-- **Permissions & Roles**: All read operations (`GET`) require `IsEmployeeOrManager` (`EMPLOYEE` or `MANAGER` role). All state-changing write operations (`POST`, `PATCH`, `DELETE`) strictly require `IsManager` (`MANAGER` role). Unauthenticated calls return `401 Unauthorized` (`MSG-4.1-M02`). Insufficient permission returns `403 Forbidden` (`MSG-4.2-M01`).
+- **Permissions & Roles**: All operations (`GET`, `POST`, `PATCH`, `DELETE`) require `IsEmployeeOrManager` (`EMPLOYEE` or `MANAGER` role). Unauthenticated calls return `401 Unauthorized` (`MSG-4.1-M02`). Insufficient permission returns `403 Forbidden` (`MSG-4.2-M01`).
 - **CSRF Protection**: All mutating calls (`POST`, `PATCH`, `DELETE`) require the `X-CSRFToken` header matching the `csrftoken` session cookie. Missing or mismatched CSRF returns `403 Forbidden` (`PROP-4.1-P06`).
 - **Query Parameters**:
   - `GET /api/v1/vehicles/` and `GET /api/v1/vehicles/export/` accept:
@@ -124,6 +124,108 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
   - `404 Not Found`: Target vehicle not found or already deleted (`MSG-4.4.1-M01`).
   - `409 Conflict`: OCC version mismatch (`MSG-4.3.1-M03`), duplicate active plate or separator variant (`MSG-4.3.1-M05`), or DEL-03 delete guards (`PROP-DEL-03-*`).
 
+## Customer Management (`/api/v1/customers/`)
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/customers/` | `EMPLOYEE`, `MANAGER` | List customers with multi-field filtering, search, ordering whitelist, pagination, and PII masking. |
+| `GET` | `/api/v1/customers/summary/` | `EMPLOYEE`, `MANAGER` | Aggregate 4 KPI metrics (`total_customers`, `active_subscribers`, `expiring_soon_subscribers`, `blacklisted_or_suspended`). |
+| `GET` | `/api/v1/customers/{id}/` | `EMPLOYEE`, `MANAGER` | Retrieve full customer profile, 3-tier administrative units (ID and name), and vehicles sub-grid with representative tickets. |
+| `POST` | `/api/v1/customers/` | `EMPLOYEE`, `MANAGER` + CSRF | Create a customer with optional atomic vehicles array in a single transaction. Auto-generates `KH%04d` under advisory lock. |
+| `PATCH` | `/api/v1/customers/{id}/` | `EMPLOYEE`, `MANAGER` + CSRF | Partial update of customer details. Enforces OCC via mandatory `row_version`, validates administrative hierarchy and status transition rules. |
+| `DELETE` | `/api/v1/customers/{id}/` | `EMPLOYEE`, `MANAGER` + CSRF | Soft delete customer guarded by DEL-02 database triggers (`deleted_at`, `deleted_by`). |
+| `POST` | `/api/v1/customers/{customer_id}/vehicles/` | `EMPLOYEE`, `MANAGER` + CSRF | Register a vehicle directly under the specified customer (SCO-06 alias of `POST /api/v1/vehicles/`). |
+
+### Customer Management Integration Notes
+
+- **Permissions & Roles**: All operations (`GET`, `POST`, `PATCH`, `DELETE`) require `IsEmployeeOrManager` (`EMPLOYEE` or `MANAGER` role). Unauthenticated calls return `401 Unauthorized` (`MSG-4.1-M02`). Insufficient permissions return `403 Forbidden` (`MSG-4.2-M01`).
+- **CSRF Protection**: All mutating calls (`POST`, `PATCH`, `DELETE`) require the `X-CSRFToken` header matching the `csrftoken` session cookie. Missing or mismatched CSRF returns `403 Forbidden` (`PROP-4.1-P06`).
+- **Query Parameters**:
+  - `GET /api/v1/customers/` accepts:
+    - `code`: Case-insensitive substring match on customer code (`customer.code`).
+    - `name` (or `full_name`): Substring match on `customer.full_name` using PostgreSQL GIN trigram index (`TL-41`).
+    - `phone`: Substring match on `customer.phone`.
+    - `identity_card`: Substring match on `customer.identity_card_number`.
+    - `status`: Exact match on customer status enum (`ACTIVE`, `SUSPENDED`, `BLACKLISTED`).
+    - `ordering`: Ordering field (`code`, `-code`, `full_name`, `-full_name`, `created_at`, `-created_at`, `row_version`, `-row_version`, `id`, `-id`). Default: `code`.
+    - `page`, `page_size`: Standard pagination parameters (`page_size` default 20, max 100).
+- **Request Bodies**:
+  - `POST /api/v1/customers/`:
+
+    ```json
+    {
+      "code": "KH0021",
+      "full_name": "Nguyễn Văn An",
+      "identity_card_number": "048095001234",
+      "phone": "0905123456",
+      "email": "van.an@example.com",
+      "date_of_birth": "1995-05-15",
+      "gender": "Nam",
+      "address": "123 Lê Duẩn",
+      "province_id": 48,
+      "district_id": 1,
+      "ward_id": 1,
+      "vehicles": [
+        {
+          "license_plate": "43A-999.88",
+          "model_name": "VF8",
+          "vehicle_type_id": 1,
+          "brand": "VinFast",
+          "color": "Trắng"
+        }
+      ]
+    }
+    ```
+
+    (`code` is optional; when omitted, the server atomically allocates the next sequential code `KH%04d` under transaction advisory lock. `vehicles` array is optional; when provided, customer and all vehicles are created atomically in a single transaction).
+
+  - `PATCH /api/v1/customers/{id}/`:
+
+    ```json
+    {
+      "row_version": 1,
+      "full_name": "Nguyễn Văn Bình",
+      "phone": "0905987654",
+      "status": "BLACKLISTED",
+      "status_reason": "Vi phạm nội quy bãi xe nhiều lần",
+      "province_id": 48,
+      "district_id": 1,
+      "ward_id": 1
+    }
+    ```
+
+    (`row_version` is mandatory for optimistic concurrency control).
+
+  - `POST /api/v1/customers/{customer_id}/vehicles/`:
+
+    ```json
+    {
+      "license_plate": "43A-888.99",
+      "model_name": "VF9",
+      "vehicle_type_id": 1,
+      "brand": "VinFast",
+      "color": "Đen"
+    }
+    ```
+
+- **Optimistic Concurrency Control (OCC)**: `PATCH /api/v1/customers/{id}/` validates that `row_version` in the request body matches the current database record. If another user has updated the record in the interim, the API returns `409 Conflict` with `MSG-4.3.1-M03` (`Dữ liệu hiện đang được cập nhật bởi user khác`).
+- **DEL-02 Soft-Delete Database Guards**: `DELETE /api/v1/customers/{id}/` executes a guarded soft delete (`deleted_at = timezone.now()`, `deleted_by = actor_id`). Database triggers intercept deletions and return `409 Conflict` under 3 conditions:
+  1. `PROP-4.4.5-P02`: Customer owns a vehicle currently parked in the lot (`exit_time IS NULL`).
+  2. `PROP-4.4.5-P03`: Customer holds an active, unexpired subscription ticket (`effective_to > CURRENT_TIMESTAMP`).
+  3. `PROP-DEL-02-ACTIVE-VEH`: Customer owns active (`deleted_at IS NULL`) registered vehicles.
+  Plain SQL hard `DELETE` is blocked by database trigger `trg_prevent_plain_delete_customer` with SQLSTATE `55000`. Successful soft-deletion returns `200 OK` with `MSG-4.4.5-M01` (`Xóa thành công`).
+- **PII Protection & Anonymization (`OQ-12`, Decree 13/2023/NĐ-CP)**:
+  - Customers marked `is_anonymized = True` return masked PII: `full_name: "Khách hàng ẩn danh"`, `phone: "***"`, `identity_card_number: "***"`.
+  - PII values are strictly omitted from exception messages, error `details`, and application logs.
+- **HTTP Status Codes**:
+  - `200 OK`: Successful retrieval, update, or soft-delete.
+  - `201 Created`: Successful customer or vehicle creation.
+  - `400 Bad Request`: Payload validation errors (`PROP-GEN-P01`), invalid name format/control chars, missing blacklist reason, or invalid administrative hierarchy.
+  - `401 Unauthorized`: Session missing or expired (`MSG-4.1-M02`).
+  - `403 Forbidden`: Insufficient role (`MSG-4.2-M01`) or invalid/missing CSRF (`PROP-4.1-P06`).
+  - `404 Not Found`: Target customer not found or already deleted (`PROP-4.4.4-P02` / `PROP-4.4.5-P01`).
+  - `409 Conflict`: OCC version mismatch (`MSG-4.3.1-M03`), unique conflict on code, CCCD, phone, or email (`MSG-4.3.1-M05`), or DEL-02 delete guards (`PROP-4.4.5-P02`, `PROP-4.4.5-P03`, `PROP-DEL-02-ACTIVE-VEH`).
+
 ## API documentation routes
 
 | Method | Endpoint | Purpose |
@@ -132,4 +234,4 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
 | `GET` | `/api/docs/` | Open Swagger UI. |
 | `GET` | `/api/redoc/` | Open ReDoc. |
 
-Django Admin is available at `/admin/` and is not part of the REST API. Other application modules (`customers`, `tickets`, `employees`, and `reports`) define database models and schema relationships but have no standalone CRUD management routes exposed; do not treat planned or SRS-listed operations as implemented routes until they appear in the live schema.
+Django Admin is available at `/admin/` and is not part of the REST API. Other application modules (`tickets`, `employees`, and `reports`) define database models and schema relationships but have no standalone CRUD management routes exposed; do not treat planned or SRS-listed operations as implemented routes until they appear in the live schema.
