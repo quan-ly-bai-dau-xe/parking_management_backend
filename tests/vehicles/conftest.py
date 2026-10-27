@@ -28,7 +28,7 @@ def auth_manager():
 
 @pytest.fixture
 def auth_employee():
-    """Employee account with read-only privileges."""
+    """Employee account with read and write privileges (Task V0: IsEmployeeOrManager)."""
     acc, _ = Account.objects.get_or_create(
         email="employee_vehicle_suite@parking.local",
         defaults={

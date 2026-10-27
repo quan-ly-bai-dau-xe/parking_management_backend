@@ -360,7 +360,7 @@ class VehicleDetailSerializer(serializers.ModelSerializer):
 class VehicleCreateSerializer(serializers.Serializer):
     """
     Serializer for creating a new vehicle (POST /api/v1/vehicles/).
-    Restricted to Manager role with CSRF validation.
+    Restricted to Employee or Manager role with CSRF validation.
     """
 
     code = serializers.CharField(

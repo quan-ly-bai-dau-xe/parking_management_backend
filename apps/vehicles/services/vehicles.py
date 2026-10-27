@@ -244,7 +244,7 @@ def create_vehicle(
 ) -> Vehicle:
     """
     Create a new vehicle record.
-    Restricted to Manager role with CSRF validation.
+    Restricted to Employee or Manager role with CSRF validation.
     Normalizes license plate, validates active uniqueness, checks FKs, and generates code if omitted.
     """
     clean_plate = validate_raw_license_plate(license_plate)

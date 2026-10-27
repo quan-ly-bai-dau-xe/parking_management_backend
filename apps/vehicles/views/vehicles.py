@@ -21,7 +21,7 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.pagination import StandardResultsSetPagination
-from apps.core.permissions import IsEmployeeOrManager, IsManager
+from apps.core.permissions import IsEmployeeOrManager
 from apps.core.serializers import ErrorEnvelopeSerializer
 from apps.vehicles.selectors.vehicles import (
     get_vehicle_by_id,
@@ -49,16 +49,15 @@ class VehicleListCreateView(APIView):
     """
     API Danh sách & Thêm mới phương tiện.
     - GET: Xem danh sách phân trang (StandardResultsSetPagination). Quyền: EMPLOYEE, MANAGER.
-    - POST: Thêm mới phương tiện. Quyền: MANAGER only. Bảo vệ CSRF bắt buộc.
+    - POST: Thêm mới phương tiện. Quyền: EMPLOYEE, MANAGER. Bảo vệ CSRF bắt buộc.
     """
 
+    permission_classes = [IsAuthenticated, IsEmployeeOrManager]
     pagination_class: type[StandardResultsSetPagination] | None = (
         StandardResultsSetPagination
     )
 
     def get_permissions(self) -> list[Any]:
-        if self.request.method == "POST":
-            return [IsAuthenticated(), IsManager()]
         return [IsAuthenticated(), IsEmployeeOrManager()]
 
     @extend_schema(
@@ -207,7 +206,7 @@ class VehicleListCreateView(APIView):
         summary="Thêm mới phương tiện",
         description=(
             "Thêm mới phương tiện khách hàng đăng ký vào hệ thống. "
-            "Quyền hạn: MANAGER only. Yêu cầu CSRF token trong header X-CSRFToken. "
+            "Quyền hạn: EMPLOYEE hoặc MANAGER. Yêu cầu CSRF token trong header X-CSRFToken. "
             "Hệ thống tự động chuẩn hóa và thẩm định biển số xe theo quy chuẩn ô tô dân sự Việt Nam (Thông tư 79/2024/TT-BCA, PROP-4.5.1-P16), "
             "kiểm tra biển số trùng lặp trong các xe đang hoạt động, "
             "kiểm tra khách hàng và loại xe tồn tại (chỉ hỗ trợ CAR và EV). "
@@ -229,7 +228,7 @@ class VehicleListCreateView(APIView):
             ),
             403: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
-                description="Không đủ quyền quản lý (chỉ dành cho MANAGER)",
+                description="Không đủ quyền truy cập",
             ),
             409: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
@@ -266,13 +265,13 @@ class VehicleDetailUpdateDeleteView(APIView):
     """
     API Xem chi tiết, Cập nhật và Xóa mềm phương tiện.
     - GET: Xem chi tiết phương tiện và 3 khối panel (xe, chủ xe, vé). Quyền: EMPLOYEE, MANAGER.
-    - PATCH: Cập nhật thông số phương tiện. Quyền: MANAGER only. Kiểm soát OCC (row_version).
-    - DELETE: Xóa mềm phương tiện. Quyền: MANAGER only. Kiểm soát 3 guard DEL-03 từ CSDL.
+    - PATCH: Cập nhật thông số phương tiện. Quyền: EMPLOYEE, MANAGER. Kiểm soát OCC (row_version).
+    - DELETE: Xóa mềm phương tiện. Quyền: EMPLOYEE, MANAGER. Kiểm soát 3 guard DEL-03 từ CSDL.
     """
 
+    permission_classes = [IsAuthenticated, IsEmployeeOrManager]
+
     def get_permissions(self) -> list[Any]:
-        if self.request.method in ("PATCH", "DELETE"):
-            return [IsAuthenticated(), IsManager()]
         return [IsAuthenticated(), IsEmployeeOrManager()]
 
     @extend_schema(
@@ -323,7 +322,7 @@ class VehicleDetailUpdateDeleteView(APIView):
         summary="Cập nhật thông tin phương tiện (OCC)",
         description=(
             "Cập nhật các thông số cho phép của phương tiện (tên model, hãng xe, màu sắc, ghi chú, "
-            "loại xe, chủ xe). Quyền hạn: MANAGER only. Yêu cầu CSRF token. "
+            "loại xe, chủ xe). Quyền hạn: EMPLOYEE hoặc MANAGER. Yêu cầu CSRF token. "
             "Trường 'license_plate' là bất biến (read-only) và sẽ bị bỏ qua nếu gửi trong request. "
             "Bắt buộc truyền trường 'row_version' trong body để kiểm soát đồng thời lạc quan (OCC). "
             "Nếu dữ liệu bị sửa đổi bởi người dùng khác, API trả về HTTP 409 Conflict với mã MSG-4.3.1-M03. "
@@ -354,7 +353,7 @@ class VehicleDetailUpdateDeleteView(APIView):
             ),
             403: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
-                description="Không đủ quyền quản lý",
+                description="Không đủ quyền truy cập",
             ),
             404: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
@@ -389,7 +388,7 @@ class VehicleDetailUpdateDeleteView(APIView):
         summary="Xóa mềm phương tiện (DEL-03)",
         description=(
             "Xóa mềm phương tiện (cập nhật deleted_at và deleted_by). "
-            "Quyền hạn: MANAGER only. Yêu cầu CSRF token. "
+            "Quyền hạn: EMPLOYEE hoặc MANAGER. Yêu cầu CSRF token. "
             "Kích hoạt rào chắn kiểm soát toàn vẹn DEL-03 từ CSDL: "
             "Chặn đứng nếu xe đang có phiên đỗ mở (409 PROP-DEL-03-OPEN-SES), "
             "có vé đỗ còn hiệu lực (409 PROP-DEL-03-ACTIVE-TKT), "
@@ -421,7 +420,7 @@ class VehicleDetailUpdateDeleteView(APIView):
             ),
             403: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
-                description="Không đủ quyền quản lý",
+                description="Không đủ quyền truy cập",
             ),
             404: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,

@@ -15,7 +15,7 @@ Verifies:
   - Invalid vehicle type (not CAR/EV) -> 400 (PROP-GEN-P01).
 - Non-existent vehicle ID -> 404 (MSG-4.4.1-M01).
 - Soft-deleted vehicle ID -> 404 (MSG-4.4.1-M01).
-- RBAC permissions: Anonymous -> 401, Customer -> 403, Employee -> 403, Manager -> 200.
+- RBAC permissions: Anonymous -> 401, Customer -> 403, Employee -> 200, Manager -> 200.
 """
 
 import pytest
@@ -193,7 +193,7 @@ def test_vehicle_update_permissions(anonymous_client, customer_client, employee_
     Quyền cập nhật xe (PATCH):
     - Anonymous -> 401
     - Customer -> 403
-    - Employee -> 403 (chỉ Manager được cập nhật)
+    - Employee -> 200 (Task V0: Employee và Manager đều có quyền ghi)
     """
     v = Vehicle.objects.filter(deleted_at__isnull=True).first()
     url = f"{BASE_URL}{v.id}/"
@@ -207,10 +207,12 @@ def test_vehicle_update_permissions(anonymous_client, customer_client, employee_
         customer_client.patch(url, payload, format="json").status_code
         == status.HTTP_403_FORBIDDEN
     )
-    assert (
-        employee_client.patch(url, payload, format="json").status_code
-        == status.HTTP_403_FORBIDDEN
-    )
+    res_emp = employee_client.patch(url, payload, format="json")
+    assert res_emp.status_code == status.HTTP_200_OK
+    assert res_emp.json()["color"] == "Xanh lá"
+    v.refresh_from_db()
+    assert v.color == "Xanh lá"
+    assert v.row_version == payload["row_version"] + 1
 
 
 def test_vehicle_update_license_plate_ignored(manager_client):
