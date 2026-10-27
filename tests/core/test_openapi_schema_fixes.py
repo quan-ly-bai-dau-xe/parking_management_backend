@@ -191,6 +191,9 @@ EXPECTED_OPERATION_SECURITY: dict[tuple[str, str], list[Any]] = {
     ("POST", "/api/v1/auth/logout/"): [{"csrfAuth": []}],
     # Protected read operations: require session cookie only
     ("GET", "/api/v1/auth/me/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/customers/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/customers/summary/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/customers/{id}/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/gates/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/sessions/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/sessions/{id}/"): [{"cookieAuth": []}],
@@ -202,6 +205,12 @@ EXPECTED_OPERATION_SECURITY: dict[tuple[str, str], list[Any]] = {
     ("GET", "/api/v1/vehicles/summary/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/vehicles/{id}/"): [{"cookieAuth": []}],
     # Protected mutating operations: require session cookie AND CSRF header in single dict
+    ("POST", "/api/v1/customers/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("PATCH", "/api/v1/customers/{id}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("DELETE", "/api/v1/customers/{id}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("POST", "/api/v1/customers/{customer_id}/vehicles/"): [
+        {"cookieAuth": [], "csrfAuth": []}
+    ],
     ("POST", "/api/v1/parking/plate-scans/"): [{"cookieAuth": [], "csrfAuth": []}],
     ("POST", "/api/v1/parking/sessions/check-in/"): [
         {"cookieAuth": [], "csrfAuth": []}
