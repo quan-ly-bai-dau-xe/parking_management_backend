@@ -97,8 +97,8 @@ def get_customers_queryset(
 
     # 1. Filter criteria
     if code_val and str(code_val).strip():
-        clean_code = str(code_val).strip()
-        qs = qs.filter(code__iexact=clean_code)
+        clean_code = escape_like(str(code_val).strip())
+        qs = qs.filter(code__ilike=f"%{clean_code}%")
 
     if name_val and str(name_val).strip():
         clean_name = escape_like(str(name_val).strip())

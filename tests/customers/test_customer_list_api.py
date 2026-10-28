@@ -2,7 +2,7 @@
 Test suite for GET /api/v1/customers/ (Customer List View).
 Covers:
 - Standard pagination (StandardResultsSetPagination).
-- Filters: code (exact iexact), name (substring with GIN trigram acceleration),
+- Filters: code (case-insensitive substring with wildcard escaping), name (substring with GIN trigram acceleration),
   phone, identity_card (CCCD), status (ACTIVE, SUSPENDED, BLACKLISTED).
 - Ordering whitelist and fallback to default (code asc, id asc).
 - Masking of PII (full_name, phone, identity_card_number) when is_anonymized = True.
@@ -71,8 +71,12 @@ def test_customer_list_custom_page_size(employee_client: APIClient):
 
 
 def test_customer_list_filter_by_code_exact(employee_client: APIClient):
-    """Verify filter by customer code is case-insensitive exact matching."""
-    sample_customer = Customer.objects.filter(deleted_at__isnull=True).first()
+    """Verify filter by exact customer code matches only that customer."""
+    sample_customer = Customer.objects.filter(
+        deleted_at__isnull=True, code="KH0001"
+    ).first()
+    if not sample_customer:
+        sample_customer = Customer.objects.filter(deleted_at__isnull=True).first()
     assert sample_customer is not None
 
     # Filter with lowercase
@@ -80,9 +84,90 @@ def test_customer_list_filter_by_code_exact(employee_client: APIClient):
     assert response.status_code == status.HTTP_200_OK
 
     data = response.json()
-    assert data["count"] >= 1
+    assert data["count"] == 1
+    assert data["results"][0]["code"].upper() == sample_customer.code.upper()
+    assert data["results"][0]["id"] == sample_customer.id
+
+
+def test_customer_list_filter_by_code_substring(employee_client: APIClient):
+    """
+    Verify filter by customer code supports substring matching.
+
+    ?code=KH00 matches KH0001..KH0020 (>= 20 records).
+    ?code=0001 matches KH0001.
+    """
+    # 1. Partial prefix matching
+    response = employee_client.get(f"{LIST_URL}?code=KH00")
+    assert response.status_code == status.HTTP_200_OK
+
+    data = response.json()
+    assert data["count"] >= 20
     for item in data["results"]:
-        assert item["code"].upper() == sample_customer.code.upper()
+        assert "KH00" in item["code"].upper()
+
+    # 2. Partial suffix matching
+    res_suffix = employee_client.get(f"{LIST_URL}?code=0001")
+    assert res_suffix.status_code == status.HTTP_200_OK
+    data_suffix = res_suffix.json()
+    assert data_suffix["count"] >= 1
+    matched_codes = [item["code"] for item in data_suffix["results"]]
+    assert any("0001" in code for code in matched_codes)
+
+
+def test_customer_list_filter_by_code_case_insensitive(employee_client: APIClient):
+    """Verify customer code substring search is case-insensitive."""
+    # Lowercase search 'kh00'
+    res_lower = employee_client.get(f"{LIST_URL}?code=kh00")
+    assert res_lower.status_code == status.HTTP_200_OK
+    data_lower = res_lower.json()
+    assert data_lower["count"] >= 20
+    for item in data_lower["results"]:
+        assert "kh00" in item["code"].lower()
+
+    # Mixed-case search 'kH00'
+    res_mixed = employee_client.get(f"{LIST_URL}?code=kH00")
+    assert res_mixed.status_code == status.HTTP_200_OK
+    data_mixed = res_mixed.json()
+    assert data_mixed["count"] >= 20
+
+
+def test_customer_list_filter_by_code_wildcard_escaping(employee_client: APIClient):
+    """
+    Verify that SQL wildcards '%' and '_' in customer code query parameter are escaped.
+
+    Without escaping:
+    - '%' would match all records in the table.
+    - '_' would match single characters (e.g. 'KH000_' would match KH0001..KH0009).
+    With escape_like, they are treated as literal characters and yield 0 matches.
+    """
+    # 1. Wildcard '%' alone via URL-encoded ?code=%25 and query dict {"code": "%"}
+    res_percent_encoded = employee_client.get(f"{LIST_URL}?code=%25")
+    assert res_percent_encoded.status_code == status.HTTP_200_OK
+    assert res_percent_encoded.json()["count"] == 0
+
+    res_percent_dict = employee_client.get(LIST_URL, {"code": "%"})
+    assert res_percent_dict.status_code == status.HTTP_200_OK
+    assert res_percent_dict.json()["count"] == 0
+
+    # 2. Wildcard '_' alone via URL param ?code=_ and query dict {"code": "_"}
+    res_underscore_url = employee_client.get(f"{LIST_URL}?code=_")
+    assert res_underscore_url.status_code == status.HTTP_200_OK
+    assert res_underscore_url.json()["count"] == 0
+
+    res_underscore_dict = employee_client.get(LIST_URL, {"code": "_"})
+    assert res_underscore_dict.status_code == status.HTTP_200_OK
+    assert res_underscore_dict.json()["count"] == 0
+
+    # 3. Wildcard pattern 'KH000_' must not match 'KH0001'..'KH0009'
+    res_pattern = employee_client.get(f"{LIST_URL}?code=KH000_")
+    assert res_pattern.status_code == status.HTTP_200_OK
+    assert res_pattern.json()["count"] == 0
+
+    # 4. Combinations of wildcards and backslashes
+    for wildcard in ["%%%", "___", "\\", "\\%", "%_"]:
+        res_wildcard = employee_client.get(LIST_URL, {"code": wildcard})
+        assert res_wildcard.status_code == status.HTTP_200_OK
+        assert res_wildcard.json()["count"] == 0
 
 
 def test_customer_list_filter_by_name_substring(employee_client: APIClient):
