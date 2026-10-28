@@ -170,17 +170,18 @@ from rest_framework.test import APIClient
 # 1. Bật database cho test
 pytestmark = pytest.mark.django_db
 
+
 def test_api_endpoint_sample(auth_employee):
     # 2. Khởi tạo DRF test client
     client = APIClient()
-  
+
     # 3. Giả lập đăng nhập bằng user/role tương ứng
     client.force_authenticate(user=auth_employee)
-  
+
     # 4. Gửi request đến API
     payload = {"license_plate": "51A-123.45"}
     response = client.post("/api/v1/parking/sessions/check-in/", payload, format="json")
-  
+
     # 5. Khẳng định mã HTTP Status và cấu trúc JSON trả về
     assert response.status_code == status.HTTP_201_CREATED
     assert "session_code" in response.data
