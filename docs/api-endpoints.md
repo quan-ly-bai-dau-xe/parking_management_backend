@@ -142,7 +142,7 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
 - **CSRF Protection**: All mutating calls (`POST`, `PATCH`, `DELETE`) require the `X-CSRFToken` header matching the `csrftoken` session cookie. Missing or mismatched CSRF returns `403 Forbidden` (`PROP-4.1-P06`).
 - **Query Parameters**:
   - `GET /api/v1/customers/` accepts:
-    - `code`: Case-insensitive substring match on customer code (`customer.code`).
+    - `code`: Case-insensitive substring match on customer code (`customer.code`) with wildcard escaping for `%` and `_` (e.g., `?code=KH00` matches `KH0001`; exact code matches preserved).
     - `name` (or `full_name`): Substring match on `customer.full_name` using PostgreSQL GIN trigram index (`TL-41`).
     - `phone`: Substring match on `customer.phone`.
     - `identity_card`: Substring match on `customer.identity_card_number`.
@@ -226,6 +226,108 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
   - `404 Not Found`: Target customer not found or already deleted (`PROP-4.4.4-P02` / `PROP-4.4.5-P01`).
   - `409 Conflict`: OCC version mismatch (`MSG-4.3.1-M03`), unique conflict on code, CCCD, phone, or email (`MSG-4.3.1-M05`), or DEL-02 delete guards (`PROP-4.4.5-P02`, `PROP-4.4.5-P03`, `PROP-DEL-02-ACTIVE-VEH`).
 
+## Administrative Units (`/api/v1/administrative/`)
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/administrative/provinces/` | `EMPLOYEE`, `MANAGER` | List all provinces/cities ordered by `id ASC`. |
+| `GET` | `/api/v1/administrative/districts/` | `EMPLOYEE`, `MANAGER` | List districts belonging to a province (`?province_id=<id>`) ordered by `id ASC`. |
+| `GET` | `/api/v1/administrative/wards/` | `EMPLOYEE`, `MANAGER` | List wards belonging to a district (`?district_id=<id>`) ordered by `id ASC`. |
+
+### Administrative Units Integration Notes
+
+- **Permissions & Roles**: Access is permitted for authenticated `EMPLOYEE` and `MANAGER` roles (`[IsAuthenticated, IsEmployeeOrManager]`). Unauthenticated calls return `401 Unauthorized` (`MSG-4.1-M02`). Calling with `CUSTOMER` role returns `403 Forbidden` (`MSG-4.2-M01`).
+- **Response Format**: Unpaginated bare JSON array of objects: `[{"id": <int>, "code": "<str>", "name": "<str>"}]` deterministically ordered by `id ASC`. Returns only active administrative units (`deleted_at IS NULL`).
+- **Query Parameters & Validation**:
+  - `GET /api/v1/administrative/provinces/`: Takes no parameters.
+  - `GET /api/v1/administrative/districts/?province_id=<id>`: Requires query parameter `province_id`. Returns `400 Bad Request` if `province_id` is missing or not a valid positive integer. If the province ID is valid but does not exist in the database, returns an empty array `[]` with `200 OK`.
+  - `GET /api/v1/administrative/wards/?district_id=<id>`: Requires query parameter `district_id`. Returns `400 Bad Request` if `district_id` is missing or not a valid positive integer. If the district ID is valid but does not exist in the database, returns an empty array `[]` with `200 OK`.
+
+## Employee Management (`/api/v1/employees/`, `/api/v1/positions/`)
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/positions/` | `MANAGER` | List active positions (`id`, `code`, `name`) in deterministic order for filter and form dropdowns. |
+| `GET` | `/api/v1/employees/summary/` | `MANAGER` | Aggregate 4 KPI metrics (`total_employees`, `active_employees`, `inactive_employees`, `total_positions`) for header cards. |
+| `GET` | `/api/v1/employees/` | `MANAGER` | List employees with multi-field filtering, search, pagination, area formatting, and zero N+1 queries. |
+| `POST` | `/api/v1/employees/` | `MANAGER` + CSRF | Atomically create an employee and linked user account with Argon2 hashing and advisory-locked code generation. |
+| `GET` | `/api/v1/employees/{id}/` | `MANAGER` | Retrieve full employee profile including administrative units and linked account metadata (zero password exposure). |
+| `PATCH` | `/api/v1/employees/{id}/` | `MANAGER` + CSRF | Partial update of employee details with mandatory `row_version` OCC, account status sync, and DEL-01 guards. |
+| `DELETE` | `/api/v1/employees/{id}/` | `MANAGER` + CSRF | Atomically soft delete employee and linked account, guarded by DEL-01 rules, and immediately revoke active sessions. |
+
+### Employee Management Integration Notes
+
+- **Permissions & Roles**: All employee operations strictly require `MANAGER` role (`[IsAuthenticated, IsManager]`). Unauthenticated calls return `401 Unauthorized` (`MSG-4.1-M02`). Authenticated users with `EMPLOYEE` or `CUSTOMER` roles receive `403 Forbidden` (`MSG-4.2-M01`).
+- **CSRF Protection**: All mutating calls (`POST`, `PATCH`, `DELETE`) require the `X-CSRFToken` header matching the `csrftoken` session cookie. Missing or mismatched CSRF returns `403 Forbidden` (`PROP-4.1-P06`).
+- **Query Parameters**:
+  - `GET /api/v1/employees/` accepts:
+    - `q`: Case-insensitive substring search matching across `full_name`, `code`, or `email`.
+    - `name`: Substring search on employee `full_name`.
+    - `code`: Substring search on employee `code`.
+    - `address`: Substring search on employee `address`.
+    - `birth_from`: Filter employees born on or after `YYYY-MM-DD`.
+    - `birth_to`: Filter employees born on or before `YYYY-MM-DD` (must be >= `birth_from`).
+    - `position`: Filter by position code (`QL`, `NVVH`, `NVTN`, `KTV`) or position integer ID.
+    - `status`: Filter by status (`ACTIVE`, `INACTIVE`).
+    - `ordering`: Whitelisted ordering fields (`id`, `-id`, `code`, `-code`, `full_name`, `-full_name`, `date_of_birth`, `-date_of_birth`, `created_at`, `-created_at`). Default ordering is `code ASC`.
+    - `page`, `page_size`: Standard pagination parameters (`page_size` default 20, max 100).
+- **Request Bodies**:
+  - `POST /api/v1/employees/`:
+
+    ```json
+    {
+      "code": "NV001",
+      "full_name": "Nguyễn Văn An",
+      "date_of_birth": "1990-05-15",
+      "gender": "MALE",
+      "identity_card_number": "012345678901",
+      "phone": "0901234567",
+      "email": "an.nguyen@smartparking.vn",
+      "address": "123 Đường Lê Duẩn",
+      "province_id": 48,
+      "district_id": 1,
+      "ward_id": 1,
+      "position_id": 1,
+      "status": "ACTIVE",
+      "password": "Password123@"
+    }
+    ```
+
+    (`code` is optional; when omitted, the server atomically allocates sequential code `NV%03d` / `NV%04d` under advisory lock `pg_advisory_xact_lock`. `password` must satisfy password policy: minimum 8 characters, at least one uppercase, one lowercase, one digit, and one special character. `role` is automatically derived from position: `QL -> MANAGER`, other positions `-> EMPLOYEE`).
+
+  - `PATCH /api/v1/employees/{id}/`:
+
+    ```json
+    {
+      "row_version": 1,
+      "full_name": "Nguyễn Văn An Cập Nhật",
+      "phone": "0909888777",
+      "status": "INACTIVE"
+    }
+    ```
+
+    (`row_version` is mandatory for optimistic concurrency control. `code` is immutable and cannot be updated. Updating `status` to `INACTIVE` automatically deactivates the linked account and revokes active sessions).
+
+- **Optimistic Concurrency Control (OCC)**: `PATCH /api/v1/employees/{id}/` validates that `row_version` matches the current database record. Stale `row_version` returns `409 Conflict` with `MSG-4.3.1-M03` (`Dữ liệu hiện đang được cập nhật bởi user khác`).
+- **Immediate Session & Remember-Token Revocation**: Whenever an employee is deactivated (`status = "INACTIVE"`), soft-deleted, or demoted from `MANAGER` to `EMPLOYEE`, all active `Session` and `RememberToken` records for that account are revoked immediately within the same transaction. The very next request with an existing session cookie is rejected.
+- **DEL-01 Deactivation, Demotion & Soft-Delete Guards**:
+  - Self-deletion guard: An authenticated user cannot delete their own account or employee profile (`PROP-DEL-01-SELF` / `PROP-DEL-01-SELF-EMP` -> `409 Conflict`).
+  - Self-deactivation guard: An employee cannot deactivate their own account (`PROP-DEL-01-SELF-DEACT` -> `409 Conflict`).
+  - Self-demotion guard: A manager cannot demote themselves (`PROP-DEL-01-SELF-DEMOTE` -> `409 Conflict`).
+  - Last active manager guard: The last remaining active manager cannot be deactivated, demoted, or deleted (`PROP-DEL-01-LAST-MGR` / `PROP-DEL-01-LAST-MGR-EMP` -> `409 Conflict`).
+  - Plain SQL hard `DELETE` is blocked by database triggers `fn_guard_soft_delete_and_restore`. Successful soft delete returns `200 OK` with `MSG-4.3.4-M01` (`Xóa thành công`).
+- **PII Protection & Security**:
+  - Password hashes, session keys, and sensitive credentials are never returned in responses or leaked in application logs.
+  - Conflict errors on unique fields (email, phone, CCCD, code) return generic `409 Conflict` (`MSG-4.3.1-M05`) without echoing user PII values.
+- **HTTP Status Codes**:
+  - `200 OK`: Successful retrieval, update, or soft-delete.
+  - `201 Created`: Successful employee and account creation.
+  - `400 Bad Request`: Validation errors, weak password, invalid control characters, or immutable code modification attempt.
+  - `401 Unauthorized`: Session missing or expired (`MSG-4.1-M02`).
+  - `403 Forbidden`: Non-manager access attempt (`MSG-4.2-M01`) or invalid CSRF (`PROP-4.1-P06`).
+  - `404 Not Found`: Employee not found or already soft-deleted.
+  - `409 Conflict`: Stale `row_version` (`MSG-4.3.1-M03`), unique conflict (`MSG-4.3.1-M05`), or DEL-01 security guards.
+
 ## API documentation routes
 
 | Method | Endpoint | Purpose |
@@ -234,4 +336,4 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
 | `GET` | `/api/docs/` | Open Swagger UI. |
 | `GET` | `/api/redoc/` | Open ReDoc. |
 
-Django Admin is available at `/admin/` and is not part of the REST API. Other application modules (`tickets`, `employees`, and `reports`) define database models and schema relationships but have no standalone CRUD management routes exposed; do not treat planned or SRS-listed operations as implemented routes until they appear in the live schema.
+Django Admin is available at `/admin/` and is not part of the REST API. Other application modules (`tickets` and `reports`) define database models and schema relationships but have no standalone CRUD management routes exposed; do not treat planned or SRS-listed operations as implemented routes until they appear in the live schema.
