@@ -33,13 +33,13 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
 | `GET` | `/api/v1/parking/sessions/` | List parking sessions. |
 | `GET` | `/api/v1/parking/sessions/{id}/` | Retrieve a parking session. |
 
-### Parking Image Storage & Dual URL Contract
+### Parking Image Storage (Cloudinary-Only)
 
-Per [ADR-0009](adr/0009-dual-image-storage-backend-and-media-serving.md), vehicle scan and session endpoints (`plate-scans`, `check-in`, `check-out`, `sessions`) support dual storage backends:
+Per [ADR-0010](adr/0010-cloudinary-only-image-storage.md) (superseding [ADR-0009](adr/0009-dual-image-storage-backend-and-media-serving.md)), Cloudinary is the exclusive image storage backend for parking scan snapshots:
 
-- **Local mode (`IMAGE_STORAGE_BACKEND=local`)**: returns relative paths (e.g., `/media/parking_scans/...`).
-- **Cloudinary mode (`IMAGE_STORAGE_BACKEND=cloudinary`)**: returns HTTPS `secure_url` (e.g., `https://res.cloudinary.com/<cloud_name>/image/upload/...`).
-- **Validation**: `entry_image_url` and `exit_image_url` accept both relative paths and authorized Cloudinary HTTPS URLs (up to 255 chars), rejecting hostile schemes (`javascript:`, `data:`, `http://`) and foreign domains with `PROP-4.5.1-P13`.
+- **Storage Backend**: Scan images are streamed directly to Cloudinary over HTTPS and served via Cloudinary CDN.
+- **URL Format**: Returns absolute HTTPS `secure_url` (e.g., `https://res.cloudinary.com/<cloud_name>/image/upload/(v<version>/)?parking_scans/<YYYY>/<MM>/<DD>/<32-hex-uuid>.<ext>`).
+- **Validation**: `entry_image_url` and `exit_image_url` strictly require Cloudinary HTTPS URLs (up to 255 chars) matching the configured cloud name. Non-HTTPS schemes (`javascript:`, `data:`, `http://`), unauthorized domains, or non-matching paths are rejected with HTTP 400 (`PROP-4.5.1-P13`).
 - **Upload failure**: Fails closed returning HTTP 502 with registered error code `PROP-4.5.1-P17` and zero database records written.
 
 ## Vehicle Management (`/api/v1/vehicles/`, `/api/v1/vehicle-types/`)

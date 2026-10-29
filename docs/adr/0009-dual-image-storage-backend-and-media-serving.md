@@ -1,6 +1,6 @@
 # ADR-0009: Dual Image Storage Backend (Local & Cloudinary) and Production Media Serving
 
-- **Status**: Accepted
+- **Status**: Superseded by ADR-0010
 - **Date**: 2026-10-29
 - **Deciders**: Owner, Tech Lead, Engineering Team
 - **Technical Context**: Image Storage Architecture, Cloudinary SDK Integration, Decree 13/2023/ND-CP Personal Data Protection, Media Serving, Frontend Origin Resolution

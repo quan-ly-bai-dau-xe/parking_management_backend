@@ -892,7 +892,7 @@ X-Request-ID: 53b70530673b41b8a7a4d75de93bf5e2
       "y2": 150
     }
   },
-  "image_url": "/media/parking_scans/2026/10/22/3b571536e9084d9f8bc679f027904cee.jpg",
+  "image_url": "https://res.cloudinary.com/parking-cloud/image/upload/v1729238400/parking_scans/2026/10/22/3b571536e9084d9f8bc679f027904cee.jpg",
   "vehicle_lookup": {
     "vehicle": {
       "id": 1,
@@ -934,7 +934,7 @@ X-Request-ID: 53b70530673b41b8a7a4d75de93bf5e2
       "session_code": "#PK-20261017-037",
       "entry_time": "2026-10-17T00:20:00+00:00",
       "entry_gate_name": "Cổng vào 1",
-      "entry_image_url": "/media/gates/pk-20261017-037_in.jpg",
+      "entry_image_url": null,
       "recognition_source": "AI",
       "ai_confidence": 97.1,
       "review_status": "MATCHED"
@@ -947,7 +947,7 @@ X-Request-ID: 53b70530673b41b8a7a4d75de93bf5e2
     "session_code": "#PK-20261017-037",
     "entry_time": "2026-10-17T00:20:00+00:00",
     "entry_gate_name": "Cổng vào 1",
-    "entry_image_url": "/media/gates/pk-20261017-037_in.jpg",
+    "entry_image_url": null,
     "recognition_source": "AI",
     "ai_confidence": 97.1,
     "review_status": "MATCHED"
@@ -1028,7 +1028,7 @@ X-Request-ID: d50c117a75c14f67a35af4e14c93ffc5
       "y2": 150
     }
   },
-  "image_url": "/media/parking_scans/2026/10/22/a98af4bc71a941d2a79cac484d323ab9.jpg",
+  "image_url": "https://res.cloudinary.com/parking-cloud/image/upload/v1729238400/parking_scans/2026/10/22/a98af4bc71a941d2a79cac484d323ab9.jpg",
   "vehicle_lookup": null,
   "is_blacklisted": false,
   "open_session": null,
@@ -1159,7 +1159,7 @@ When `review_status === "NEEDS_REVIEW"`:
       "session_code": "#PK-20261017-037",
       "entry_time": "2026-10-17T00:20:00+00:00",
       "entry_gate_name": "Cổng vào 1",
-      "entry_image_url": "/media/gates/pk-20261017-037_in.jpg",
+      "entry_image_url": null,
       "recognition_source": "AI",
       "ai_confidence": 97.1,
       "review_status": "MATCHED"
@@ -1256,7 +1256,7 @@ When `review_status === "NEEDS_REVIEW"`:
           "session_code": "#PK-20261017-037",
           "entry_time": "2026-10-17T00:20:00+00:00",
           "entry_gate_name": "Cổng vào 1",
-          "entry_image_url": "/media/gates/pk-20261017-037_in.jpg",
+          "entry_image_url": null,
           "recognition_source": "AI",
           "ai_confidence": 97.1,
           "review_status": "MATCHED"
@@ -1496,7 +1496,7 @@ When `review_status === "NEEDS_REVIEW"`:
         "duration_seconds": 466347,
         "duration_text": "5 ngày 9 giờ 32 phút",
         "fee_amount": "30000.00",
-        "entry_image_url": "/media/gates/pk-20261017-050_in.jpg",
+        "entry_image_url": null,
         "exit_image_url": null,
         "entry_gate_name": "Cổng vào 2",
         "exit_gate_name": null,
@@ -3249,7 +3249,7 @@ export interface paths {
 | 6 | **Cookies Not Saved in Browser** | Request sent from Frontend lacks cross-origin cookie configuration. | Add `credentials: "include"` when using `fetch` or `withCredentials: true` when using `axios`. Do not leave default `credentials: "same-origin"`. |
 | 7 | **Error `"Invalid HTTP_HOST header: ..."`** (DisallowedHost) | Received `Host` header is not included in Django `ALLOWED_HOSTS` list. | Add frontend hostname or dev machine host to `ALLOWED_HOSTS` in backend `.env` (e.g., `ALLOWED_HOSTS=localhost,127.0.0.1,web`). |
 | 8 | **HTTP 503 `PROP-4.5.1-P15`** (`Hệ thống nhận diện biển số xe đang quá tải, vui lòng thử lại sau.` - License plate recognition system is overloaded, please try again later) | Number of concurrent plate scan requests exceeds OCR queue capacity (`PARKING_OCR_CONCURRENCY_LIMIT=4`). | Read `Retry-After` response header (default 3 seconds), display "System busy, retrying..." message, and retry automatically after specified delay. |
-| 9 | **Broken Image on History Screen (`Lịch sử ra/vào`)** | Most likely: relative URLs (`/media/...`) resolved against Frontend SPA origin (e.g. `http://localhost:3000/media/...`) rather than Backend host, or `DEBUG=False` without media routing. | Use `resolveImageUrl()` helper to resolve relative URLs against Backend origin or render Cloudinary HTTPS URLs directly (see Section 15). |
+| 9 | **Broken Image on History Screen (`Lịch sử ra/vào`)** | Cloudinary credentials missing/invalid, network connectivity failure during upload, or historical/seed session has `null` image URL without frontend null-guard fallback. | Verify `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, and `CLOUDINARY_API_SECRET` in `.env` and verify outgoing HTTPS connectivity. For historical sessions with `null` image URLs, ensure frontend implements a null-guard placeholder (see Section 15). |
 
 ### 14.2 Features Not Implemented Yet (What Is Not Available Yet)
 
@@ -3272,70 +3272,44 @@ To prevent frontend developers from spending time searching for or awaiting APIs
 
 ---
 
-## 15. Vehicle Scan & History Image Resolution Guide (Dual-Backend Storage)
+## 15. Cloudinary Parking Scan Image URLs
 
-Per [ADR-0009](../adr/0009-dual-image-storage-backend-and-media-serving.md), the backend supports two interchangeable image storage backends controlled via `IMAGE_STORAGE_BACKEND`:
+Per [ADR-0010](../adr/0010-cloudinary-only-image-storage.md) (which supersedes [ADR-0009](../adr/0009-dual-image-storage-backend-and-media-serving.md)), the backend exclusively uses **Cloudinary** as the sole cloud image storage backend for parking scan images.
 
-1. **Local Storage (`IMAGE_STORAGE_BACKEND=local`)**:
-   - Images are saved under `MEDIA_ROOT/parking_scans/`.
-   - Serializers return relative URL strings (e.g., `/media/parking_scans/2026/10/29/b068f56813a84124a900554a299759f0.jpg`).
-   - In containerized deployments running Gunicorn (`DEBUG=False`), `config/urls.py` safely routes media requests through `django.views.static.serve`.
-2. **Cloudinary CDN (`IMAGE_STORAGE_BACKEND=cloudinary`)**:
-   - Images are streamed directly from RAM to Cloudinary over HTTPS without writing intermediate files to disk.
-   - Serializers return fully-qualified HTTPS CDN URLs (e.g., `https://res.cloudinary.com/<cloud_name>/image/upload/v1730178490/parking_scans/...`).
-   - Personal Data Protection (Decree 13/2023/ND-CP): All asset identifiers are cryptographically unguessable 128-bit UUID4 tokens (`public_id` never contains license plate characters or PII), and EXIF/camera metadata is stripped in two tiers.
+### 15.1 Cloudinary-Only HTTPS URL Format
 
-### 15.1 Frontend URL Resolution Contract
+All vehicle scan image URLs returned by the API (`image_url` in plate scan responses, `entry_image_url` and `exit_image_url` in parking session endpoints) are fully qualified, absolute HTTPS URLs served directly via Cloudinary CDN:
 
-To eliminate broken images across all screens (`Lịch sử ra/vào`, `Quét biển số`, `Chi tiết phiên đỗ xe`) regardless of which backend is active, frontend applications must normalize image URLs using `resolveImageUrl`:
-
-```typescript
-/**
- * Resolves image URLs received from the Parking Management API.
- * Handles both absolute HTTPS URLs (Cloudinary) and relative paths (Local storage).
- *
- * @param imageUrl - Raw image URL from API response (entry_image_url, exit_image_url, image_url)
- * @returns Fully qualified URL suitable for HTML <img> src attribute, or null
- */
-export function resolveImageUrl(imageUrl: string | null | undefined): string | null {
-  if (!imageUrl) {
-    return null;
-  }
-
-  // 1. Absolute HTTPS/HTTP URL (Cloudinary storage): render directly
-  if (imageUrl.startsWith("https://") || imageUrl.startsWith("http://")) {
-    return imageUrl;
-  }
-
-  // 2. Relative path (Local storage): prepend backend API base origin
-  const apiBase = (
-    // Vite exposes env vars as import.meta.env (process.env does not exist in the browser)
-    import.meta.env.VITE_API_BASE_URL ?? "http://127.0.0.1:8000"
-  ).replace(/\/+$/, "");
-
-  const cleanPath = imageUrl.startsWith("/") ? imageUrl : `/${imageUrl}`;
-  return `${apiBase}${cleanPath}`;
-}
+```text
+https://res.cloudinary.com/<cloud_name>/image/upload/(v<version>/)?parking_scans/<YYYY>/<MM>/<DD>/<32-hex-uuid>.<ext>
 ```
 
-### 15.2 Usage in React / Next.js Components
+Key characteristics:
+
+- **Absolute HTTPS**: Image URLs are always absolute HTTPS URLs. Frontend applications can bind them directly to `<img src={imageUrl} />` without any hostname resolution or URL prefixing.
+- **Decree 13/2023/ND-CP Personal Data Protection**: All public IDs use cryptographically random 128-bit UUIDs (`uuid4().hex`) with zero license plate characters or PII. GPS location coordinates and EXIF metadata are stripped before upload.
+
+### 15.2 Null-Guard Requirement for Historical & Seed Data
+
+In accordance with ADR-0010, the seed dataset (`db/02-seed.sql`) sets all historical `entry_image_url` and `exit_image_url` to `null`. Furthermore, parking sessions created without scan images or where plate recognition occurred without image capture return `null`.
+
+Frontend components must implement defensive null checks (or fallback placeholder images) when rendering scan images:
 
 ```tsx
-import { resolveImageUrl } from "@/utils/image";
-
-export function ParkingHistoryItem({ session }) {
+export function ParkingHistoryItem({ session }: { session: SessionListItem }) {
   return (
     <div className="session-card">
       <span className="plate-text">{session.license_plate}</span>
+      {/* 1. Direct consumption with null guard / fallback placeholder */}
       <img
-        src={resolveImageUrl(session.entry_image_url) || "/placeholder-car.png"}
+        src={session.entry_image_url ?? "/placeholder-car.png"}
         alt={`Entry scan for ${session.license_plate}`}
         loading="lazy"
         className="scan-thumbnail"
       />
       {session.exit_image_url && (
         <img
-          src={resolveImageUrl(session.exit_image_url) || "/placeholder-car.png"}
+          src={session.exit_image_url}
           alt={`Exit scan for ${session.license_plate}`}
           loading="lazy"
           className="scan-thumbnail"
