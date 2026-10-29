@@ -10,6 +10,7 @@ from decimal import Decimal
 from pathlib import Path
 
 import environ
+from django.core.exceptions import ImproperlyConfigured
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent.parent
@@ -190,6 +191,45 @@ MEDIA_ROOT = BASE_DIR / "media"
 # ==============================================================================
 # Parking Domain & Storage Settings (J6)
 # ==============================================================================
+# Image Storage Backend Settings (ADR-0009)
+IMAGE_STORAGE_BACKEND: str = (
+    env.str("IMAGE_STORAGE_BACKEND", default="local").strip().lower()
+)
+
+ALLOWED_STORAGE_BACKENDS = ("local", "cloudinary")
+if IMAGE_STORAGE_BACKEND not in ALLOWED_STORAGE_BACKENDS:
+    raise ImproperlyConfigured(
+        f"Invalid IMAGE_STORAGE_BACKEND: '{IMAGE_STORAGE_BACKEND}'. "
+        f"Permitted values are: {', '.join(ALLOWED_STORAGE_BACKENDS)}."
+    )
+
+CLOUDINARY_CLOUD_NAME: str = env.str("CLOUDINARY_CLOUD_NAME", default="").strip()
+CLOUDINARY_API_KEY: str = env.str("CLOUDINARY_API_KEY", default="").strip()
+CLOUDINARY_API_SECRET: str = env.str("CLOUDINARY_API_SECRET", default="").strip()
+
+if IMAGE_STORAGE_BACKEND == "cloudinary":
+    missing_vars: list[str] = []
+    if not CLOUDINARY_CLOUD_NAME:
+        missing_vars.append("CLOUDINARY_CLOUD_NAME")
+    if not CLOUDINARY_API_KEY:
+        missing_vars.append("CLOUDINARY_API_KEY")
+    if not CLOUDINARY_API_SECRET:
+        missing_vars.append("CLOUDINARY_API_SECRET")
+    if missing_vars:
+        raise ImproperlyConfigured(
+            f"IMAGE_STORAGE_BACKEND='cloudinary' requires environment variables. "
+            f"Missing: {', '.join(missing_vars)}."
+        )
+
+    import cloudinary
+
+    cloudinary.config(
+        cloud_name=CLOUDINARY_CLOUD_NAME,
+        api_key=CLOUDINARY_API_KEY,
+        api_secret=CLOUDINARY_API_SECRET,
+        secure=True,
+    )
+
 # MAX_IMAGE_SIZE_MB: Maximum allowed scan image file size in Megabytes.
 # Safe range: 1 to 50 MB (Default: 5 MB).
 MAX_IMAGE_SIZE_MB: int = env.int("MAX_IMAGE_SIZE_MB", default=5)

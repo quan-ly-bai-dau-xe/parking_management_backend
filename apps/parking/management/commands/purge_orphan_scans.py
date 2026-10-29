@@ -33,6 +33,14 @@ def normalize_db_url_to_rel_path(url: str | None, media_url_prefix: str) -> str 
         return None
 
     parsed = urlparse(url)
+    # Bỏ qua các URL Cloudinary từ xa một cách an toàn
+    if (
+        parsed.scheme in ("http", "https")
+        and parsed.netloc
+        and "cloudinary.com" in parsed.netloc
+    ):
+        return None
+
     path = parsed.path if parsed.path else url
 
     clean_prefix = "/" + media_url_prefix.strip("/") + "/"

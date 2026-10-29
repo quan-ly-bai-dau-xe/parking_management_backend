@@ -15,6 +15,9 @@ DEBUG = env.bool("DEBUG", default=False)
 # Keep the test suite independent of downloaded OCR model assets.
 PARKING_OCR_ENGINE = "dummy"
 
+# Image storage backend: default to local disk storage for test environment (ADR-0009)
+IMAGE_STORAGE_BACKEND = "local"
+
 # PostgreSQL 18.6 database configuration loaded from environment variables
 DATABASES = {
     "default": {

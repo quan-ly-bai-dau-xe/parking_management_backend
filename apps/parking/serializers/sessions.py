@@ -25,7 +25,7 @@ class ParkingImageRelativeUrlField(serializers.CharField):
     Mọi giá trị khác bị từ chối với HTTP 400 PROP-4.5.1-P13.
     """
 
-    DEFAULT_MAX_LENGTH = 150
+    DEFAULT_MAX_LENGTH = 255
 
     def __init__(self, **kwargs):
         kwargs.setdefault("max_length", self.DEFAULT_MAX_LENGTH)

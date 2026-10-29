@@ -7,6 +7,7 @@ vehicle context lookup, trigram suggestions, and canonical response payload comp
 
 from __future__ import annotations
 
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -209,8 +210,9 @@ def execute_plate_scan(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
-    # 4. Save processed image with defensive unlink on failure
+    # 4. Save processed image with defensive unlink or remote asset destroy on failure
     saved_file_path: Path | None = None
+    relative_url: str | None = None
     try:
         t_wr0 = time.perf_counter()
         saved_file_path, relative_url = save_processed_image(processed_image)
@@ -269,4 +271,15 @@ def execute_plate_scan(
     except Exception:
         if saved_file_path and saved_file_path.is_file():
             saved_file_path.unlink(missing_ok=True)
+        elif relative_url and "res.cloudinary.com" in relative_url:
+            try:
+                import cloudinary.uploader
+
+                m = re.search(
+                    r"/image/upload/(?:v\d+/)?(.*?)(?:\.[^.]+)?$", relative_url
+                )
+                if m:
+                    cloudinary.uploader.destroy(m.group(1))
+            except Exception:
+                pass
         raise
