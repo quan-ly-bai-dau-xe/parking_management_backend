@@ -82,7 +82,7 @@ File test: [`tests/parking/test_check_in_api.py`](file:///E:/parking_management_
 - **Test xe trong danh sách đen (Blacklist - 409 Conflict)**:
 
   ```bash
-  pytest tests/parking/test_check_in_api.py::test_check_in_blacklisted_no_override -v --no-cov
+  pytest tests/parking/test_check_in_api.py::test_check_in_blacklisted_plate_rejected_and_alerted -v --no-cov
   ```
 
 ### B. API Check-out & Tính phí (`/api/v1/parking/sessions/check-out/`)
@@ -92,7 +92,7 @@ File test: [`tests/parking/test_check_out_api.py`](file:///E:/parking_management
 - **Test check-out xe và tính phí thành công**:
 
   ```bash
-  pytest tests/parking/test_check_out_api.py::test_check_out_visitor_success -v --no-cov
+  pytest tests/parking/test_check_out_api.py::test_check_out_visitor_paid_by_cash -v --no-cov
   ```
 
 ### C. API Tra cứu xe (`/api/v1/parking/vehicle-lookup/` & `vehicle-search/`)
@@ -102,13 +102,13 @@ File test: [`tests/parking/test_vehicle_lookup_api.py`](file:///E:/parking_manag
 - **Test tra cứu xe theo biển số chuẩn hóa**:
 
   ```bash
-  pytest tests/parking/test_vehicle_lookup_api.py::test_vehicle_lookup_success -v --no-cov
+  pytest tests/parking/test_vehicle_lookup_api.py::test_vehicle_lookup_success_existing_vehicle -v --no-cov
   ```
 
 - **Test tìm kiếm xe theo nhiều tiêu chí (Full-text / Trigram GIN)**:
 
   ```bash
-  pytest tests/parking/test_vehicle_search_api.py::test_search_by_license_plate -v --no-cov
+  pytest tests/parking/test_vehicle_search_api.py::test_search_explicit_license_plate -v --no-cov
   ```
 
 ### D. API Xác thực / Authentication (`/api/v1/auth/login/`, `logout/`, `me/`)
@@ -118,13 +118,13 @@ File test: [`tests/accounts/test_core_auth.py`](file:///E:/parking_management_ba
 - **Test đăng nhập thành công**:
 
   ```bash
-  pytest tests/accounts/test_core_auth.py::CoreAuthEndpointsTest::test_login_success -v --no-cov
+  pytest tests/accounts/test_core_auth.py::LoginEndpointTest::test_login_success_by_email_case_insensitive -v --no-cov
   ```
 
 - **Test sai mật khẩu hoặc tài khoản bị khóa**:
 
   ```bash
-  pytest tests/accounts/test_core_auth.py::CoreAuthEndpointsTest::test_login_invalid_password -v --no-cov
+  pytest tests/accounts/test_core_auth.py::LoginEndpointTest::test_auth_failures_return_uniform_401_msg_m02 -v --no-cov
   ```
 
 ### E. API Kiểm tra Hạ tầng / Health Check (`/api/health/`)
