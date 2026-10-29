@@ -1,10 +1,6 @@
+# Phân Tích Đối Chiếu Màn Hình UI/UX và API Backend
 
-Ran search for Parking Project directory
-Ran list files in Parking Project
-Ran check items in Parking Project
-Ran check inside Lich su ra
-Analyzed 06-frontend-srs-db-alignment.md:L1-100
-Analyzed 07-fe-srs-traceability.md:L1-120
+> Ghi chú của Team Lead: tài liệu này phản ánh backend tại thời điểm tác giả viết. Từ đó các API vehicles, customers, employees và administrative units đã được triển khai; nguồn hiện hành là `docs/api-endpoints.md` và OpenAPI schema.
 
 Dưới đây là bảng đối chiếu và phân tích chi tiết giữa **danh sách API hiện có trong mã nguồn backend** ([`docs/hd_lay_api.md`](file:///E:/parking_management_backend/docs/hd_lay_api.md)) và **các file ảnh thiết kế UI/UX trong thư mục** [`Parking Project/`](<file:///E:/parking_management_backend/Parking%20Project/>).
 
@@ -12,7 +8,7 @@ Thư mục [`Parking Project/`](<file:///E:/parking_management_backend/Parking%2
 
 ---
 
-### 1. Bảng ma trận đối chiếu Màn hình UI/UX và API Backend
+## 1. Bảng ma trận đối chiếu Màn hình UI/UX và API Backend
 
 | STT | File ảnh UI/UX (`Parking Project/`)                                                                                                                                                              | Chức năng / Nghiệp vụ trên UI                                                                                                                                         | API hiện có trong `hd_lay_api.md`                                                                                                                                                                                                                      |                     Mức độ đáp ứng                     |
 | :-: | :-------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :----------------------------------------------------------: |
@@ -29,9 +25,9 @@ Thư mục [`Parking Project/`](<file:///E:/parking_management_backend/Parking%2
 
 ---
 
-### 2. Phân tích chi tiết mức độ đáp ứng
+## 2. Phân tích chi tiết mức độ đáp ứng
 
-#### 🟢 Nhóm 1: Các màn hình ĐÃ CÓ API hoàn thiện 100%
+### 🟢 Nhóm 1: Các màn hình ĐÃ CÓ API hoàn thiện 100%
 
 Đây là nhóm chức năng vận hành trực tiếp tại trạm kiểm soát bãi đỗ xe (Barrier & Gate):
 
@@ -51,7 +47,7 @@ Thư mục [`Parking Project/`](<file:///E:/parking_management_backend/Parking%2
 
 ---
 
-#### 🟡 Nhóm 2: Màn hình mới đáp ứng MỘT PHẦN
+### 🟡 Nhóm 2: Màn hình mới đáp ứng MỘT PHẦN
 
 - **Màn hình Quản lý xe ([`Quản lý xe — Smart Mobility.png`](<file:///E:/parking_management_backend/Parking%20Project/Quản%20lý%20xe%20—%20Smart%20Mobility.png>))**:
   - Backend mới chỉ có API tra cứu/tìm kiếm phương tiện (`/api/v1/parking/vehicle-search/`).
@@ -59,7 +55,7 @@ Thư mục [`Parking Project/`](<file:///E:/parking_management_backend/Parking%2
 
 ---
 
-#### 🔴 Nhóm 3: Các màn hình HOÀN TOÀN THIẾU API trong `hd_lay_api.md`
+### 🔴 Nhóm 3: Các màn hình HOÀN TOÀN THIẾU API trong `hd_lay_api.md`
 
 Các màn hình này hiện tại Backend chưa mở route (`apps/*/urls.py` đang trống) và Frontend đang phải chạy bằng mock data:
 
@@ -71,7 +67,7 @@ Các màn hình này hiện tại Backend chưa mở route (`apps/*/urls.py` đa
 
 ---
 
-### 3. Kết luận
+## 3. Kết luận
 
 - **Tiến độ Backend hiện tại**: Đã tập trung hoàn thiện và kiểm thử kỹ lưỡng **2 màn hình cốt lõi nhất** của hệ thống là **Xác thực (`login-container.png`)** và **Vận hành trạm kiểm soát xe ra/vào trực tiếp (`Main Page.png`, `Lịch sử ra/vào`)**.
 - **Công việc tiếp theo**: Cần bổ sung các API quản trị cho 5 màn hình còn lại (Xe -> Khách hàng -> Vé -> Sơ đồ bãi -> Nhân viên -> Dashboard) để hoàn tất 100% khớp nối với bản vẽ UI/UX.

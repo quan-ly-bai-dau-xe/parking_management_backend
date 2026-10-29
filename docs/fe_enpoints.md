@@ -1,23 +1,4 @@
-
-Ran list src subdirectories
-Ran list src services
-Ran list config and features
-Ran list mocks and root files in src
-Ran list docs directory
-Analyzed apiClient.js:L1-86
-Analyzed authService.js:L1-87
-Analyzed dashboardService.js:L1-100
-Analyzed dashboardService.js:L101-193
-Analyzed plateScanService.js:L1-100
-Analyzed plateScanService.js:L101-274
-Analyzed vehicleService.js:L1-100
-Ran search API usages across src · Exited with code 1
-Ran search API usages across src
-Analyzed vite.config.js:L1-28
-Ran search API endpoints in docs
-Ran search architecture docs
-Ran list src pages
-Ran check data source imports in pages
+# Danh Sách API Endpoint Phía Frontend
 
 Hiện tại trong dự án frontend, các API kết nối đến Django backend (qua proxy Vite tại cổng `8000`) được tổ chức tập trung tại [`apiClient.js`](file:///e:/parking_management_frontend/src/services/apiClient.js) và các service trong thư mục `src/features/`.
 
@@ -25,7 +6,7 @@ Dưới đây là danh sách chi tiết các API đang có trong dự án:
 
 ---
 
-### 1. Nhóm Xác thực & CSRF (Auth)
+## 1. Nhóm Xác thực & CSRF (Auth)
 
 *Được triển khai trong [`src/services/apiClient.js`](file:///e:/parking_management_frontend/src/services/apiClient.js) và [`src/features/authService.js`](file:///e:/parking_management_frontend/src/features/authService.js)*
 
@@ -38,7 +19,7 @@ Dưới đây là danh sách chi tiết các API đang có trong dự án:
 
 ---
 
-### 2. Nhóm Quét biển số & Phiên đỗ xe (Parking & OCR)
+## 2. Nhóm Quét biển số & Phiên đỗ xe (Parking & OCR)
 
 *Được triển khai trong [`src/features/plateScanService.js`](file:///e:/parking_management_frontend/src/features/plateScanService.js)*
 
@@ -51,7 +32,7 @@ Dưới đây là danh sách chi tiết các API đang có trong dự án:
 
 ---
 
-### 3. Nhóm Quản lý phương tiện (Vehicles)
+## 3. Nhóm Quản lý phương tiện (Vehicles)
 
 *Được triển khai trong [`src/features/vehicleService.js`](file:///e:/parking_management_frontend/src/features/vehicleService.js)*
 
@@ -67,7 +48,7 @@ Dưới đây là danh sách chi tiết các API đang có trong dự án:
 
 ---
 
-### 4. Các module hiện đang dùng Mock Data (chưa nối API backend thực tế)
+## 4. Các module hiện đang dùng Mock Data (chưa nối API backend thực tế)
 
 Hiện một số trang chức năng vẫn đang sử dụng mock data tĩnh trong thư mục `src/mocks/`:
 
