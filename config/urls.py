@@ -8,8 +8,7 @@ The `urlpatterns` list routes URLs to views. For more information please see:
 from django.conf import settings
 from django.contrib import admin
 from django.contrib.staticfiles.urls import staticfiles_urlpatterns
-from django.urls import include, path, re_path
-from django.views.static import serve
+from django.urls import include, path
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -44,17 +43,6 @@ urlpatterns: list = [
         name="redoc",
     ),
 ]
-
-# Serve media files safely via django.views.static.serve when local storage is active (ADR-0009)
-if getattr(settings, "IMAGE_STORAGE_BACKEND", "local") == "local":
-    media_prefix = settings.MEDIA_URL.strip("/")
-    urlpatterns += [
-        re_path(
-            rf"^{media_prefix}/(?P<path>.*)$",
-            serve,
-            {"document_root": settings.MEDIA_ROOT},
-        ),
-    ]
 
 # Serve static files in development/DEBUG mode
 if settings.DEBUG:

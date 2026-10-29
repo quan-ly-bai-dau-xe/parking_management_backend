@@ -209,7 +209,7 @@ class VehicleSearchView(APIView):
                                         "session_code": "#PK-20261017-037",
                                         "entry_time": "2026-10-17T07:20:00+07:00",
                                         "entry_gate_name": "Cổng vào 1",
-                                        "entry_image_url": "/media/parking_scans/2026/10/17/xe0001.jpg",
+                                        "entry_image_url": "https://res.cloudinary.com/parking-cloud/image/upload/v1729152000/parking_scans/2026/10/17/a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.jpg",
                                         "recognition_source": "AI",
                                         "ai_confidence": 97.10,
                                         "review_status": "MATCHED",

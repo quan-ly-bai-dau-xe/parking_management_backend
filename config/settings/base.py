@@ -184,51 +184,46 @@ USE_TZ = True
 STATIC_URL = "/static/"
 STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# Media files (User uploads)
-MEDIA_URL = "/media/"
-MEDIA_ROOT = BASE_DIR / "media"
-
 # ==============================================================================
-# Parking Domain & Storage Settings (J6)
+# Parking Domain & Storage Settings (ADR-0010: Cloudinary Exclusive)
 # ==============================================================================
-# Image Storage Backend Settings (ADR-0009)
-IMAGE_STORAGE_BACKEND: str = (
-    env.str("IMAGE_STORAGE_BACKEND", default="local").strip().lower()
-)
-
-ALLOWED_STORAGE_BACKENDS = ("local", "cloudinary")
-if IMAGE_STORAGE_BACKEND not in ALLOWED_STORAGE_BACKENDS:
-    raise ImproperlyConfigured(
-        f"Invalid IMAGE_STORAGE_BACKEND: '{IMAGE_STORAGE_BACKEND}'. "
-        f"Permitted values are: {', '.join(ALLOWED_STORAGE_BACKENDS)}."
-    )
-
 CLOUDINARY_CLOUD_NAME: str = env.str("CLOUDINARY_CLOUD_NAME", default="").strip()
 CLOUDINARY_API_KEY: str = env.str("CLOUDINARY_API_KEY", default="").strip()
 CLOUDINARY_API_SECRET: str = env.str("CLOUDINARY_API_SECRET", default="").strip()
 
-if IMAGE_STORAGE_BACKEND == "cloudinary":
+
+def validate_cloudinary_credentials(
+    cloud_name: str, api_key: str, api_secret: str
+) -> None:
+    """Fail fast when a required Cloudinary variable is empty.
+
+    Raises ImproperlyConfigured naming ONLY the missing variable names so that no
+    secret value can leak through the exception message.
+    """
     missing_vars: list[str] = []
-    if not CLOUDINARY_CLOUD_NAME:
+    if not cloud_name:
         missing_vars.append("CLOUDINARY_CLOUD_NAME")
-    if not CLOUDINARY_API_KEY:
+    if not api_key:
         missing_vars.append("CLOUDINARY_API_KEY")
-    if not CLOUDINARY_API_SECRET:
+    if not api_secret:
         missing_vars.append("CLOUDINARY_API_SECRET")
     if missing_vars:
         raise ImproperlyConfigured(
-            f"IMAGE_STORAGE_BACKEND='cloudinary' requires environment variables. "
-            f"Missing: {', '.join(missing_vars)}."
+            f"Missing required Cloudinary environment variables: {', '.join(missing_vars)}."
         )
 
+
+def configure_cloudinary_sdk(cloud_name: str, api_key: str, api_secret: str) -> None:
+    """Configure the Cloudinary SDK in one place (always over HTTPS)."""
     import cloudinary
 
     cloudinary.config(
-        cloud_name=CLOUDINARY_CLOUD_NAME,
-        api_key=CLOUDINARY_API_KEY,
-        api_secret=CLOUDINARY_API_SECRET,
+        cloud_name=cloud_name,
+        api_key=api_key,
+        api_secret=api_secret,
         secure=True,
     )
+
 
 # MAX_IMAGE_SIZE_MB: Maximum allowed scan image file size in Megabytes.
 # Safe range: 1 to 50 MB (Default: 5 MB).

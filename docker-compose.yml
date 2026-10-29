@@ -55,10 +55,9 @@ services:
       GUNICORN_MAX_REQUESTS_JITTER: ${GUNICORN_MAX_REQUESTS_JITTER:-100}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
       GUNICORN_MEMORY_LIMIT_MB: ${GUNICORN_MEMORY_LIMIT_MB:-1536}
-      IMAGE_STORAGE_BACKEND: ${IMAGE_STORAGE_BACKEND:-local}
-      CLOUDINARY_CLOUD_NAME: ${CLOUDINARY_CLOUD_NAME:-}
-      CLOUDINARY_API_KEY: ${CLOUDINARY_API_KEY:-}
-      CLOUDINARY_API_SECRET: ${CLOUDINARY_API_SECRET:-}
+      CLOUDINARY_CLOUD_NAME: "${CLOUDINARY_CLOUD_NAME:?Error: CLOUDINARY_CLOUD_NAME is required}"
+      CLOUDINARY_API_KEY: "${CLOUDINARY_API_KEY:?Error: CLOUDINARY_API_KEY is required}"
+      CLOUDINARY_API_SECRET: "${CLOUDINARY_API_SECRET:?Error: CLOUDINARY_API_SECRET is required}"
       PARKING_OCR_ENGINE: ${PARKING_OCR_ENGINE:-fast_alpr}
       PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD: ${PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD:-90.0}
       PARKING_OCR_ADAPTIVE_ENSEMBLE: ${PARKING_OCR_ADAPTIVE_ENSEMBLE:-1}
@@ -93,14 +92,6 @@ services:
       AUTH_THROTTLE_WINDOW_SECONDS: ${AUTH_THROTTLE_WINDOW_SECONDS:-900}
       NUM_PROXIES: ${NUM_PROXIES:-0}
       DB_SSLMODE: ${DB_SSLMODE:-prefer}
-    # Linux Host Permission Note:
-    # If deploying on native Linux, ensure host directory ./media is writable by container UID 10001:
-    #   mkdir -p media && sudo chown -R 10001:10001 media
-    # Alternatively, specify matching host user:
-    #   user: "${CURRENT_UID:-10001}:${CURRENT_GID:-10001}"
-    volumes:
-      # Bind mount directly to host media directory (STRICT: no named volume for media)
-      - ./media:/app/media
     depends_on:
       db:
         condition: service_healthy

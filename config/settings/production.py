@@ -6,6 +6,14 @@ import os
 
 from .base import *
 
+# Validate and configure Cloudinary SDK for runtime
+validate_cloudinary_credentials(
+    CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+)
+configure_cloudinary_sdk(
+    CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+)
+
 # SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = env("SECRET_KEY")
 

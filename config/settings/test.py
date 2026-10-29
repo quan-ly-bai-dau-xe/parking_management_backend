@@ -15,8 +15,14 @@ DEBUG = env.bool("DEBUG", default=False)
 # Keep the test suite independent of downloaded OCR model assets.
 PARKING_OCR_ENGINE = "dummy"
 
-# Image storage backend: default to local disk storage for test environment (ADR-0009)
-IMAGE_STORAGE_BACKEND = "local"
+# Fake non-secret Cloudinary credentials for test suite and CI (ADR-0010)
+CLOUDINARY_CLOUD_NAME = "test-cloud"
+CLOUDINARY_API_KEY = "test-key"
+CLOUDINARY_API_SECRET = "test-secret"
+
+configure_cloudinary_sdk(
+    CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+)
 
 # PostgreSQL 18.6 database configuration loaded from environment variables
 DATABASES = {

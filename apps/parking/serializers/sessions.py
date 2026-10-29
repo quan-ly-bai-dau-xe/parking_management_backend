@@ -20,8 +20,8 @@ from apps.tickets.models import Payment
 
 class ParkingImageRelativeUrlField(serializers.CharField):
     """
-    Serializer Field chuyên dụng cho entry_image_url và exit_image_url per F3.
-    Chỉ chấp nhận null/omitted hoặc đường dẫn tương đối đúng chuẩn trỏ tới file có thật.
+    Serializer Field chuyên dụng cho entry_image_url và exit_image_url per F3 / ADR-0010.
+    Chỉ chấp nhận null/omitted hoặc URL Cloudinary HTTPS đúng chuẩn.
     Mọi giá trị khác bị từ chối với HTTP 400 PROP-4.5.1-P13.
     """
 
