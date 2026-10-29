@@ -35,8 +35,8 @@ logger = logging.getLogger(__name__)
 
 _REQUEST_ID_RE = re.compile(r"^[A-Za-z0-9._-]{1,64}$")
 
-# Vehicle lookup alias preserved for lifecycle crash test patch compatibility
-lookup_vehicle_by_plate = get_combined_vehicle_context
+# Vehicle lookup function used by execute_plate_scan; aliased for test patching. Tests patch apps.parking.views.scans.vehicle_lookup_func to simulate a DB failure.
+vehicle_lookup_func = get_combined_vehicle_context
 
 
 def resolve_request_id(request: Any) -> str:
@@ -467,7 +467,7 @@ class PlateScanView(APIView):
             image_file=image_file,
             stages=stages,
             recognizer=get_plate_recognizer(),
-            lookup_func=lookup_vehicle_by_plate,
+            lookup_func=vehicle_lookup_func,
         )
 
         set_observability_metadata(

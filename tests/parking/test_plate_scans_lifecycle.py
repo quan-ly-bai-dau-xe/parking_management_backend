@@ -138,9 +138,9 @@ class TestBoundaryF10ResidualArtifacts:
             "crash_test.jpg", buf.getvalue(), content_type="image/jpeg"
         )
 
-        # Mô phỏng lỗi crash bất ngờ ở bước tra cứu xe lookup_vehicle_by_plate
+        # Mô phỏng lỗi crash bất ngờ ở bước tra cứu xe vehicle_lookup_func
         with patch(
-            "apps.parking.views.scans.lookup_vehicle_by_plate",
+            "apps.parking.views.scans.vehicle_lookup_func",
             side_effect=RuntimeError("Database Connection Abruptly Terminated!"),
         ):
             resp = client.post(

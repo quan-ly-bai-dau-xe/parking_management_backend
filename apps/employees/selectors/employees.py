@@ -48,10 +48,6 @@ def list_positions() -> QuerySet[Position]:
     return Position.objects.filter(deleted_at__isnull=True).order_by("id")
 
 
-# Alias for compatibility with view conventions
-get_positions_queryset = list_positions
-
-
 def get_employee_summary() -> dict[str, int]:
     """
     Single Source of Truth (SOT) for the 4 dashboard KPI cards matching list filters 100%:
@@ -242,10 +238,6 @@ def list_employees(
         qs = qs.order_by("-created_at", "id")
 
     return qs
-
-
-# Alias for compatibility with view conventions
-get_employees_queryset = list_employees
 
 
 def get_employee_by_id(

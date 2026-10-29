@@ -204,7 +204,7 @@ Run the application directly on a workstation with local Python and PostgreSQL i
 
 #### 1. Prerequisites
 
-- Python 3.14.7 (Python 3.15 is unsupported).
+- Python 3.14.7 (Python 3.15 is unsupported). Note: The codebase uses PEP 758 `except A, B:` syntax and therefore needs Python 3.14.7 (older interpreters fail with a SyntaxError).
 - PostgreSQL 18.x from postgresql.org (Windows installer includes pgAdmin 4 GUI and contrib extensions). *(not verified: Windows native MSI installer and pgAdmin 4 GUI)*
 
 #### 2. Provision database and user role via pgAdmin

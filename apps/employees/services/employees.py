@@ -749,7 +749,3 @@ def soft_delete_employee(
         "code": "MSG-4.3.4-M01",
         "message": "Xóa thành công",
     }
-
-
-# Alias for compatibility with view conventions
-delete_employee = soft_delete_employee
