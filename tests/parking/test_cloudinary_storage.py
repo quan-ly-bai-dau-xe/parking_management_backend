@@ -4,29 +4,27 @@ Decree 13/2023/ND-CP compliance, dual URL validation, and fail-closed error hand
 """
 
 import io
-from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
 from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
-from django.core.management import call_command
-from django.utils import timezone
 from PIL import Image
 
 from apps.core.exceptions import BusinessAPIException
-from apps.parking.management.commands.purge_orphan_scans import (
-    normalize_db_url_to_rel_path,
-)
-from apps.parking.models import ParkingGate, VehicleEntryExitLog
+from apps.parking.models import ParkingGate
 from apps.parking.serializers.sessions import (
     CheckInRequestSerializer,
     ParkingImageRelativeUrlField,
 )
-from apps.parking.services.ocr import DummyPlateRecognizer
-from apps.parking.services.plate_scan import execute_plate_scan
+from apps.parking.services.ocr import DummyPlateRecognizer, PlateScanResult
+from apps.parking.services.plate_scan import (
+    compose_scan_contract_payload,
+    execute_plate_scan,
+)
 from apps.parking.services.upload import (
     ProcessedImage,
+    process_uploaded_image,
     save_processed_image,
     validate_parking_image_path,
 )
@@ -133,37 +131,16 @@ def test_validate_parking_image_path_test_folder_rejected(monkeypatch):
     assert exc_info.value.code == "PROP-4.5.1-P13"
 
 
-def test_validate_parking_image_path_local_valid(tmp_path, monkeypatch):
-    """Accepts valid local relative path when file exists on disk."""
-    monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-    monkeypatch.setattr(settings, "MEDIA_URL", "/media/")
-
-    target_dir = tmp_path / "parking_scans" / "2026" / "10" / "29"
-    target_dir.mkdir(parents=True, exist_ok=True)
-    target_file = target_dir / "12345678901234567890123456789012.jpg"
-    target_file.write_bytes(b"dummy image bytes")
-
-    valid_local_url = (
-        "/media/parking_scans/2026/10/29/12345678901234567890123456789012.jpg"
-    )
-    assert validate_parking_image_path(valid_local_url) == valid_local_url
-
-
-def test_validate_parking_image_path_local_missing_file_rejected(tmp_path, monkeypatch):
-    """Rejects local relative path if physical file does not exist on disk."""
-    monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-    monkeypatch.setattr(settings, "MEDIA_URL", "/media/")
-
-    missing_local_url = (
-        "/media/parking_scans/2026/10/29/12345678901234567890123456789012.jpg"
-    )
+def test_validate_parking_image_path_local_rejected():
+    """Rejects local relative path with PROP-4.5.1-P13 per ADR-0010."""
+    local_url = "/media/parking_scans/2026/10/29/12345678901234567890123456789012.jpg"
     with pytest.raises(BusinessAPIException) as exc_info:
-        validate_parking_image_path(missing_local_url)
+        validate_parking_image_path(local_url)
     assert exc_info.value.code == "PROP-4.5.1-P13"
 
 
 def test_parking_image_relative_url_field_validation(monkeypatch):
-    """ParkingImageRelativeUrlField accepts up to 255 chars and validates dual URLs."""
+    """ParkingImageRelativeUrlField accepts up to 255 chars and validates Cloudinary HTTPS URLs."""
     field = ParkingImageRelativeUrlField()
     assert field.max_length == 255
 
@@ -181,31 +158,15 @@ def test_parking_image_relative_url_field_validation(monkeypatch):
 # ==============================================================================
 
 
-def test_save_processed_image_local_mode(tmp_path, monkeypatch):
-    """In local mode, save_processed_image writes to disk and returns Path and relative URL."""
-    monkeypatch.setattr(settings, "IMAGE_STORAGE_BACKEND", "local")
-    monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-    monkeypatch.setattr(settings, "MEDIA_URL", "/media/")
-
-    processed = _create_processed_image()
-    dest_path, rel_url = save_processed_image(processed)
-
-    assert dest_path is not None
-    assert isinstance(dest_path, Path)
-    assert dest_path.exists()
-    assert rel_url.startswith("/media/parking_scans/")
-
-
 def test_save_processed_image_cloudinary_mode_success(monkeypatch):
     """
-    In Cloudinary mode, save_processed_image:
+    save_processed_image streams directly to Cloudinary:
     - Streams directly from memory (zero disk write)
     - Uses 128-bit random UUID4 public_id (no plate text / PII)
     - Strips metadata with transformation flags force_strip
     - Organizes under parking_scans/YYYY/MM/DD
     - Returns None as file_path and HTTPS secure_url
     """
-    monkeypatch.setattr(settings, "IMAGE_STORAGE_BACKEND", "cloudinary")
     monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
 
     expected_secure_url = (
@@ -253,7 +214,6 @@ def test_save_processed_image_cloudinary_failure_fail_closed(monkeypatch):
     - Registered error code PROP-4.5.1-P17
     - Zero secrets logged
     """
-    monkeypatch.setattr(settings, "IMAGE_STORAGE_BACKEND", "cloudinary")
     monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
 
     mock_upload = MagicMock(
@@ -270,7 +230,6 @@ def test_save_processed_image_cloudinary_failure_fail_closed(monkeypatch):
 
 def test_save_processed_image_cloudinary_missing_secure_url_fail_closed(monkeypatch):
     """A Cloudinary response without a usable secure_url must fail closed, never store an empty URL."""
-    monkeypatch.setattr(settings, "IMAGE_STORAGE_BACKEND", "cloudinary")
     monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
 
     bad_responses = ({}, {"secure_url": ""}, {"secure_url": "http://insecure/x.jpg"})
@@ -281,62 +240,6 @@ def test_save_processed_image_cloudinary_missing_secure_url_fail_closed(monkeypa
         ):
             save_processed_image(_create_processed_image())
         assert exc_info.value.code == "PROP-4.5.1-P17"
-
-
-# ==============================================================================
-# 3. Purge Orphan Scans Command Tests
-# ==============================================================================
-
-
-def test_normalize_db_url_to_rel_path_skips_cloudinary_urls():
-    """normalize_db_url_to_rel_path returns None for remote Cloudinary URLs."""
-    cloudinary_url = (
-        "https://res.cloudinary.com/test-cloud/image/upload/"
-        "v1730178490/parking_scans/2026/10/29/12345678901234567890123456789012.jpg"
-    )
-    assert normalize_db_url_to_rel_path(cloudinary_url, "/media/") is None
-
-
-def test_normalize_db_url_to_rel_path_retains_testserver_urls():
-    """normalize_db_url_to_rel_path properly resolves http://testserver/media/... URLs."""
-    testserver_url = "http://testserver/media/parking_scans/2025/09/01/ref_full.jpg"
-    res = normalize_db_url_to_rel_path(testserver_url, "/media/")
-    assert res == "parking_scans/2025/09/01/ref_full.jpg"
-
-
-@pytest.mark.django_db
-def test_purge_orphan_scans_safely_skips_remote_urls(tmp_path, monkeypatch):
-    """
-    purge_orphan_scans runs cleanly when DB contains remote Cloudinary URLs.
-    Does not crash, does not attempt filesystem delete or remote API purge.
-    """
-    monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-    scans_dir = tmp_path / "parking_scans" / "2026" / "10" / "29"
-    scans_dir.mkdir(parents=True, exist_ok=True)
-    orphan_file = scans_dir / "orphan_local.jpg"
-    orphan_file.write_bytes(b"orphan")
-
-    gate = ParkingGate.objects.filter(direction="IN").first()
-    if not gate:
-        gate = ParkingGate.objects.create(name="Cổng vào", direction="IN")
-
-    # Session record referencing remote Cloudinary URL
-    VehicleEntryExitLog.objects.create(
-        session_code="PK-CLOUD-001",
-        license_plate="51K-999.99",
-        entry_time=timezone.now(),
-        entry_gate=gate,
-        entry_image_url="https://res.cloudinary.com/test-cloud/image/upload/v12345/parking_scans/2026/10/29/cloud.jpg",
-    )
-
-    out_buf = io.StringIO()
-    call_command(
-        "purge_orphan_scans", stdout=out_buf, dry_run=True, older_than_hours=0.0
-    )
-    output = out_buf.getvalue()
-
-    assert "TỔNG KẾT DỌN DẸP ẢNH QUÉT MỒ CÔI" in output
-    assert "PK-CLOUD-001" not in output
 
 
 # ==============================================================================
@@ -368,8 +271,7 @@ def test_check_in_api_accepts_cloudinary_image_url(monkeypatch):
 
 @pytest.mark.django_db
 def test_plate_scan_pipeline_cloudinary_mode_success(monkeypatch):
-    """Plate scan in Cloudinary mode returns HTTPS secure_url with no local file written."""
-    monkeypatch.setattr(settings, "IMAGE_STORAGE_BACKEND", "cloudinary")
+    """Plate scan returns HTTPS secure_url with direct cloud streaming."""
     monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
 
     buf = io.BytesIO()
@@ -395,7 +297,6 @@ def test_plate_scan_pipeline_cloudinary_mode_success(monkeypatch):
 @pytest.mark.django_db
 def test_plate_scan_pipeline_cloudinary_upload_failure_fail_closed(monkeypatch):
     """Plate scan upload failure raises PROP-4.5.1-P17 without creating DB records."""
-    monkeypatch.setattr(settings, "IMAGE_STORAGE_BACKEND", "cloudinary")
     monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
 
     buf = io.BytesIO()
@@ -416,7 +317,6 @@ def test_plate_scan_pipeline_cloudinary_upload_failure_fail_closed(monkeypatch):
 @pytest.mark.django_db
 def test_plate_scan_pipeline_cloudinary_compensating_rollback(monkeypatch):
     """If downstream processing fails after upload, cloudinary.uploader.destroy is invoked."""
-    monkeypatch.setattr(settings, "IMAGE_STORAGE_BACKEND", "cloudinary")
     monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
 
     buf = io.BytesIO()
@@ -449,3 +349,164 @@ def test_plate_scan_pipeline_cloudinary_compensating_rollback(monkeypatch):
         mock_destroy.assert_called_once_with(
             "parking_scans/2026/10/29/b068f56813a84124a900554a299759f0"
         )
+
+
+@pytest.mark.django_db
+def test_plate_scan_pipeline_compensating_destroy_failure_logged_and_fail_closed(
+    monkeypatch, caplog
+):
+    """If compensating destroy fails, logs single warning with exception class name only and propagates error (R5)."""
+    import logging
+
+    monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
+
+    buf = io.BytesIO()
+    Image.new("RGB", (300, 300), color="white").save(buf, format="JPEG")
+    file_obj = SimpleUploadedFile(
+        "plate.jpg", buf.getvalue(), content_type="image/jpeg"
+    )
+
+    expected_url = (
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+        "v1730178490/parking_scans/2026/10/29/b068f56813a84124a900554a299759f0.jpg"
+    )
+
+    mock_upload = MagicMock(return_value={"secure_url": expected_url})
+    mock_destroy = MagicMock(
+        side_effect=ConnectionError("Cloudinary destroy connection lost")
+    )
+
+    with (
+        patch("cloudinary.uploader.upload", mock_upload),
+        patch("cloudinary.uploader.destroy", mock_destroy),
+        caplog.at_level(logging.WARNING, logger="apps.parking.services.plate_scan"),
+    ):
+        rec = DummyPlateRecognizer(default_plate="51K-992.14")
+        with (
+            patch(
+                "apps.parking.services.plate_scan.compose_scan_contract_payload",
+                side_effect=RuntimeError("downstream crashed"),
+            ),
+            pytest.raises(RuntimeError),
+        ):
+            execute_plate_scan(file_obj, recognizer=rec)
+
+        warning_records = [
+            r
+            for r in caplog.records
+            if r.name == "apps.parking.services.plate_scan"
+            and r.levelno == logging.WARNING
+        ]
+        assert len(warning_records) == 1
+        assert (
+            "Compensating destroy failed: ConnectionError" in warning_records[0].message
+        )
+        assert "Cloudinary destroy connection lost" not in warning_records[0].message
+
+
+def test_validate_parking_image_path_empty_configured_cloud_name(monkeypatch):
+    """Rejects URLs when CLOUDINARY_CLOUD_NAME is not configured or empty (PROP-4.5.1-P13)."""
+    monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "")
+    valid_url = (
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+        "v1730178490/parking_scans/2026/10/29/12345678901234567890123456789012.jpg"
+    )
+    with pytest.raises(BusinessAPIException) as exc_info:
+        validate_parking_image_path(valid_url)
+    assert exc_info.value.code == "PROP-4.5.1-P13"
+
+
+def test_parking_image_relative_url_field_non_string_rejected():
+    """ParkingImageRelativeUrlField rejects non-string data with PROP-4.5.1-P13."""
+    field = ParkingImageRelativeUrlField()
+    for bad_data in [12345, True, ["url"], {"url": "val"}]:
+        with pytest.raises(BusinessAPIException) as exc_info:
+            field.run_validation(bad_data)
+        assert exc_info.value.code == "PROP-4.5.1-P13"
+
+
+def test_process_uploaded_image_bytes_and_bytearray_input():
+    """process_uploaded_image accepts raw bytes or bytearray directly."""
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 100), color="green").save(buf, format="JPEG")
+    raw_bytes = buf.getvalue()
+
+    result_bytes = process_uploaded_image(raw_bytes)
+    assert result_bytes.width == 100
+    assert result_bytes.height == 100
+    assert result_bytes.format == "JPEG"
+
+    result_bytearray = process_uploaded_image(bytearray(raw_bytes))
+    assert result_bytearray.width == 100
+    assert result_bytearray.height == 100
+
+
+def test_process_uploaded_image_invalid_object_type_raises():
+    """process_uploaded_image raises PROP-4.5.1-P02 when input has no read method and is not bytes."""
+    for invalid_input in [12345, object(), ["image.jpg"]]:
+        with pytest.raises(BusinessAPIException) as exc_info:
+            process_uploaded_image(invalid_input)
+        assert exc_info.value.code == "PROP-4.5.1-P02"
+
+
+def test_process_uploaded_image_rgba_mode_converted_to_rgb():
+    """RGBA PNG image is converted to RGB mode during preprocessing."""
+    buf = io.BytesIO()
+    Image.new("RGBA", (120, 80), color=(255, 0, 0, 128)).save(buf, format="PNG")
+    file_obj = SimpleUploadedFile("test.png", buf.getvalue(), content_type="image/png")
+
+    result = process_uploaded_image(file_obj)
+    assert result.pil_image.mode == "RGB"
+    assert result.width == 120
+    assert result.height == 80
+
+
+def test_compose_scan_contract_payload_empty_candidates():
+    """Empty OCR candidates yields empty raw_text and raw_norm in contract payload."""
+    scan_result = PlateScanResult(
+        candidates=[],
+        best_candidate=None,
+        engine_name="dummy",
+        raw_text="",
+        latency_ms=1.5,
+    )
+    payload = compose_scan_contract_payload(
+        scan_result=scan_result,
+        image_relative_url="",
+        vehicle_lookup_data=None,
+        is_blacklisted=False,
+        open_session_data=None,
+    )
+    assert payload["plate_raw"] == ""
+    assert payload["plate_final"] == ""
+    assert payload["best_candidate"] is None
+
+
+@pytest.mark.django_db
+def test_plate_scan_pipeline_compensating_destroy_unmatched_url(monkeypatch):
+    """When relative_url contains res.cloudinary.com but does not match regex, destroy is safely skipped."""
+    monkeypatch.setattr(settings, "CLOUDINARY_CLOUD_NAME", "test-cloud")
+
+    buf = io.BytesIO()
+    Image.new("RGB", (100, 100), color="white").save(buf, format="JPEG")
+    file_obj = SimpleUploadedFile(
+        "plate.jpg", buf.getvalue(), content_type="image/jpeg"
+    )
+
+    mock_upload = MagicMock(
+        return_value={"secure_url": "https://res.cloudinary.com/broken-url-no-match"}
+    )
+    mock_destroy = MagicMock()
+    with (
+        patch("cloudinary.uploader.upload", mock_upload),
+        patch("cloudinary.uploader.destroy", mock_destroy),
+        patch(
+            "apps.parking.services.plate_scan.compose_scan_contract_payload",
+            side_effect=RuntimeError("crash"),
+        ),
+        pytest.raises(RuntimeError),
+    ):
+        rec = DummyPlateRecognizer(default_plate="51K-992.14")
+        execute_plate_scan(file_obj, recognizer=rec)
+
+    mock_destroy.assert_not_called()
