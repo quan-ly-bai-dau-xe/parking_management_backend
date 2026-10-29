@@ -37,12 +37,6 @@ class AdministrativeWardSerializer(serializers.ModelSerializer):
         fields = ["id", "code", "name"]
 
 
-# Convenient aliases for callers
-ProvinceSerializer = AdministrativeProvinceSerializer
-DistrictSerializer = AdministrativeDistrictSerializer
-WardSerializer = AdministrativeWardSerializer
-
-
 class DistrictFilterQuerySerializer(serializers.Serializer):
     """Validate query parameters for filtering districts by province."""
 

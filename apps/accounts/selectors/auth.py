@@ -58,5 +58,5 @@ def get_active_account_by_identifier(identifier: Any) -> Account | None:
     return None
 
 
-# Canonical alias matching PROJECT.md interface contract
+# Short public name of get_active_account_by_identifier (exported by apps.accounts.selectors).
 get_account_by_identifier = get_active_account_by_identifier
