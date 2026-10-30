@@ -81,6 +81,8 @@ docker compose up --build
 FastAlprPlateRecognizer (Dual-OCR Ensemble) initialized successfully.
 ```
 
+1. When `COMPOSE_PROFILES=frontend` is enabled in `.env` with the sibling `../parking_management_frontend` directory present, `docker compose up --build` also starts the `frontend` Nginx SPA container at `http://127.0.0.1:5173` proxying `/api/` to `http://backend:8000`.
+
 ### 2.3 Load Initial Seed Data
 
 To populate parking lots, floors, barrier gates, parking slots, and 20 sample accounts, run:
