@@ -396,6 +396,46 @@ def check_env_example_profiles_commented(
     return problems
 
 
+def check_frontend_no_env_or_vite_leaks(
+    compose_data: dict[str, Any],
+    raw_yaml_text: str,
+    raw_env_text: str,
+) -> list[str]:
+    """
+    Verifies that the frontend service has no environment, no env_file,
+    and no build.args entry, and that no VITE_ string appears anywhere in
+    docker-compose.yml or .env.example (preventing configuration leakage).
+    """
+    problems: list[str] = []
+    frontend = compose_data.get("services", {}).get("frontend")
+    if isinstance(frontend, dict):
+        if "environment" in frontend:
+            problems.append(
+                "frontend service must not define 'environment'; frontend configuration must remain isolated in frontend repository."
+            )
+        if "env_file" in frontend:
+            problems.append(
+                "frontend service must not define 'env_file'; frontend configuration must remain isolated in frontend repository."
+            )
+        build_cfg = frontend.get("build")
+        if isinstance(build_cfg, dict) and "args" in build_cfg:
+            problems.append(
+                "frontend service must not define 'build.args'; frontend configuration must remain isolated in frontend repository."
+            )
+
+    if "VITE_" in raw_yaml_text:
+        problems.append(
+            "String 'VITE_' must not appear anywhere in docker-compose.yml; frontend variables must not leak into backend compose."
+        )
+
+    if "VITE_" in raw_env_text:
+        problems.append(
+            "String 'VITE_' must not appear anywhere in .env.example; frontend variables must not leak into backend compose."
+        )
+
+    return problems
+
+
 # ==============================================================================
 # File-Reading Validation Entry Points
 # ==============================================================================
@@ -452,6 +492,13 @@ def validate_compose_fullstack(
         check_env_example_profiles_commented(
             raw_env_text=raw_env_text,
             env_example_data=env_example_data,
+        )
+    )
+    problems.extend(
+        check_frontend_no_env_or_vite_leaks(
+            compose_data=compose_data,
+            raw_yaml_text=raw_yaml_text,
+            raw_env_text=raw_env_text,
         )
     )
 
@@ -845,4 +892,24 @@ def test_compose_fullstack_live_repo() -> None:
     assert not problems, (
         "Compose fullstack drift detected on live repository:\n"
         + "\n".join(f"- {p}" for p in problems)
+    )
+
+
+def test_frontend_service_no_env_or_vite_leaks() -> None:
+    """
+    Assert that the frontend service in docker-compose.yml has no environment,
+    no env_file, and no build.args entry, and that no VITE_ string appears anywhere
+    in docker-compose.yml or .env.example (preventing frontend config leakage).
+    """
+    compose_data = load_compose_file(COMPOSE_FILE)
+    raw_yaml_text = COMPOSE_FILE.read_text(encoding="utf-8")
+    raw_env_text = ENV_EXAMPLE_FILE.read_text(encoding="utf-8")
+
+    problems = check_frontend_no_env_or_vite_leaks(
+        compose_data=compose_data,
+        raw_yaml_text=raw_yaml_text,
+        raw_env_text=raw_env_text,
+    )
+    assert not problems, "Frontend environment leakage detected:\n" + "\n".join(
+        f"- {p}" for p in problems
     )

@@ -154,6 +154,22 @@ Key environment variables controlling the frontend and Docker Compose services:
 | `WEB_PORT` | `8000` | Host port mapped to the backend container (`127.0.0.1:${WEB_PORT:-8000}:8000`). |
 | `POSTGRES_PORT` | `5432` | Host port mapped to PostgreSQL (`127.0.0.1:${POSTGRES_PORT:-5432}:5432`). |
 
+##### Environment files
+
+Each repository maintains its own `.env` configuration file in its respective root folder:
+
+- **Backend environment** (`parking_management_backend/.env`): Configures Django, database credentials, security secrets, and Docker Compose settings (`COMPOSE_PROFILES`, `FRONTEND_PORT`, `FRONTEND_CONTEXT`).
+- **Frontend environment** (`parking_management_frontend/.env`): Configures client-side build flags (such as `VITE_USE_MOCK`).
+
+These environment files remain strictly separate and are never merged into one file. Docker Compose in the backend does not read or forward frontend variables (`VITE_*`).
+
+Key operational guidelines for `parking_management_frontend/.env`:
+
+- `VITE_USE_MOCK=false`: The frontend application connects to the real backend REST API without mock data fallback. This setting is required for full-stack operation.
+- `VITE_USE_MOCK=true`: The customer screens use local mock data. Note that frontend developers may default to `true` on their local machines.
+- **Image rebuild requirement**: The frontend multi-stage Docker build copies the frontend repository directory (`COPY . .`) and executes `npm run build`, baking `VITE_*` values directly into the static bundle served by Nginx. Consequently, after modifying `parking_management_frontend/.env`, you must rebuild the image using `docker compose up --build -d` (a plain `docker compose up -d` reuses the cached image and will not reflect `.env` changes).
+- **Local development (no Docker)**: Running `vite dev` in the frontend repository reads the exact same `.env` file.
+
 #### 3. Start services
 
 ##### Standard Full-Stack Startup
