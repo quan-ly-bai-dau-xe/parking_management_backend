@@ -271,15 +271,21 @@ def execute_plate_scan(
             saved_file_path=None,
         )
     except Exception:
-        if relative_url and "res.cloudinary.com" in relative_url:
+        # Anchored match on the whole url (host included), never a substring test.
+        m = (
+            re.fullmatch(
+                r"https://res\.cloudinary\.com/[^/]+/image/upload/(?:v\d+/)?"
+                r"(parking_scans/\d{4}/\d{2}/\d{2}/[0-9a-f]{32})\.(?:jpg|png|webp)",
+                relative_url,
+            )
+            if relative_url
+            else None
+        )
+        if m:
             try:
                 import cloudinary.uploader
 
-                m = re.search(
-                    r"/image/upload/(?:v\d+/)?(.*?)(?:\.[^.]+)?$", relative_url
-                )
-                if m:
-                    cloudinary.uploader.destroy(m.group(1))
+                cloudinary.uploader.destroy(m.group(1))
             except Exception as exc:
                 logger.warning(
                     "Compensating destroy failed: %s", exc.__class__.__name__
