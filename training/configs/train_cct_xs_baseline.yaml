@@ -1,0 +1,49 @@
+# Baseline Training Hyperparameters Configuration for CCT-XS Fine-Tuning
+# Experiment: exp01_cct_xs_vietnamese_baseline
+
+experiment_name: "exp01_cct_xs_vietnamese_baseline"
+seed: 42
+
+dataset:
+  train_manifest: "data/manifest_train.json"
+  val_manifest: "data/manifest_val.json"
+  plate_config: "configs/plate_config_vn.yaml"
+  model_config: "configs/model_cct_xs.yaml"
+  min_height: 20
+  min_width: 40
+
+training:
+  batch_size: 64
+  epochs: 50
+  validation_freq: 1
+  mixed_precision_policy: "float32"
+
+optimizer:
+  name: "AdamW"
+  lr: 0.001
+  final_lr_factor: 0.01
+  warmup_fraction: 0.05
+  weight_decay: 0.01
+  clipnorm: 1.0
+  use_ema: true
+  wd_ignore: "bias,layer_norm"
+
+loss:
+  plate_loss: "cce"
+  label_smoothing: 0.01
+  plate_loss_weight: 1.0
+
+early_stopping:
+  metric: "val_plate_acc"
+  patience: 15
+  mode: "max"
+
+hardware:
+  workers: 4
+  use_multiprocessing: false
+  max_queue_size: 10
+
+checkpoint:
+  output_dir: "./outputs/checkpoints"
+  save_best_only: true
+  save_weights_only: false

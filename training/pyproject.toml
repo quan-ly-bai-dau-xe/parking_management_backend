@@ -1,0 +1,103 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "plate-training"
+version = "0.1.0"
+description = "Isolated training and evaluation subproject for Vietnamese license-plate recognition"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [{ name = "CodeGym Parking Team" }]
+dependencies = [
+    "fast-plate-ocr>=1.1.0",
+    "keras>=3.8.0",
+    "torch>=2.2.0",
+    "onnx>=1.16.0",
+    "onnxruntime>=1.20.0",
+    "onnxslim>=0.1.30",
+    "albumentations>=1.4.0",
+    "pydantic>=2.10.0",
+    "jsonschema>=4.23.0",
+    "pillow>=10.4.0",
+    "opencv-python-headless>=4.10.0",
+    "pyarrow>=18.0.0",
+    "pandas>=2.2.0",
+    "click>=8.1.0",
+    "pyyaml>=6.0.0",
+    "imagehash>=4.3.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-cov>=6.0.0",
+    "ruff>=0.9.0",
+    "mypy>=1.14.0",
+    "nbformat>=5.10.0",
+    "nbconvert>=7.16.0",
+]
+
+[project.scripts]
+plate-training = "plate_training.cli:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+# ------------------------------------------------------------------------------
+# Tool Configurations (Completely isolated from root Django configurations)
+# ------------------------------------------------------------------------------
+[tool.ruff]
+target-version = "py310"
+line-length = 88
+exclude = [
+    ".git",
+    "__pycache__",
+    ".pytest_cache",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    "venv",
+    "outputs",
+    "checkpoints",
+]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+
+[tool.mypy]
+python_version = "3.10"
+mypy_path = "src"
+packages = ["plate_training"]
+ignore_missing_imports = true
+follow_imports = "silent"
+strict_optional = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+check_untyped_defs = true
+exclude = [
+    "^\\.venv/",
+    "^venv/",
+    "^outputs/",
+    "^checkpoints/",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["src"]
+python_files = ["test_*.py", "*_test.py"]
+addopts = "-v --strict-markers"
+markers = [
+    "leakage: Tests verifying split leakage prevention (exact & perceptual hash)",
+    "unit: Unit tests for core processing logic",
+    "parity: Tests verifying ONNX vs Keras inference parity",
+    "heavy: Tests requiring published weights or 322 real detector crops (prepared via 'python -m plate_training.cli prepare-heavy-inputs')",
+]

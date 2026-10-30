@@ -6,7 +6,9 @@
     ".agents/**",
     ".git/**",
     ".venv/**",
-    "venv/**"
+    "venv/**",
+    "training/.venv/**",
+    "training/data/**"
   ],
   "config": {
     "default": true,

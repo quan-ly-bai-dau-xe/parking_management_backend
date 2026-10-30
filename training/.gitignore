@@ -1,0 +1,61 @@
+# Byte-compiled / cache files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.cache/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Personal Data Protection (Decree 13/2023/ND-CP - Vehicle plate images forbidden in git)
+*.jpg
+*.jpeg
+*.png
+*.webp
+*.bmp
+staging/
+staging_dataset/
+crops/
+images/
+
+# Raw datasets & temporary crop images (Strict personal data protection)
+data/**
+!data/
+!data/manifest.schema.json
+!data/frozen_test_registry.json
+!data/.gitkeep
+!docs/label_studio_template.xml
+!docs/label-studio-template.xml
+*.parquet
+*.csv
+*.tar.gz
+*.zip
+
+# Checkpoints, trained models & weights (NEVER commit model binary artifacts to git)
+checkpoints/
+*.ckpt
+*.pt
+*.pth
+*.keras
+*.h5
+*.onnx
+outputs/
+trained_models/
+tensorboard_logs/
+
+# Credentials, tokens & secrets (CRITICAL CONSTRAINTS)
+kaggle.json
+.kaggle/
+.env
+.env.*
+
+# Jupyter notebook execution outputs
+notebooks/.ipynb_checkpoints/
+notebooks/*.nbconvert.ipynb

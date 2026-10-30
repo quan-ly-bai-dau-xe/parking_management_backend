@@ -1,0 +1,89 @@
+name: Training subproject check & test suite
+
+on:
+  push:
+    paths:
+      - 'training/**'
+      - '.github/workflows/03-training-check.yml'
+    branches: [main, master, dev, "feat/**"]
+  pull_request:
+    paths:
+      - 'training/**'
+      - '.github/workflows/03-training-check.yml'
+    branches: [main, master, dev, "feat/**"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  training-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python 3.14.7
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.14.7"
+          cache: "pip"
+          cache-dependency-path: "training/requirements-ci.txt"
+
+      - name: Install lightweight CI dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r training/requirements-ci.txt
+          pip install --no-deps -e training/
+
+      - name: Run Ruff Linter on training/
+        run: ruff check training/
+
+      - name: Run Ruff Formatter Check on training/
+        run: ruff format --check training/
+
+      - name: Run Mypy Type Checker on training/src/plate_training
+        run: mypy --config-file training/pyproject.toml training/src/plate_training
+
+      - name: Run Pytest Suite on training/tests/
+        run: pytest -c training/pyproject.toml training/tests/
+
+  training-heavy-check:
+    # Manual only: downloads the full training stack (torch, keras) and the published
+    # weights; run it from the Actions tab (workflow_dispatch), not on every pull request.
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+
+      - name: Set up Python 3.14.7
+        uses: actions/setup-python@42375524e23c412d93fb67b49958b491fce71c38 # v5.4.0
+        with:
+          python-version: "3.14.7"
+          cache: "pip"
+          cache-dependency-path: "training/requirements-train.txt"
+
+      - name: Set up Heavy Cache Directory
+        run: |
+          mkdir -p ~/.cache/plate_training
+          echo "PLATE_TRAINING_CACHE=$HOME/.cache/plate_training" >> $GITHUB_ENV
+
+      - name: Install full training dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r training/requirements-train.txt
+          pip install -r training/requirements-ci.txt
+          pip install --no-deps -e training/
+
+      - name: Prepare Heavy Inputs via CLI
+        run: |
+          python -m plate_training.cli prepare-heavy-inputs
+
+      - name: Run Full Pytest Suite with Strict Heavy Enforcement (0 Skips Allowed)
+        env:
+          PLATE_TRAINING_REQUIRE_HEAVY: "1"
+        run: |
+          pytest -c training/pyproject.toml training/tests/ -v

@@ -162,3 +162,31 @@ CLAUDE.local.md
 # Teamwork and agent internal working directories (contain scratch, logs, credentials)
 .agents/
 .agents/**
+
+# ------------------------------------------------------------------------------
+# 10. Plate Recognition Training Subproject
+# ------------------------------------------------------------------------------
+# Kaggle authentication token & secrets (CRITICAL - NEVER COMMIT)
+kaggle.json
+.kaggle/
+
+# Subproject raw data & images (preserve schema and templates only)
+training/data/**
+!training/data/manifest.schema.json
+!training/data/frozen_test_registry.json
+!training/data/.gitkeep
+
+# Training outputs, checkpoints, and model weights
+training/outputs/**
+training/trained_models/**
+training/tensorboard_logs/**
+training/.cache/
+training/.cache/**
+*.onnx
+*.keras
+*.h5
+*.ckpt
+
+# Jupyter notebook execution outputs
+training/notebooks/*.nbconvert.ipynb
+

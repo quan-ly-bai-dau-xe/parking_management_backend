@@ -1,0 +1,17 @@
+{
+  "id": "<KAGGLE_USERNAME>/vietnamese-plate-cct-training",
+  "title": "Vietnamese License Plate CCT-XS Training",
+  "code_file": "kaggle_train.ipynb",
+  "language": "python",
+  "kernel_type": "notebook",
+  "is_private": "true",
+  "enable_gpu": "true",
+  "enable_tpu": "false",
+  "enable_internet": "false",
+  "dataset_sources": [
+    "<KAGGLE_USERNAME>/vietnamese-license-plate-manifest",
+    "<KAGGLE_USERNAME>/plate-training-wheels"
+  ],
+  "competition_sources": [],
+  "kernel_sources": []
+}

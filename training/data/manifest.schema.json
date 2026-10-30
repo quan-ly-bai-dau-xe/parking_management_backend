@@ -1,0 +1,93 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://parking-management.local/schemas/manifest.schema.json",
+  "title": "Plate Training Manifest Schema",
+  "description": "JSON schema for license plate training/validation/frozen-test manifest dataset.",
+  "type": "array",
+  "items": {
+    "$ref": "#/$defs/manifestRow"
+  },
+  "$defs": {
+    "manifestRow": {
+      "type": "object",
+      "required": [
+        "image_path",
+        "sha256",
+        "plate_text",
+        "split",
+        "provenance",
+        "license"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "image_path": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Relative path to the plate crop image from manifest root."
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^[a-f0-9]{64}$",
+          "description": "Lowercase 64-character hexadecimal SHA-256 checksum of raw image bytes."
+        },
+        "plate_text": {
+          "type": "string",
+          "pattern": "^[A-Z0-9]{1,10}$",
+          "description": "Normalized uppercase alphanumeric plate ground truth (1 to 10 characters)."
+        },
+        "split": {
+          "type": "string",
+          "enum": ["train", "val", "frozen-test"],
+          "description": "Dataset split assignment. 'frozen-test' is strictly reserved and immutable."
+        },
+        "provenance": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Origin of the sample (e.g., 'sonnetechnology', 'field-survey-2026', 'synthetic')."
+        },
+        "license": {
+          "type": "string",
+          "minLength": 1,
+          "description": "SPDX identifier or license string (e.g., 'CC-BY-4.0', 'Proprietary', 'MIT')."
+        },
+        "plate_region": {
+          "type": "string",
+          "default": "VN",
+          "description": "ISO or customary country/region code (default: 'VN')."
+        },
+        "aspect_ratio": {
+          "type": "number",
+          "minimum": 0.1,
+          "maximum": 10.0,
+          "description": "Crop width-to-height ratio for aspect ratio anomaly screening."
+        },
+        "quality": {
+          "type": "string",
+          "enum": ["readable", "ambiguous", "unreadable"],
+          "default": "readable",
+          "description": "Visual quality categorization from annotation process."
+        },
+        "group_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Identifier for vehicle or capture session (prevents multi-frame data leakage across splits)."
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "split": {
+                "enum": ["train", "val"]
+              }
+            }
+          },
+          "then": {
+            "required": ["group_id"]
+          }
+        }
+      ]
+    }
+  }
+}
+

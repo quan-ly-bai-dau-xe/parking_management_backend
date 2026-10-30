@@ -1,0 +1,34 @@
+<View>
+  <!-- 1. Plate crop image display -->
+  <Image name="image" value="$image" zoom="true" zoomControl="true"/>
+
+  <!-- 2. Normalized plate character text input -->
+  <Header value="Plate Character Transcription (Uppercase alphanumeric, no hyphens or dots)"/>
+  <TextArea name="plate_text" toName="image"
+            editable="true" rows="1" maxSubmissions="1"
+            required="true" placeholder="Example: 29A12345, 30A99999"/>
+
+  <!-- 3. Plate format classification -->
+  <Header value="Plate Format"/>
+  <Choices name="plate_format" toName="image" showInline="true">
+    <Choice value="one_line" text="One line (Long)"/>
+    <Choice value="two_line" text="Two lines (Square)"/>
+  </Choices>
+
+  <!-- 4. Plate color classification per Circular 24/2023/TT-BCA -->
+  <Header value="Plate Color Category"/>
+  <Choices name="plate_type" toName="image" showInline="true">
+    <Choice value="white" text="White plate with black text (Personal / Enterprise)"/>
+    <Choice value="yellow" text="Yellow plate with black text (Commercial transport)"/>
+    <Choice value="blue" text="Blue plate with white text (State agency)"/>
+    <Choice value="other" text="Special plate (Military red, diplomatic NG/QT)"/>
+  </Choices>
+
+  <!-- 5. Visual quality categorization -->
+  <Header value="Visual Quality"/>
+  <Choices name="plate_quality" toName="image" showInline="true">
+    <Choice value="readable" text="Clear / Easily readable (100% confidence)"/>
+    <Choice value="ambiguous" text="Blurred / Ambiguous / Dirt occlusion"/>
+    <Choice value="unreadable" text="Completely unreadable (Excluded from training)"/>
+  </Choices>
+</View>
