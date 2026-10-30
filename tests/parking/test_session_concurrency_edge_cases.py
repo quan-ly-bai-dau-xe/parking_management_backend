@@ -13,7 +13,6 @@ Stress-tests:
    - Corrupted and truncated image streams -> 400 PROP-4.5.1-P05.
    - Decompression bomb detection (dimension cap > 4096px) -> 400 PROP-4.5.1-P05.
    - EXIF and GPS Metadata stripping -> verifying GPS latitude/longitude and EXIF tags are 100% stripped.
-   - Path traversal in filename -> files strictly stored in isolated UUID paths under MEDIA_ROOT.
 """
 
 import io
@@ -23,7 +22,6 @@ from datetime import timedelta
 from decimal import Decimal
 
 import pytest
-from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import connections
 from django.utils import timezone
@@ -164,11 +162,8 @@ class TestUploadSecurityBoundary:
         assert exc.value.status_code == 400
 
     @pytest.mark.django_db
-    def test_upload_exif_gps_stripping(self, tmp_path, monkeypatch):
+    def test_upload_exif_gps_stripping(self):
         """Xác nhận toàn bộ EXIF và dữ liệu GPS bị loại bỏ hoàn toàn khi lưu trữ file."""
-        monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-        monkeypatch.setattr(settings, "MEDIA_URL", "/media/")
-
         exif = Image.Exif()
         gps_data = {
             ExifTags.GPS.GPSLatitudeRef: "N",
@@ -195,48 +190,16 @@ class TestUploadSecurityBoundary:
         )
         result = validate_and_save_image(upload_file)
 
-        assert result.file_path.exists()
-        saved_img = Image.open(result.file_path)
+        assert result.file_path is None
+        assert result.relative_url.startswith(
+            "https://res.cloudinary.com/test-cloud/image/upload/"
+        )
+        saved_img = Image.open(io.BytesIO(result.image_bytes))
         saved_exif = saved_img.getexif()
 
         assert saved_exif.get(ExifTags.Base.Make) is None
         gps_ifd = saved_exif.get_ifd(ExifTags.IFD.GPSInfo)
         assert len(gps_ifd) == 0, f"GPS info was not stripped: {gps_ifd}"
-
-    @pytest.mark.django_db
-    def test_upload_path_traversal_in_filename(self, tmp_path, monkeypatch):
-        """Path traversal trong filename không thể lưu ra ngoài thư mục MEDIA_ROOT."""
-        monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-        monkeypatch.setattr(settings, "MEDIA_URL", "/media/")
-
-        buf = io.BytesIO()
-        img = Image.new("RGB", (100, 100), color="gray")
-        img.save(buf, format="JPEG")
-        image_bytes = buf.getvalue()
-
-        traversal_names = [
-            "../../../../etc/config.jpg",
-            "..\\..\\system\\test.jpg",
-            "nested/../../../../shell.jpg",
-            "%2e%2e%2f%2e%2e%2f_test.jpg",
-        ]
-
-        for malicious_name in traversal_names:
-            file_obj = SimpleUploadedFile(
-                name=malicious_name,
-                content=image_bytes,
-                content_type="image/jpeg",
-            )
-            result = validate_and_save_image(file_obj)
-
-            dest = result.file_path.resolve()
-            media_resolved = tmp_path.resolve()
-            assert media_resolved in dest.parents, (
-                f"File leaked outside MEDIA_ROOT: {dest}"
-            )
-            assert "config" not in dest.name
-            assert "test" not in dest.name
-            assert "shell" not in dest.name
 
 
 # ==============================================================================

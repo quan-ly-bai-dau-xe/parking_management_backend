@@ -3,10 +3,10 @@ Boundary Stress Test Suite for Plate Scans Lifecycle Management.
 
 Focus Areas Tested Empirically:
 1. 422 Residual Artifacts: Burst uploads across JPEG, PNG, WEBP and mid-process OCR crashes.
-   Confirm zero leftover files in MEDIA_ROOT under all failure paths.
+   Confirm zero leftover uploads to Cloudinary under all failure paths.
 2. EXIF Orientation Transpose Matrix: Orientation tags 6 (90 CW), 8 (270 CW), 3 (180), 1 (Normal), and None.
-   Confirm transposed upright dimensions (height > width) at both OCR input bytes and disk persistence,
-   and confirm EXIF metadata is completely stripped on saved disk files.
+   Confirm transposed upright dimensions (height > width) at both OCR input bytes and Cloudinary upload bytes,
+   and confirm EXIF metadata is completely stripped on uploaded files.
 3. Stream Ingestion Defense:
    - Early abort on declared size > 5MB (zero bytes read from stream).
    - Deceptive spoofed declared size with 12MB body (stream capped at max_bytes + 1).
@@ -15,7 +15,6 @@ Focus Areas Tested Empirically:
 """
 
 import io
-from pathlib import Path
 from unittest.mock import patch
 
 import pytest
@@ -52,23 +51,21 @@ def auth_employee():
 # 1. BOUNDARY STRESS TEST: 422 RESIDUAL ARTIFACTS & MID-PROCESS CRASH CLEANUP
 # ==============================================================================
 class TestBoundaryF10ResidualArtifacts:
-    """Thử nghiệm thực nghiệm đối kháng về rò rỉ tệp trong MEDIA_ROOT khi quét thất bại."""
+    """Thử nghiệm thực nghiệm đối kháng về rò rỉ tải ảnh khi quét thất bại (ADR-0010)."""
 
     def test_burst_422_uploads_across_formats_leaves_zero_leftovers(
-        self, auth_employee, monkeypatch
+        self, auth_employee, monkeypatch, fake_cloudinary_storage
     ):
         """
         Stress test: Upload liên tiếp 15 bức ảnh không chứa biển số (5 JPEG, 5 PNG, 5 WEBP).
         Xác nhận:
         - Tất cả 15 requests đều trả về HTTP 422 PROP-4.5.1-P06.
-        - Số lượng tệp phát sinh trong MEDIA_ROOT chính xác là 0.
+        - Số lượng tệp tải lên Cloudinary chính xác là 0 (zero remote uploads).
         """
         monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
         set_global_recognizer(DummyPlateRecognizer(default_plate=""))
 
-        media_root = Path(settings.MEDIA_ROOT)
-        media_root.mkdir(parents=True, exist_ok=True)
-        files_before = set(media_root.rglob("*"))
+        initial_count = len(fake_cloudinary_storage.uploaded_public_ids)
 
         client = APIClient()
         client.force_authenticate(user=auth_employee)
@@ -103,31 +100,27 @@ class TestBoundaryF10ResidualArtifacts:
         assert len(results) == 15
         assert all(code == 422 for code in results)
 
-        files_after = set(media_root.rglob("*"))
-        leftover_files = [f for f in (files_after - files_before) if f.is_file()]
-        assert len(leftover_files) == 0, (
-            f"Boundary Failure: Found {len(leftover_files)} leftover files after 15 burst 422 requests: {leftover_files}"
+        assert len(fake_cloudinary_storage.uploaded_public_ids) == initial_count, (
+            f"Boundary Failure: Found leftover uploads after 15 burst 422 requests: {fake_cloudinary_storage.uploaded_public_ids}"
         )
 
         set_global_recognizer(None)
 
     def test_mid_process_crash_after_save_triggers_unlink_cleanup(
-        self, auth_employee, monkeypatch
+        self, auth_employee, monkeypatch, fake_cloudinary_storage
     ):
         """
         Thử nghiệm kịch bản lỗi bất thường (defensive test):
-        Ảnh hợp lệ, OCR tìm thấy biển số, file ĐÃ ĐƯỢC LƯU VÀO ĐĨA,
+        Ảnh hợp lệ, OCR tìm thấy biển số, file ĐÃ ĐƯỢC TẢI LÊN CLOUDINARY,
         nhưng sau đó hệ thống gặp crash đột ngột (ví dụ cơ sở dữ liệu tra cứu bị lỗi).
-        Xác nhận khối defensive exception handling trong PlateScanView lập tức unlink file rác.
+        Xác nhận compensating destroy lập tức thu hồi asset đã upload.
         """
         monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
         set_global_recognizer(
             DummyPlateRecognizer(default_plate="51K-123.45", default_confidence=99.0)
         )
 
-        media_root = Path(settings.MEDIA_ROOT)
-        media_root.mkdir(parents=True, exist_ok=True)
-        files_before = set(media_root.rglob("*"))
+        initial_destroyed = len(fake_cloudinary_storage.destroyed_public_ids)
 
         client = APIClient()
         client.force_authenticate(user=auth_employee)
@@ -138,9 +131,9 @@ class TestBoundaryF10ResidualArtifacts:
             "crash_test.jpg", buf.getvalue(), content_type="image/jpeg"
         )
 
-        # Mô phỏng lỗi crash bất ngờ ở bước tra cứu xe lookup_vehicle_by_plate
+        # Mô phỏng lỗi crash bất ngờ ở bước tra cứu xe vehicle_lookup_func
         with patch(
-            "apps.parking.views.scans.lookup_vehicle_by_plate",
+            "apps.parking.views.scans.vehicle_lookup_func",
             side_effect=RuntimeError("Database Connection Abruptly Terminated!"),
         ):
             resp = client.post(
@@ -150,11 +143,10 @@ class TestBoundaryF10ResidualArtifacts:
             )
             assert resp.status_code == status.HTTP_500_INTERNAL_SERVER_ERROR
 
-        # File đã lưu trước khi crash phải bị xóa hoàn toàn khỏi đĩa (defensive unlink)
-        files_after = set(media_root.rglob("*"))
-        new_files = [f for f in (files_after - files_before) if f.is_file()]
-        assert len(new_files) == 0, (
-            f"Boundary Failure: Defensive unlink failed! Leftover file exists: {new_files}"
+        assert (
+            len(fake_cloudinary_storage.destroyed_public_ids) == initial_destroyed + 1
+        ), (
+            f"Boundary Failure: Compensating destroy failed! Destroyed IDs: {fake_cloudinary_storage.destroyed_public_ids}"
         )
 
         set_global_recognizer(None)
@@ -193,12 +185,13 @@ class TestBoundaryF10ExifOrientationMatrix:
         expected_w,
         expected_h,
         should_transpose,
+        fake_cloudinary_storage,
     ):
         """
         Kiểm tra ma trận các hướng xoay EXIF:
         - Kích thước gửi tới OCR engine phải đúng chuẩn expected (chiều cao > chiều rộng nếu orientation 6, 8).
-        - Kích thước lưu trên đĩa MEDIA_ROOT phải đúng chuẩn expected.
-        - EXIF metadata trên tệp lưu đĩa phải bị tước bỏ hoàn toàn (strip EXIF).
+        - Kích thước tải lên Cloudinary phải đúng chuẩn expected.
+        - EXIF metadata trên tệp lưu trữ phải bị tước bỏ hoàn toàn (strip EXIF).
         """
         monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
 
@@ -248,20 +241,18 @@ class TestBoundaryF10ExifOrientationMatrix:
                 f"Orientation {orientation} should result in height > width, got {captured_dimensions[0]}"
             )
 
-        # 2. File lưu trên đĩa đúng kích thước và tước bỏ EXIF
-        media_url = getattr(settings, "MEDIA_URL", "/media/")
-        rel_url = resp.data["image_url"]
-        rel_path = (
-            rel_url[len(media_url) :].lstrip("/")
-            if rel_url.startswith(media_url)
-            else rel_url.removeprefix(media_url)
+        # 2. File tải lên Cloudinary đúng kích thước và tước bỏ EXIF
+        saved_url = resp.data["image_url"]
+        assert saved_url.startswith(
+            "https://res.cloudinary.com/test-cloud/image/upload/"
         )
-        disk_path = Path(settings.MEDIA_ROOT) / rel_path
-        assert disk_path.is_file()
+        assert fake_cloudinary_storage.last_uploaded_bytes is not None
 
-        with Image.open(disk_path) as disk_img:
+        with Image.open(
+            io.BytesIO(fake_cloudinary_storage.last_uploaded_bytes)
+        ) as disk_img:
             assert disk_img.size == (expected_w, expected_h)
-            # Thẻ EXIF orientation phải bị xóa hoàn toàn khỏi file lưu đĩa
+            # Thẻ EXIF orientation phải bị xóa hoàn toàn khỏi file tải lên
             assert disk_img.getexif().get(0x0112) is None
 
         set_global_recognizer(None)

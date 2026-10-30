@@ -22,10 +22,6 @@ class VehicleSearchItemSerializer(VehicleLookupResponseSerializer):
     )
 
 
-# Alias tương thích tài liệu đặc tả OpenAPI
-VehicleSearchResultSerializer = VehicleSearchItemSerializer
-
-
 class VehicleSearchListResponseSerializer(serializers.Serializer):
     """
     Envelope phản hồi danh sách phân trang chuẩn cho Modal tìm xe per Task 9.
@@ -62,10 +58,6 @@ class VehicleSearchListResponseSerializer(serializers.Serializer):
         required=False,
         help_text="Thông điệp phản hồi (trả về 'Không tìm thấy dữ liệu trùng khớp' khi results rỗng)",
     )
-
-
-# Alias tương thích OpenAPI schema generator
-PaginatedVehicleSearchResponseSerializer = VehicleSearchListResponseSerializer
 
 
 class VehicleSearchQuerySerializer(serializers.Serializer):

@@ -1,10 +1,11 @@
 """
 Image upload security service for Parking Management Backend.
 Validates file size, content magic bytes, Pillow integrity, decompression bomb caps,
-strips EXIF/GPS metadata, and stores with randomized UUID names under MEDIA_ROOT.
+strips EXIF/GPS metadata, and uploads with randomized UUID names to Cloudinary.
 """
 
 import io
+import logging
 import re
 import uuid
 from dataclasses import dataclass
@@ -17,6 +18,8 @@ from PIL import Image, ImageOps
 
 from apps.core.exceptions import BusinessAPIException
 from apps.core.messages import ALL_MESSAGES
+
+logger = logging.getLogger(__name__)
 
 # Prevent decompression bomb DOS attacks
 Image.MAX_IMAGE_PIXELS = 16_000_000
@@ -70,7 +73,7 @@ class ProcessedImage:
 class UploadResult:
     """Kết quả xác thực và lưu trữ hình ảnh tải lên an toàn."""
 
-    file_path: Path
+    file_path: Path | None
     relative_url: str
     image_bytes: bytes
     width: int
@@ -280,31 +283,52 @@ def process_uploaded_image(file_obj: Any) -> ProcessedImage:
         ) from exc
 
 
-def save_processed_image(processed: ProcessedImage) -> tuple[Path, str]:
+def save_processed_image(
+    processed: ProcessedImage,
+    folder_prefix: str | None = None,
+) -> tuple[Path | None, str]:
     """
-    Lưu trữ tệp hình ảnh đã qua xử lý an toàn vào MEDIA_ROOT với UUID ngẫu nhiên.
-    Trả về: (đường dẫn tệp cục bộ Path, đường dẫn URL tương đối str).
+    Lưu trữ tệp hình ảnh đã qua xử lý lên Cloudinary (ADR-0010):
+    Upload trực tiếp từ memory buffer (io.BytesIO) lên Cloudinary qua HTTPS.
+    Sinh public_id ngẫu nhiên bằng UUID4 128-bit (không chứa biển số xe/PII).
+    Tước bỏ siêu dữ liệu với flags: force_strip.
+    Trả về: (None, secure_url).
     """
     now = timezone.now()
-    media_root = Path(settings.MEDIA_ROOT)
-    sub_dir = Path("parking_scans") / now.strftime("%Y/%m/%d")
-    target_dir = media_root / sub_dir
-    target_dir.mkdir(parents=True, exist_ok=True)
+    date_folder = now.strftime("%Y/%m/%d")
+    folder = folder_prefix or f"parking_scans/{date_folder}"
+    random_uuid = uuid.uuid4().hex
 
-    random_filename = f"{uuid.uuid4().hex}{processed.ext}"
-    dest_path = target_dir / random_filename
-    dest_path.write_bytes(processed.image_bytes)
+    try:
+        import cloudinary.uploader
 
-    media_url = settings.MEDIA_URL.rstrip("/")
-    rel_path_str = (sub_dir / random_filename).as_posix()
-    relative_url = f"{media_url}/{rel_path_str}"
-
-    return dest_path, relative_url
+        upload_result = cloudinary.uploader.upload(
+            io.BytesIO(processed.image_bytes),
+            public_id=random_uuid,
+            folder=folder,
+            resource_type="image",
+            overwrite=True,
+            transformation=[{"flags": "force_strip"}],
+        )
+        secure_url = upload_result.get("secure_url") or ""
+        if not isinstance(secure_url, str) or not secure_url.startswith("https://"):
+            raise ValueError("Cloudinary response has no secure_url")
+        return None, secure_url
+    except Exception as exc:
+        logger.error("Cloudinary upload failed: %s", exc.__class__.__name__)
+        raise BusinessAPIException(
+            code="PROP-4.5.1-P17",
+            message=ALL_MESSAGES.get(
+                "PROP-4.5.1-P17",
+                "Không thể lưu trữ hình ảnh tải lên dịch vụ đám mây, vui lòng thử lại sau.",
+            ),
+            status_code=502,
+        ) from exc
 
 
 def validate_and_save_image(file_obj: Any) -> UploadResult:
     """
-    Hàm tiện ích tương thích ngược: vừa xác thực tiền xử lý, vừa lưu tệp đĩa.
+    Hàm tiện ích tương thích ngược: vừa xác thực tiền xử lý, vừa lưu trữ lên Cloudinary.
     """
     processed = process_uploaded_image(file_obj)
     dest_path, relative_url = save_processed_image(processed)
@@ -323,16 +347,15 @@ def validate_parking_image_path(url: str | None) -> str | None:
     """
     Xác thực đường dẫn ảnh quét phương tiện (entry_image_url / exit_image_url):
     1. Chấp nhận None (hoặc omitted).
-    2. Từ chối chuỗi rỗng hoặc vượt quá max_length 150 ký tự.
-    3. Kiểm tra định dạng URL tương đối nghiêm ngặt:
-       MEDIA_URL + parking_scans/YYYY/MM/DD/<32 lowercase hex>.(jpg|png|webp)
-    4. Chống Path Traversal và kiểm tra tệp thực tế tồn tại trong MEDIA_ROOT.
-    5. Trả về HTTP 400 và PROP-4.5.1-P13 nếu không hợp lệ.
+    2. Từ chối chuỗi rỗng hoặc vượt quá max_length 255 ký tự.
+    3. Chỉ chấp nhận URL Cloudinary HTTPS khớp regex chuẩn (ADR-0010):
+       ^https://res\\.cloudinary\\.com/<configured cloud name>/image/upload/(v\\d+/)?parking_scans/\\d{4}/\\d{2}/\\d{2}/[0-9a-f]{32}\\.(jpg|png|webp)$
+    4. Trả về HTTP 400 và PROP-4.5.1-P13 nếu không hợp lệ.
     """
     if url is None:
         return None
     url = str(url).strip()
-    if not url:
+    if not url or len(url) > 255:
         raise BusinessAPIException(
             code="PROP-4.5.1-P13",
             message=ALL_MESSAGES.get(
@@ -342,7 +365,8 @@ def validate_parking_image_path(url: str | None) -> str | None:
             status_code=400,
         )
 
-    if len(url) > 150:
+    cloud_name = getattr(settings, "CLOUDINARY_CLOUD_NAME", "").strip()
+    if not cloud_name:
         raise BusinessAPIException(
             code="PROP-4.5.1-P13",
             message=ALL_MESSAGES.get(
@@ -352,24 +376,13 @@ def validate_parking_image_path(url: str | None) -> str | None:
             status_code=400,
         )
 
-    media_url = settings.MEDIA_URL.rstrip("/")
-    escaped_prefix = re.escape(media_url)
-    pattern = rf"^{escaped_prefix}/parking_scans/\d{{4}}/(?:0[1-9]|1[0-2])/(?:0[1-9]|[12]\d|3[01])/[0-9a-f]{{32}}\.(?:jpg|png|webp)$"
+    escaped_cloud = re.escape(cloud_name)
+    pattern = (
+        rf"^https://res\.cloudinary\.com/{escaped_cloud}/image/upload/"
+        rf"(?:v\d+/)?parking_scans/\d{{4}}/\d{{2}}/\d{{2}}/[0-9a-f]{{32}}"
+        rf"\.(?:jpg|png|webp)$"
+    )
     if not re.match(pattern, url):
-        raise BusinessAPIException(
-            code="PROP-4.5.1-P13",
-            message=ALL_MESSAGES.get(
-                "PROP-4.5.1-P13",
-                "Đường dẫn hình ảnh không hợp lệ hoặc tệp không tồn tại.",
-            ),
-            status_code=400,
-        )
-
-    media_root = Path(settings.MEDIA_ROOT).resolve()
-    rel_path_str = url[len(media_url) :].lstrip("/")
-    target_file = (media_root / rel_path_str).resolve()
-
-    if not target_file.is_relative_to(media_root) or not target_file.is_file():
         raise BusinessAPIException(
             code="PROP-4.5.1-P13",
             message=ALL_MESSAGES.get(
