@@ -494,37 +494,10 @@ def run_benchmark(
 
 def purge_benchmark_scans() -> None:
     """
-    Safely purges unreferenced test scans from MEDIA_ROOT after benchmark.
-    Prevents polluting the host repository's media directory.
+    No-op under ADR-0010 (Cloudinary Exclusive Storage).
+    Scan images are streamed directly to Cloudinary; no local cleanup is required.
     """
-    try:
-        import os
-        import sys
-        from io import StringIO
-        from pathlib import Path
-
-        repo_root = str(Path(__file__).resolve().parents[2])
-        if repo_root not in sys.path:
-            sys.path.insert(0, repo_root)
-
-        import django
-        from django.conf import settings
-        from django.core.management import call_command
-
-        if not settings.configured:
-            os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
-            django.setup()
-
-        out = StringIO()
-        call_command(
-            "purge_orphan_scans",
-            older_than_hours=0.0,
-            dry_run=False,
-            stdout=out,
-        )
-        print("\n[CLEANUP] Successfully purged orphan benchmark scans from MEDIA_ROOT.")
-    except Exception as exc:
-        print(f"\n[WARN] Failed to purge benchmark scans: {exc}", file=sys.stderr)
+    print("\n[CLEANUP] Cloudinary exclusive backend: direct cloud streaming.")
 
 
 if __name__ == "__main__":
@@ -555,7 +528,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--purge-scans",
         action="store_true",
-        help="Purge unreferenced orphan scan images from MEDIA_ROOT after benchmark to prevent disk pollution",
+        help="No-op compatibility flag under ADR-0010 (Cloudinary Exclusive Storage)",
     )
     args = parser.parse_args()
 

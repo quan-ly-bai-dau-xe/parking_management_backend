@@ -95,6 +95,20 @@ def test_gates_list_and_filter(auth_employee):
     for gate in resp_out.data:
         assert gate["direction"] == "OUT"
 
+    # 4. Lọc cổng theo is_active
+    resp_active = client.get("/api/v1/parking/gates/?is_active=true")
+    assert resp_active.status_code == status.HTTP_200_OK
+    for gate in resp_active.data:
+        assert gate["is_active"] is True
+
+    # 5. Selector get_gate_by_id
+    from apps.parking.selectors.gates import get_gate_by_id
+
+    first_gate = resp.data[0]
+    gate_obj = get_gate_by_id(first_gate["id"])
+    assert gate_obj is not None
+    assert gate_obj.id == first_gate["id"]
+
 
 # ==============================================================================
 # SESSIONS LIST & DETAIL API TESTS

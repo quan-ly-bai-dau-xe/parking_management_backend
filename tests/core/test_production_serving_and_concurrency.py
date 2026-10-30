@@ -28,7 +28,6 @@ from apps.parking.services.upload import (
     TARGET_MAX_SIDE,
     process_uploaded_image,
 )
-from config.settings import local as local_settings
 
 
 @pytest.fixture(autouse=True)
@@ -92,10 +91,19 @@ def test_sql_logging_hygiene_pii_protection():
     P1 (Rule 07 Section 5): Xác minh cờ DJANGO_LOG_SQL_QUERIES mặc định tắt SQL DEBUG logging
     để chống rò rỉ PII khách hàng ra container log.
     """
-    loggers_dict = local_settings.LOGGING["loggers"]
-    sql_logger_cfg = loggers_dict.get("django.db.backends", {})
-    expected_level = "DEBUG" if local_settings.LOG_SQL_QUERIES else "WARNING"
-    assert sql_logger_cfg.get("level") == expected_level
+    with (
+        patch("config.settings.base.validate_cloudinary_credentials"),
+        patch("config.settings.base.configure_cloudinary_sdk"),
+    ):
+        import importlib
+
+        from config.settings import local as local_settings
+
+        importlib.reload(local_settings)
+        loggers_dict = local_settings.LOGGING["loggers"]
+        sql_logger_cfg = loggers_dict.get("django.db.backends", {})
+        expected_level = "DEBUG" if local_settings.LOG_SQL_QUERIES else "WARNING"
+        assert sql_logger_cfg.get("level") == expected_level
 
 
 def test_database_connection_sizing_bounds():

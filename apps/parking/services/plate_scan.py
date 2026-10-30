@@ -7,6 +7,8 @@ vehicle context lookup, trigram suggestions, and canonical response payload comp
 
 from __future__ import annotations
 
+import logging
+import re
 import time
 from collections.abc import Callable
 from dataclasses import dataclass
@@ -36,6 +38,8 @@ from apps.parking.services.upload import (
     process_uploaded_image,
     save_processed_image,
 )
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -209,11 +213,11 @@ def execute_plate_scan(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         )
 
-    # 4. Save processed image with defensive unlink on failure
-    saved_file_path: Path | None = None
+    # 4. Save processed image to Cloudinary (with compensating destroy rollback on failure)
+    relative_url: str | None = None
     try:
         t_wr0 = time.perf_counter()
-        saved_file_path, relative_url = save_processed_image(processed_image)
+        _, relative_url = save_processed_image(processed_image)
         if stages is not None:
             stages["write"] = (time.perf_counter() - t_wr0) * 1000.0
 
@@ -264,9 +268,26 @@ def execute_plate_scan(
             review_status=payload["review_status"],
             review_reasons=payload["review_reasons"],
             plate_normalized=final_norm_plate,
-            saved_file_path=saved_file_path,
+            saved_file_path=None,
         )
     except Exception:
-        if saved_file_path and saved_file_path.is_file():
-            saved_file_path.unlink(missing_ok=True)
+        # Anchored match on the whole url (host included), never a substring test.
+        m = (
+            re.fullmatch(
+                r"https://res\.cloudinary\.com/[^/]+/image/upload/(?:v\d+/)?"
+                r"(parking_scans/\d{4}/\d{2}/\d{2}/[0-9a-f]{32})\.(?:jpg|png|webp)",
+                relative_url,
+            )
+            if relative_url
+            else None
+        )
+        if m:
+            try:
+                import cloudinary.uploader
+
+                cloudinary.uploader.destroy(m.group(1))
+            except Exception as exc:
+                logger.warning(
+                    "Compensating destroy failed: %s", exc.__class__.__name__
+                )
         raise

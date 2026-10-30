@@ -40,14 +40,6 @@ def ensure_sample_data() -> None:
     return None
 
 
-@pytest.fixture(autouse=True)
-def redirect_media_root_to_tmp() -> None:
-    """
-    Overrides the root conftest fixture to prevent unnecessary settings or media touches.
-    """
-    return None
-
-
 # Regex for detecting Vietnamese diacritics
 VIETNAMESE_DIACRITICS_PATTERN: re.Pattern[str] = re.compile(
     r"[àáạảãâầấậẩẫăằắặẳẵèéẹẻẽêềếệểễìíịỉĩòóọỏõôồốộổỗơờớợởỡùúụủũưừứựửữỳýỵỷỹđ"

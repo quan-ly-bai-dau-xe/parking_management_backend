@@ -244,7 +244,7 @@ class PlateScanView(APIView):
                                     "y2": 440,
                                 },
                             },
-                            "image_url": "/media/parking_scans/2026/10/18/f3e1a8b2c4d5.jpg",
+                            "image_url": "https://res.cloudinary.com/parking-cloud/image/upload/v1729238400/parking_scans/2026/10/18/f3e1a8b2c4d5e6f7a8b9c0d1e2f3a4b5.jpg",
                             "vehicle_lookup": {
                                 "vehicle": {
                                     "id": 1,
@@ -343,7 +343,7 @@ class PlateScanView(APIView):
                                     "y2": 300,
                                 },
                             },
-                            "image_url": "/media/parking_scans/2026/10/18/a1b2c3d4e5f6.jpg",
+                            "image_url": "https://res.cloudinary.com/parking-cloud/image/upload/v1729238400/parking_scans/2026/10/18/a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6.jpg",
                             "vehicle_lookup": None,
                             "is_blacklisted": False,
                             "open_session": None,

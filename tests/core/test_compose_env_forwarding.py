@@ -88,6 +88,9 @@ INTENTIONAL_DEFAULT_MISMATCH_ALLOWLIST: dict[str, str] = {
     "ALLOWED_HOSTS": "Compose defaults to 'localhost,127.0.0.1,web' to permit container inter-service calls",
     "SECRET_KEY": "Compose enforces mandatory required expansion ${SECRET_KEY:?...} without fallback default",
     "POSTGRES_PASSWORD": "Compose enforces mandatory required expansion ${POSTGRES_PASSWORD:?...} without fallback default",
+    "CLOUDINARY_CLOUD_NAME": "Compose enforces mandatory required expansion ${CLOUDINARY_CLOUD_NAME:?...} without fallback default",
+    "CLOUDINARY_API_KEY": "Compose enforces mandatory required expansion ${CLOUDINARY_API_KEY:?...} without fallback default",
+    "CLOUDINARY_API_SECRET": "Compose enforces mandatory required expansion ${CLOUDINARY_API_SECRET:?...} without fallback default",
 }
 
 # Allowlist for keys whose default value in docker-compose.yml intentionally differs from in-code defaults.

@@ -112,6 +112,9 @@ Configure required environment variables in `.env`:
 DEBUG=True
 SECRET_KEY=your_secret_key_here
 POSTGRES_PASSWORD=your_password_here
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 `DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404.
@@ -275,6 +278,9 @@ POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
 CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
 `DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404. While the backend starts with minimal database and secret settings, a browser frontend accessing the API from another origin (such as `http://localhost:3000`) requires `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` to prevent HTTP 403 Forbidden CSRF rejection errors (`PROP-4.1-P06`).
@@ -407,6 +413,9 @@ Key environment variables:
 
 - `SECRET_KEY`: Django secret key (required).
 - `POSTGRES_PASSWORD`: PostgreSQL database password (required).
+- `CLOUDINARY_CLOUD_NAME`: Cloudinary cloud name for scan image storage (required; halts startup if unset).
+- `CLOUDINARY_API_KEY`: Cloudinary API key (required; halts startup if unset).
+- `CLOUDINARY_API_SECRET`: Cloudinary API secret (required; halts startup if unset).
 - `POSTGRES_DB`: PostgreSQL database name (default: `parking_db`).
 - `POSTGRES_USER`: PostgreSQL database user (default: `parking_user`).
 - `WEB_PORT`: Host port for Django backend (default: `8000`, bound exclusively to `127.0.0.1`).
@@ -445,7 +454,7 @@ Key environment variables:
 | `bind: address already in use` | Host port 8000 or 5432 is occupied by another local process. | Change `WEB_PORT` or `POSTGRES_PORT` to an available port in `.env` (e.g., `WEB_PORT=8015`, `POSTGRES_PORT=5445`). |
 | `FATAL: password authentication failed` | `POSTGRES_PASSWORD` was changed in `.env` after the database volume was already initialized. | Restore the original password in `.env`, update the password in PostgreSQL via `ALTER ROLE`, or recreate the volume in development. |
 | New variables in `.env` have no effect | The variable was not forwarded into the container. | Declare the variable under `services.web.environment` in `docker-compose.yml`. |
-| Missing required variables when running compose | `SECRET_KEY` or `POSTGRES_PASSWORD` is not set. | Provide values for both required variables in `.env`. |
+| Missing required variables when running compose | `SECRET_KEY`, `POSTGRES_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, or `CLOUDINARY_API_SECRET` is not set. | Provide values for all required variables in `.env`. |
 
 #### Table 2: Troubleshooting Option 2 (Local Python & PostgreSQL)
 
@@ -455,33 +464,9 @@ Key environment variables:
 | `permission denied to create database` during `pytest` | Role `parking_user` lacks the `CREATEDB` attribute. | Connect via pgAdmin as `postgres` and execute `ALTER ROLE parking_user CREATEDB;`. |
 | Swagger UI missing CSS/JS styling | Development server started with `DEBUG=False`. | Set `DEBUG=True` in `.env` so Django serves static assets in development. |
 | First license plate scan is slow or fails | OCR engine is downloading ONNX weights to `~/.cache`. | Ensure active internet connectivity during the first plate scan request. |
+| `ImproperlyConfigured: Missing required Cloudinary environment variables` | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, or `CLOUDINARY_API_SECRET` is unset in `.env`. | Configure Cloudinary credentials in `.env`. |
 
 ---
-
-### Step 5.1: Purge Orphan Scan Images (`purge_orphan_scans`)
-
-To reclaim disk space by purging unreferenced scan images under `MEDIA_ROOT/parking_scans` that are not tied to any parking session log (`VehicleEntryExitLog.entry_image_url` or `exit_image_url`), use the dedicated management command:
-
-```bash
-# 1. Dry-run simulation (default, safe inspection without deleting files):
-python manage.py purge_orphan_scans
-
-# Or inside Docker web container:
-docker compose exec web python manage.py purge_orphan_scans
-
-# 2. Execute actual deletion (purges unreferenced files older than 24 hours):
-python manage.py purge_orphan_scans --no-dry-run --older-than-hours 24
-
-# Or inside Docker web container:
-docker compose exec web python manage.py purge_orphan_scans --no-dry-run --older-than-hours 24
-```
-
-**Command Parameters**:
-
-- `--dry-run` / `--no-dry-run`: Defaults to `--dry-run` for safety. Pass `--no-dry-run` to permanently remove orphan files.
-- `--older-than-hours <N>`: Only considers files modified earlier than $N$ hours ago (default: `24.0`). Prevents deleting scan images from active uploads or ongoing check-in sessions.
-- Preserves 100% of referenced image files and never mutates or drops database log rows.
-- Automatically cleans up empty `YYYY/MM/DD` date subdirectories.
 
 ### Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"
 
@@ -590,24 +575,21 @@ The repository provides a standalone, high-performance load testing tool (`tests
 
 - **Runtime Synthetic Images (H9a, K2)**: Pre-generates realistic Vietnamese license plates before worker threads start across multiple resolutions (`640x480`, `1920x1080`, and `4000x3000` 12 MP) using Pillow. Zero dependency on external sample files.
 - **Cold vs. Warm Burst Profiling (K2)**: Supports `--warmup` and `--warmup-duration` (default `3.0` seconds) to report separate `COLD RUN METRICS` and `WARM RUN METRICS` tables.
-- **Throwaway Media Hygiene (K7)**: Provides `tests/perf/docker-compose.tmpfs.yml` (mounting `/app/media` on RAM `tmpfs`) and `--purge-scans` (invoking `purge_orphan_scans` automatically after local runs) so benchmarks never pollute the repository `media/` directory.
+- **Cloudinary Storage Hygiene (K7, ADR-0010)**: Parking scans are stored exclusively in Cloudinary with zero local disk writes, ensuring load tests and benchmarks never accumulate media files on local storage.
 - **Fail-Fast Error Accounting (H8c)**: Fatal errors (`500 Internal Server Error`, connection drops, or unexpected status codes outside `--allow-status`) are counted and reported. The process exits with code `1` upon any unexpected failure.
 - **Circuit Breaker Validation**: Tests backend under heavy concurrency (`32` to `64` concurrent workers) while verifying semaphore admission (`503 Service Unavailable` with `Retry-After`) under saturation.
 
 #### Running Soak & Concurrency Tests
 
 ```bash
-# 0. Recommended: Start stack with RAM tmpfs over /app/media so zero scan files persist on host disk:
-docker compose -f docker-compose.yml -f tests/perf/docker-compose.tmpfs.yml up -d
-
-# 1. Full benchmark suite across all scenarios at concurrency 32 and 64 (with automatic orphan scan cleanup):
-python tests/perf/load_test.py --duration 10 --purge-scans
+# 1. Full benchmark suite across all scenarios at concurrency 32 and 64:
+python tests/perf/load_test.py --duration 10
 
 # 2. High-concurrency 180-second soak test (64 clients for 180 seconds):
 python tests/perf/load_test.py --concurrency 64 --duration 180 --scenario lookup
 
 # 3. Targeted 12 MP cold-start vs. warm-state burst test (K2):
-python tests/perf/load_test.py --concurrency 32,64 --duration 10 --scenario scan_12mp --warmup --purge-scans
+python tests/perf/load_test.py --concurrency 32,64 --duration 10 --scenario scan_12mp --warmup
 ```
 
 #### Query Ceiling Budgets & Database Safeguards (H5)
@@ -651,9 +633,6 @@ docker compose exec web python manage.py migrate --noinput
 
 # Load sample seed data (Development only; production is protected by default):
 docker compose exec web python manage.py load_sample_data
-
-# Purge unreferenced scan images older than 24 hours:
-docker compose exec web python manage.py purge_orphan_scans --no-dry-run --older-than-hours 24
 
 # ------------------------------------------------------------------------------
 # 3. GRACEFUL SHUTDOWN
@@ -735,7 +714,7 @@ Every critical API request (`/api/v1/parking/plate-scans/`, check-in, check-out)
   - `ocr1`: Model 1 CCT character recognition inference ($\sim 4.3\text{ ms}$).
   - `ocr2`: Model 2 Mobile-ViT-v2 fallback OCR ($0.00\text{ ms}$ when adaptive skip succeeds; $\sim 4.3\text{ ms}$ otherwise).
   - `db`: Database lookups (vehicle indexing, active ticket, open session queries).
-  - `write`: File storage write to `parking_scans/YYYY/MM/DD/`.
+  - `write`: Image upload to Cloudinary folder `parking_scans/YYYY/MM/DD/`.
 - **`review_status`**: Policy verdict (`AUTO` for automated barrier opening; `NEEDS_REVIEW` for manual operator inspection).
 - **`review_reasons`**: Specific trigger codes requiring review (`LOW_CHAR_CONFIDENCE`, `POSITION_CORRECTED`, `MODEL_DISAGREEMENT`, `UNKNOWN_PLATE_PATTERN`, etc.).
 - **`plate`**: Privacy-masked license plate string (`51F***81`). Full raw plates are persisted exclusively in encrypted/audited database tables.
@@ -796,9 +775,6 @@ docker stats --no-stream parking_management_backend-web-1
 
 # 2. Check for memory-triggered worker restarts:
 docker compose logs web | grep -E "Graceful memory exit|worker was killed|Booting worker"
-
-# 3. Check disk space in scan upload directory:
-docker compose exec web du -sh /app/media/parking_scans
 ```
 
 **Remediation**:

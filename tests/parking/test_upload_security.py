@@ -5,7 +5,7 @@ Verifies:
 - File > 5MB -> 400 PROP-4.5.1-P03
 - Invalid magic bytes -> 400 PROP-4.5.1-P04
 - Corrupt file / decompression bomb -> 400 PROP-4.5.1-P05
-- Valid JPEG/PNG/WebP upload strips EXIF GPS and stores under MEDIA_ROOT with UUID name.
+- Valid JPEG/PNG/WebP upload strips EXIF GPS and uploads to Cloudinary with UUID name.
 """
 
 import io
@@ -140,11 +140,8 @@ def test_upload_decompression_bomb_dimension_raises_prop_p05():
         assert exc_info.value.status_code == 400
 
 
-def test_upload_valid_jpeg_success(tmp_path, monkeypatch):
-    """Upload ảnh JPEG hợp lệ được lưu an toàn dưới MEDIA_ROOT với URL chuẩn."""
-    monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-    monkeypatch.setattr(settings, "MEDIA_URL", "/media/")
-
+def test_upload_valid_jpeg_success():
+    """Upload ảnh JPEG hợp lệ được lưu an toàn lên Cloudinary với URL chuẩn."""
     jpeg_bytes = _create_test_image("JPEG", size=(200, 150))
     file_obj = SimpleUploadedFile("plate.jpg", jpeg_bytes, content_type="image/jpeg")
 
@@ -153,16 +150,14 @@ def test_upload_valid_jpeg_success(tmp_path, monkeypatch):
     assert result.format == "JPEG"
     assert result.width == 200
     assert result.height == 150
-    assert result.relative_url.startswith("/media/parking_scans/")
-    assert result.file_path.exists()
-    assert result.file_path.is_file()
+    assert result.relative_url.startswith(
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+    )
+    assert result.file_path is None
 
 
-def test_upload_valid_png_success(tmp_path, monkeypatch):
-    """Upload ảnh PNG hợp lệ được lưu an toàn."""
-    monkeypatch.setattr(settings, "MEDIA_ROOT", tmp_path)
-    monkeypatch.setattr(settings, "MEDIA_URL", "/media/")
-
+def test_upload_valid_png_success():
+    """Upload ảnh PNG hợp lệ được lưu an toàn lên Cloudinary."""
     png_bytes = _create_test_image("PNG", size=(300, 200))
     file_obj = SimpleUploadedFile("plate.png", png_bytes, content_type="image/png")
 
@@ -171,8 +166,10 @@ def test_upload_valid_png_success(tmp_path, monkeypatch):
     assert result.format == "PNG"
     assert result.width == 300
     assert result.height == 200
-    assert result.relative_url.startswith("/media/parking_scans/")
-    assert result.file_path.exists()
+    assert result.relative_url.startswith(
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+    )
+    assert result.file_path is None
 
 
 def test_j8_draft_mode_12mp_downscaling_no_upscale():
