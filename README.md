@@ -10,13 +10,22 @@ Intelligent Parking Lot Management System (`Bãi xe Smart Mobility`) — Backend
 
 ---
 
-## 1. Project Overview & Scope
+- [1. Project Overview & Scope](#1-project-overview--scope)
+- [2. Architecture & Data Safety](#2-architecture--data-safety)
+- [3. Quick Start (Development & Operations)](#3-quick-start-development--operations)
+- [4. CI/CD & Branch Protection Rules for Repository Owner](#4-cicd--branch-protection-rules-for-repository-owner)
+- [5. Documentation & AI Operating System](#5-documentation--ai-operating-system)
+- [6. Governance & License](#6-governance--license)
+
+<details id="1-project-overview--scope">
+<summary>1. Project Overview & Scope</summary>
 
 - **Scope**: Backend REST API exclusively (`parking_management_backend`). Client applications (Web SPA / Mobile) integrate via OpenAPI 3.0 contracts.
 - **Specification Hierarchy**: The Frontend UI design ([`docs/requirements/06-frontend-srs-db-alignment.md`](docs/requirements/06-frontend-srs-db-alignment.md), `TL-01`–`TL-51`) serves as the **primary** specification; the SRS v4.1 catalog ([`docs/requirements/00-srs-catalog.md`](docs/requirements/00-srs-catalog.md)) is **secondary** where frontend screens are silent.
 - **Fixed Tech Stack**: Python `3.14.7` (Python 3.15 is strictly forbidden), Django `6.1.2` (LTS roadmap to 6.2 in April 2027), DRF `3.18.3`, PostgreSQL `18.6` via Docker Compose (psycopg `3.3.6`). Detailed rationale in [ADR-0001](docs/adr/0001-fixed-tech-stack-and-lts-roadmap.md) and [ADR-0006](docs/adr/0006-django-skeleton-v2-schema-authority.md).
 - **Public Repo Security**: Zero secrets, zero production tokens, zero live credentials committed.
 
+<!-- markdownlint-disable-next-line MD001 -->
 ### 1.1. Note for PR #13 Contributor (`@Mercenarya`) and Team
 
 Thank you to `@Mercenarya` for establishing the initial Django project skeleton and domain app structure (`accounts`, `customers`, `employees`, `vehicles`, `tickets`, `parking`, `reports`) in Pull Request #13. That foundation defined the core package layout, settings split (`config/settings/`), and modular app boundaries (`views/`, `services/`, `selectors/`, `serializers/`) that Round 29 builds upon directly.
@@ -37,9 +46,12 @@ Per Team Lead decision **TL-48**, this branch provides only the skeleton foundat
 - Refer to [`.claude/skills/13-api-first-contract-and-mock-data/SKILL.md`](.claude/skills/13-api-first-contract-and-mock-data/SKILL.md) for API-first schema contract design.
 - Utilize the pre-configured 3-tier template package layouts in each domain app.
 
+</details>
+
 ---
 
-## 2. Architecture & Data Safety
+<details id="2-architecture--data-safety">
+<summary>2. Architecture & Data Safety</summary>
 
 ### 2.1. PostgreSQL Schema Authority & Unmanaged Models ([ADR-0006](docs/adr/0006-django-skeleton-v2-schema-authority.md))
 
@@ -66,11 +78,15 @@ Per Team Lead decision **TL-48**, this branch provides only the skeleton foundat
 - **`serializers/`**: DRF `ModelSerializer` with automatic field mapping, whitespace trimming, max-length validation, and standardized error envelopes.
 - **Standard Error Envelope**: Uniform JSON response `{"code": "...", "message": "...", "details": {...}}` translating PostgreSQL SQLSTATE codes (`23514`, `55000`, `23503`, `23505`, `22023`).
 
+</details>
+
 ---
 
-## 3. Quick Start (Development & Operations)
+<details id="3-quick-start-development--operations">
+<summary>3. Quick Start (Development & Operations)</summary>
 
-### Choose how to run the backend
+<details id="choose-how-to-run-the-backend">
+<summary>Choose how to run the backend</summary>
 
 The backend provides two independent startup options depending on developer workflow preference and workstation setup:
 
@@ -81,9 +97,12 @@ The backend provides two independent startup options depending on developer work
 | **Advantages** | Self-contained packaging, automatic network/volume provisioning, and automatic PostgreSQL extension loading. | Lower RAM/CPU consumption, direct local debugging, and visual data inspection via pgAdmin 4. |
 | **Disadvantages** | Requires host resources for container virtualization. | Requires manual PostgreSQL service installation, role provisioning, and Python virtual environment management. |
 
+</details>
+
 ---
 
-### Option 1: run with Docker
+<details id="option-1-run-with-docker">
+<summary>Option 1: run with Docker</summary>
 
 Launch the complete full-stack system consisting of a PostgreSQL 18.6 database (`db`), a Python 3.14.7 application server (`web` running Gunicorn & ONNX Runtime), and an Nginx-served SPA web application (`frontend`) via pre-configured container services.
 
@@ -280,9 +299,12 @@ docker compose down
 - **Environment updates**: After editing `.env`, run `docker compose up -d` to apply updated environment settings without rebuilding images (`--build`).
 - **Forwarding new variables**: Any new environment variable required by the web container must be declared under `services.web.environment` in `docker-compose.yml`.
 
+</details>
+
 ---
 
-### Option 2: run with Python and a locally installed PostgreSQL (no Docker)
+<details id="option-2-run-with-python-and-a-locally-installed-postgresql-no-docker">
+<summary>Option 2: run with Python and a locally installed PostgreSQL (no Docker)</summary>
 
 <!-- cspell:ignore createdb -->
 <!-- cspell:ignore NOSUPERUSER -->
@@ -471,9 +493,12 @@ To run the frontend Single Page Application alongside the backend without contai
 
 If you prefer running the backend with Docker, see [Option 1: run with Docker](#option-1-run-with-docker). <!-- closing-docker-pointer -->
 
+</details>
+
 ---
 
-### Verify the backend and try a login (both options)
+<details id="verify-the-backend-and-try-a-login-both-options">
+<summary>Verify the backend and try a login (both options)</summary>
 
 After starting the backend using either option, verify operational status and test authentication:
 
@@ -526,9 +551,12 @@ Upon successful authentication, the server responds with HTTP `200 OK`, returnin
 - **Same Host Requirement**: Run the frontend and backend on the same host name (`127.0.0.1` or `localhost`) during local development to avoid cross-site cookie restrictions in modern browsers.
 - **Trusted Origins**: Default CORS and CSRF configurations (`CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`) permit cross-origin requests from `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, and `http://127.0.0.1:3000`.
 
+</details>
+
 ---
 
-### Environment variables
+<details id="environment-variables">
+<summary>Environment variables</summary>
 
 Key environment variables:
 
@@ -564,9 +592,12 @@ Key environment variables:
 - `DB_POOL_ENABLE`: Enable psycopg database connection pooling (default: `False`, using `CONN_MAX_AGE=60` with `CONN_HEALTH_CHECKS=True`).
 - `DB_CONN_MAX_AGE`: Persistent database connection lifespan in seconds (default: `60`).
 
+</details>
+
 ---
 
-### Troubleshooting
+<details id="troubleshooting">
+<summary>Troubleshooting</summary>
 
 #### Table 1: Troubleshooting Option 1 (Docker)
 
@@ -587,9 +618,12 @@ Key environment variables:
 | First license plate scan is slow or fails | OCR engine is downloading ONNX weights to `~/.cache`. | Ensure active internet connectivity during the first plate scan request. |
 | `ImproperlyConfigured: Missing required Cloudinary environment variables` | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, or `CLOUDINARY_API_SECRET` is unset in `.env`. | Configure Cloudinary credentials in `.env`. |
 
+</details>
+
 ---
 
-### Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"
+<details id="step-8-interactive-api-documentation-csrf--swagger-try-it-out">
+<summary>Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"</summary>
 
 Access the interactive API documentation and health endpoints:
 
@@ -678,7 +712,10 @@ Then in your browser developer tools (or via browser automation), add the cookie
 
 And ensure your requests send the header `X-CSRFToken` matching your browser's `csrftoken` cookie.
 
-### Step 9: Run Automated Test Suite
+</details>
+
+<details id="step-9-run-automated-test-suite">
+<summary>Step 9: Run Automated Test Suite</summary>
 
 Execute the full automated test suite with coverage against live PostgreSQL 18.6:
 
@@ -688,7 +725,10 @@ pytest -v --cov=apps
 
 *Threshold*: All tests must pass with line coverage enforced at `>= 80%` (default deterministic suite: `992` passed, `7` skipped; opt-in relative performance benchmarks marked `@pytest.mark.perf` run when `RUN_PERF_TESTS=1`).
 
-### Step 10: Performance Testing & High-Concurrency Soak Runbook (H1, H3, H4, H5, H9a, K2, K7)
+</details>
+
+<details id="step-10-performance-testing--high-concurrency-soak-runbook-h1-h3-h4-h5-h9a-k2-k7">
+<summary>Step 10: Performance Testing & High-Concurrency Soak Runbook (H1, H3, H4, H5, H9a, K2, K7)</summary>
 
 The repository provides a standalone, high-performance load testing tool (`tests/perf/load_test.py`) that uses native standard libraries (`urllib`, `http.client`, `threading`) and Pillow for synthetic runtime image generation.
 
@@ -724,7 +764,10 @@ Automated tests (`tests/parking/test_query_budgets.py`) enforce hard SQL query c
 - Check-out (`POST /api/v1/parking/sessions/{id}/check-out/`): `7 <= 9` queries
 - Sessions List (`GET /api/v1/parking/sessions/`): `267.1 RPS` (`p95 = 196.9 ms <= 277 ms`, `4.26x` Round 33 throughput at `c = 32`)
 
-### Step 11: Production Operations Runbook & Incident Playbooks (J7.d, Standard 6)
+</details>
+
+<details id="step-11-production-operations-runbook--incident-playbooks-j7d-standard-6">
+<summary>Step 11: Production Operations Runbook & Incident Playbooks (J7.d, Standard 6)</summary>
 
 This runbook provides authoritative operational procedures, parameter safety envelopes, structured log specifications, and incident response playbooks for on-call engineers managing the Smart Mobility parking backend stack.
 
@@ -974,9 +1017,14 @@ docker compose exec web python manage.py showmigrations
 docker compose exec web python manage.py migrate core <target_migration>
 ```
 
+</details>
+
+</details>
+
 ---
 
-## 4. CI/CD & Branch Protection Rules for Repository Owner
+<details id="4-cicd--branch-protection-rules-for-repository-owner">
+<summary>4. CI/CD & Branch Protection Rules for Repository Owner</summary>
 
 To maintain production stability and prevent untested code merges, the **Repository Owner** must configure GitHub Branch Protection Rules on branches `main` and `dev`:
 
@@ -993,9 +1041,12 @@ To maintain production stability and prevent untested code merges, the **Reposit
 3. **Require Linear History / No Direct Push**: Direct commits to `main` and `dev` are strictly blocked.
 4. **Preserved Schema Check**: Keep `.github/workflows/01-db-schema-check.yml` active to protect frozen `db/` schema files.
 
+</details>
+
 ---
 
-## 5. Documentation & AI Operating System
+<details id="5-documentation--ai-operating-system">
+<summary>5. Documentation & AI Operating System</summary>
 
 - **Developer & Integration Guides**:
   - [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md) — Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
@@ -1022,9 +1073,12 @@ To maintain production stability and prevent untested code merges, the **Reposit
   - [`.claude/skills/`](.claude/skills/) — Numbered specialized skills (`01`–`13`).
   - [`CLAUDE.md`](CLAUDE.md) — Project context for AI coding assistants.
 
+</details>
+
 ---
 
-## 6. Governance & License
+<details id="6-governance--license">
+<summary>6. Governance & License</summary>
 
 - **License**: All Rights Reserved. (No open-source license granted).
 - **Vulnerability Reporting**: Strictly via GitHub Private Vulnerability Reporting. See [SECURITY.md](SECURITY.md).
@@ -1037,3 +1091,5 @@ This project utilizes the 322-plate Vietnamese license plate benchmark dataset f
 - **Author**: Sonnetechnology
 - **Source Link**: [Hugging Face Dataset: sonnetechnology/license-plate-text-recognition-full](https://huggingface.co/datasets/sonnetechnology/license-plate-text-recognition-full)
 - **License**: [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/)
+
+</details>
