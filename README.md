@@ -235,9 +235,17 @@ Alternatively, seed sample data manually while containers are running:
 docker compose exec web python manage.py load_sample_data
 ```
 
-*Production note*: In production (`DEBUG=False`), `load_sample_data` is blocked to prevent accidental data contamination unless the `--force-production` flag is explicitly provided.
+*Production safety note*: In production (`DEBUG=False`), `load_sample_data` is blocked to prevent accidental data contamination unless the `--force-production` flag is explicitly provided. When run with `--force-production` in production mode, all sample account passwords are automatically reset to unusable hashes (`!`) to prevent the development password from existing in production.
 
-Sample accounts loaded from `db/02-seed.sql` do not contain usable passwords (password hashes use the unusable prefix `!`). Set account passwords using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
+For local development (`DEBUG=True`), all 20 sample accounts in `db/02-seed.sql` come pre-configured out of the box with the shared development password **`Parking@Dev2026`** (**WARNING: Dev-only password. Never use in production!**).
+
+On an already-seeded database, refresh sample account passwords to the seed password by running:
+
+```bash
+docker compose exec web python manage.py load_sample_data --refresh-passwords
+```
+
+Alternatively, individual account passwords can be set using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
 
 ```bash
 # Interactive password entry via prompt:
@@ -378,7 +386,17 @@ python manage.py migrate
 python manage.py load_sample_data
 ```
 
-Sample accounts from `db/02-seed.sql` do not contain usable passwords (password hashes use the unusable prefix `!`). Set account passwords using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
+*Production safety note*: In production (`DEBUG=False`), `load_sample_data` is blocked unless `--force-production` is passed, and all sample account passwords are automatically reset to unusable hashes (`!`) upon load.
+
+For local development (`DEBUG=True`), all 20 sample accounts in `db/02-seed.sql` come pre-configured out of the box with the shared development password **`Parking@Dev2026`** (**WARNING: Dev-only password. Never use in production!**).
+
+On an already-seeded database, refresh sample account passwords to the seed password by running:
+
+```bash
+python manage.py load_sample_data --refresh-passwords
+```
+
+Alternatively, individual account passwords can be set using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
 
 ```bash
 # Interactive password entry via prompt:

@@ -113,11 +113,27 @@ When receiving status `HTTP/1.1 200 OK` with JSON content `{"status": "healthy",
 
 ## 3. Development Password Setup & Sample Account Directory
 
-To comply with strict security standards, all 20 sample accounts loaded from `db/02-seed.sql` have unusable password hashes (Django `!` prefix). Developers must set development passwords via the management CLI command.
+For local development and frontend integration testing, all 20 sample accounts loaded from `db/02-seed.sql` come pre-configured out of the box with the shared development-only password **`Parking@Dev2026`** (**WARNING: Development-only password. In production environments (`DEBUG=False`), all sample account passwords are automatically reset to unusable hashes (`!`) by the loader safety net**).
 
-### 3.1 Command to Set Development Account Passwords
+Sample accounts can log in immediately through `/api/v1/auth/login/` using either their login email or 10-digit mobile phone number as the `identifier`, along with `Parking@Dev2026` as the password.
 
-The `set_account_password` management command accepts passwords exclusively via the `ACCOUNT_PASSWORD` environment variable (passwords must never be passed via CLI flags to avoid terminal history leaks):
+To refresh sample account passwords on an already-seeded database:
+
+- **In Docker**:
+
+  ```bash
+  docker compose exec web python manage.py load_sample_data --refresh-passwords
+  ```
+
+- **Local host**:
+
+  ```bash
+  python manage.py load_sample_data --refresh-passwords
+  ```
+
+### 3.1 Command to Set Individual Account Passwords
+
+If developers wish to assign a custom password to an individual account, the `set_account_password` management command accepts passwords securely via the `ACCOUNT_PASSWORD` environment variable or interactive prompt (passwords must never be passed via CLI flags to avoid terminal history leaks):
 
 - **In Docker**:
 

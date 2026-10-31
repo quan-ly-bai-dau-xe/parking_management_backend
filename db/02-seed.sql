@@ -10,7 +10,8 @@
 --   - PART 1: Reference Lookup Data (required in all environments; TL-02..TL-20).
 --   - PART 2: Sample Operational Data (removable block for development/QA/demo;
 --     synthetic personal data generated from fixed PRNG seed 20261017, RFC 2606
---     example domains only, and Django '!' unusable password hashes).
+--     example domains only, Argon2id hash of shared dev-only password, reset to
+--     unusable '!' hashes in production via load_sample_data safety net).
 -- ============================================================================
 
 BEGIN;
@@ -349,31 +350,31 @@ ON CONFLICT (lot_id, code) WHERE deleted_at IS NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
 -- 2.6. SYSTEM ACCOUNTS (20 ACCOUNTS: 1 MANAGER, 7 EMPLOYEE, 12 CUSTOMER — TL-01, TL-21)
---   All password_hash values use Django's unusable-password prefix '!' + 40
---   deterministic alphanumeric characters (cannot authenticate until reset).
+--   All password_hash values use an Argon2id hash of the shared dev-only password
+--   (reset to unusable hashes in production via load_sample_data safety net).
 -- ----------------------------------------------------------------------------
 INSERT INTO account (email, phone, password_hash, role, is_active, last_login_at)
 VALUES
-    ('hoang.dinh.khang@example.com', '0880721788', '!llp4Vi0ulafwxv3xktvXAwiXkJ4v8cMts9V8fQaE', 'MANAGER', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('luong.mai.phuong@example.org', '0385211625', '!E6jx193Cyen0LYHbaggJh4BtFEXbRw9shHQiJmOr', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('do.minh.quan@example.net', '0760098704', '!Mw1JDg60wCADMDDhvHGBrfJGvwwByxD1hiWsgFAv', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('truong.ngoc.bich@example.com', '0374179898', '!1pV9O7ooVSRT4k9yPB3uvMesIxfDQdcxASGP9mxM', 'EMPLOYEE', FALSE, '2026-09-10 17:30:00+07'::TIMESTAMPTZ),
-    ('vu.quoc.hung@example.org', '0361681236', '!TBtnGqDHNZdZDzKQNdQ4Sw58g6ytwMnsPMgYffnA', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('phan.thanh.thao@example.net', '0356582610', '!3qEhSwoyvkygzqgJI0gx8d32Q71TxPYQ4dNIYdvx', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('ngo.gia.bao@example.com', '0864769738', '!fMRLWGbinmVscfJWo1HmExEK38YUJCByYbj482ja', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('dinh.lan.anh@example.org', '0707739639', '!U5baTmrr7Q0ooo2DacmYGciCUkzsYyATMXxV31e2', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('trinh.xuan.truong@example.com', '0868851325', '!EEQ6iA4trd3REvq6SLnQdhLEa3ZuEBp7VMKLZDRm', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('bui.khanh.doan@example.org', '0348083802', '!KO9wxoq4WS0BHsHXAeV8hMqx1QodybQyISzE7wGt', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('lam.hoang.viet@example.net', '0790226163', '!XbdFKsAaL2cXgqa3VFODVpLfA2A8E5UWxfIzdKso', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('doan.tuyet.mai@example.com', '0779009950', '!JGvi7DK0fo1HiO6v6nPzxTpIcM66JOepnjzxnN42', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('ho.trong.nghia@example.org', '0789632200', '!U0K2g0B312E2ontN1052JVAnRTCKjJVVYds9OBM8', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('ta.minh.chau@example.net', '0708960990', '!wEX7lFt7yqMjBHWUc1CK97JrUiwM7xpYOaKT7JpH', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('cao.tien.dung@example.com', '0327855040', '!EcDeO95IZ5MHRJ1fIYDxVgmDdzOE1Pug9KS4FEQs', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('duong.hong.nhung@example.org', '0332790866', '!ZR0oBqmkRna21d97OJ6rjGYK7TyMmENpFLnJ8zUn', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('ha.manh.cuong@example.net', '0861032661', '!FlMLLALLQW4wpka4Ksns1poZvCAFjBhlko9K5svc', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('mai.phuong.thao@example.com', '0781281571', '!UU83ZWiY7FvRxqeX8MbVHDbeKFVCrnE2RW8qjYZw', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('kieu.quoc.tuan@example.org', '0392758924', '!lIF9JTbeoxZFmxSScv5d4XPHYfz9KAnlk2kbAWyy', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('chu.kim.oanh@example.net', '0387755825', '!1inni527okEx5nAcUfvwrFeRVKDdIWAttelX3FTa', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ)
+    ('hoang.dinh.khang@example.com', '0880721788', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'MANAGER', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('luong.mai.phuong@example.org', '0385211625', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('do.minh.quan@example.net', '0760098704', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('truong.ngoc.bich@example.com', '0374179898', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', FALSE, '2026-09-10 17:30:00+07'::TIMESTAMPTZ),
+    ('vu.quoc.hung@example.org', '0361681236', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('phan.thanh.thao@example.net', '0356582610', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('ngo.gia.bao@example.com', '0864769738', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('dinh.lan.anh@example.org', '0707739639', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('trinh.xuan.truong@example.com', '0868851325', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('bui.khanh.doan@example.org', '0348083802', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('lam.hoang.viet@example.net', '0790226163', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('doan.tuyet.mai@example.com', '0779009950', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('ho.trong.nghia@example.org', '0789632200', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('ta.minh.chau@example.net', '0708960990', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('cao.tien.dung@example.com', '0327855040', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('duong.hong.nhung@example.org', '0332790866', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('ha.manh.cuong@example.net', '0861032661', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('mai.phuong.thao@example.com', '0781281571', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('kieu.quoc.tuan@example.org', '0392758924', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('chu.kim.oanh@example.net', '0387755825', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ)
 ON CONFLICT (lower(email)) WHERE deleted_at IS NULL AND email IS NOT NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
