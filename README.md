@@ -85,16 +85,27 @@ The backend provides two independent startup options depending on developer work
 
 ### Option 1: run with Docker
 
-Launch the complete system consisting of a PostgreSQL 18.6 database and a Python 3.14.7 application server (Gunicorn & ONNX Runtime) via pre-configured container services.
+Launch the complete full-stack system consisting of a PostgreSQL 18.6 database (`db`), a Python 3.14.7 application server (`web` running Gunicorn & ONNX Runtime), and an Nginx-served SPA web application (`frontend`) via pre-configured container services.
 
-#### 1. Clone repository and create environment file
+#### 1. Repository Layout & Sibling Frontend Requirement
 
-Clone the repository to your local machine:
+The full-stack Docker Compose setup expects the frontend repository (`parking_management_frontend`) to reside as a sibling directory in the same parent folder as the backend repository:
+
+```text
+parent_directory/
+├── parking_management_backend/     # Backend Django REST API & Docker Compose
+└── parking_management_frontend/    # Frontend SPA web application
+```
+
+Clone both repositories into the same parent folder:
 
 ```bash
 git clone https://github.com/quan-ly-bai-dau-xe/parking_management_backend.git
+git clone https://github.com/quan-ly-bai-dau-xe/parking_management_frontend.git
 cd parking_management_backend
 ```
+
+#### 2. Create environment configuration
 
 Create the `.env` configuration file from `.env.example`:
 
@@ -115,7 +126,11 @@ POSTGRES_PASSWORD=your_password_here
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
+# Uncomment ONLY if the sibling parking_management_frontend repository is cloned (starts db, web and frontend):
+# COMPOSE_PROFILES=frontend
 ```
+
+`COMPOSE_PROFILES=frontend` makes `docker compose up --build` fail when the sibling `parking_management_frontend` directory is missing (Docker cannot find the build context). Leave it commented out if you do not have the frontend repository.
 
 `DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404.
 
@@ -125,27 +140,84 @@ Generate a secure random `SECRET_KEY`:
 python -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
-#### Docker Compose Environment Note
+##### Docker Compose Environment & Frontend Controls
 
 The `.env` file is read by Docker Compose on the host machine to interpolate `${...}` variables and is NOT copied into the container image (`.dockerignore`). Any environment variable required by the application inside the container must be explicitly declared and forwarded under `services.web.environment` in `docker-compose.yml`. This requirement is verified by `tests/core/test_compose_env_forwarding.py`.
 
-Other configuration variables have built-in defaults in `docker-compose.yml`, so a minimal `.env` file containing only the required variables is sufficient.
+Key environment variables controlling the frontend and Docker Compose services:
 
-#### 2. Start all services
+| Variable | Default Value | Description |
+|---|---|---|
+| `COMPOSE_PROFILES` | `(unset)` | Controls which profile-gated services are started. Set to `frontend` for full-stack startup (`db`, `web`, and `frontend`), or leave commented out / unset (the default in `.env.example`) for standalone backend mode (`db` and `web` only). |
+| `FRONTEND_PORT` | `5173` | Host port mapped to the frontend container (`127.0.0.1:${FRONTEND_PORT:-5173}:5173`). Changing `FRONTEND_PORT` from `5173` requires updating `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` with matching `http://localhost:<FRONTEND_PORT>` and `http://127.0.0.1:<FRONTEND_PORT>` origins. |
+| `FRONTEND_CONTEXT` | `../parking_management_frontend` | Build context directory for the frontend Docker image. |
+| `WEB_PORT` | `8000` | Host port mapped to the backend container (`127.0.0.1:${WEB_PORT:-8000}:8000`). |
+| `POSTGRES_PORT` | `5432` | Host port mapped to PostgreSQL (`127.0.0.1:${POSTGRES_PORT:-5432}:5432`). |
 
-Build images and launch all services:
+##### Environment files
+
+Each repository maintains its own `.env` configuration file in its respective root folder:
+
+- **Backend environment** (`parking_management_backend/.env`): Configures Django, database credentials, security secrets, and Docker Compose settings (`COMPOSE_PROFILES`, `FRONTEND_PORT`, `FRONTEND_CONTEXT`).
+- **Frontend environment** (`parking_management_frontend/.env`): Configures client-side build flags (such as `VITE_USE_MOCK`).
+
+These environment files remain strictly separate and are never merged into one file. Docker Compose in the backend does not read or forward frontend variables (`VITE_*`).
+
+Key operational guidelines for `parking_management_frontend/.env`:
+
+- `VITE_USE_MOCK=false`: The frontend application connects to the real backend REST API without mock data fallback. This setting is required for full-stack operation.
+- `VITE_USE_MOCK=true`: The customer screens use local mock data. Note that frontend developers may default to `true` on their local machines.
+- **Image rebuild requirement**: The frontend multi-stage Docker build copies the frontend repository directory (`COPY . .`) and executes `npm run build`, baking `VITE_*` values directly into the static bundle served by Nginx. Consequently, after modifying `parking_management_frontend/.env`, you must rebuild the image using `docker compose up --build -d` (a plain `docker compose up -d` reuses the cached image and will not reflect `.env` changes).
+- **Local development (no Docker)**: Running `vite dev` in the frontend repository reads the exact same `.env` file.
+
+#### 3. Start services
+
+##### Standard Full-Stack Startup
+
+Build images and launch all three containers (`db`, `web`, and `frontend`):
 
 ```bash
-# Build images and start services in the foreground:
+# Build images and start all services in the foreground:
 docker compose up --build
 
-# Or build images and start in detached mode:
+# Or build images and start in detached (background) mode:
 docker compose up --build -d
 ```
 
-*Security note*: Host ports are bound exclusively to the loopback interface `127.0.0.1` (`127.0.0.1:${WEB_PORT:-8000}` and `127.0.0.1:${POSTGRES_PORT:-5432}`).
+*Security note*: All host ports are bound exclusively to the local loopback interface `127.0.0.1` (`127.0.0.1:${FRONTEND_PORT:-5173}`, `127.0.0.1:${WEB_PORT:-8000}`, and `127.0.0.1:${POSTGRES_PORT:-5432}`).
 
-#### 3. Seed sample data and set credentials
+##### Access URLs
+
+Once all containers are healthy and running, access the services via:
+
+| Service / Interface | URL | Note |
+|---|---|---|
+| **Frontend Web Application** | `http://localhost:5173` (or `http://127.0.0.1:5173`) | React SPA served by Nginx, proxying `/api/` to backend |
+| **Backend REST API** | `http://localhost:8000` (or `http://127.0.0.1:8000`) | Django / Gunicorn direct API root |
+| **Interactive Swagger UI** | `http://localhost:8000/api/v1/schema/swagger-ui/` | Interactive OpenAPI documentation and test client |
+| **ReDoc API Documentation** | `http://localhost:8000/api/v1/schema/redoc/` | Clean static OpenAPI reference documentation |
+
+##### Standalone Backend Mode (Without Frontend Repository)
+
+If you only need to work on the backend API or if the sibling `parking_management_frontend` repository is absent, use one of the following two methods to start `db` and `web` cleanly without build or missing-context errors:
+
+- **Method 1 (Specify target services via CLI)**:
+  Explicitly specify only the database and web services:
+
+  ```bash
+  docker compose up --build db web
+  ```
+
+- **Method 2 (Disable frontend profile in `.env`)**:
+  Leave `# COMPOSE_PROFILES=frontend` commented out in `.env` (the default in `.env.example`), or ensure `COMPOSE_PROFILES` is unset or empty. Then run the standard startup command:
+
+  ```bash
+  docker compose up --build
+  ```
+
+  Docker Compose skips the profile-gated `frontend` service and starts only `db` and `web`, exiting cleanly with code 0.
+
+#### 4. Seed sample data and set credentials
 
 By default, `LOAD_SAMPLE_DATA` is set to `0` to prevent overwriting existing data. To automatically seed sample data on container startup, set `LOAD_SAMPLE_DATA=1` in `.env` or start with:
 
@@ -183,15 +255,19 @@ Sample test accounts extracted from `db/02-seed.sql`:
 | `EMPLOYEE` | `luong.mai.phuong@example.org` | `0385211625` |
 | `CUSTOMER` | `trinh.xuan.truong@example.com` | `0868851325` |
 
-#### 4. Stop and update configuration
+#### 5. Stop services and data preservation
 
-To stop services while preserving database volume data:
+To stop services safely while preserving all database records:
 
 ```bash
+# Stop running containers without removing them:
 docker compose stop
+
+# Or stop and remove containers and networks safely:
+docker compose down
 ```
 
-- **Data loss warning**: Running `docker compose down -v` permanently deletes the database volume `parking_postgres_data`. Use `docker compose down` (without the `-v` flag) to preserve persistent data.
+- **Critical Data Loss Warning**: Running `docker compose down -v` permanently deletes the named volume `parking_postgres_data` and all stored database records. Always use `docker compose down` (without the `-v` flag) to preserve persistent data.
 - **Password changes**: Modifying `POSTGRES_PASSWORD` in `.env` after the database volume has already been initialized does not update the password inside PostgreSQL (causing authentication failures). Retain the initial password or remove the development volume to reinitialize from scratch.
 - **Environment updates**: After editing `.env`, run `docker compose up -d` to apply updated environment settings without rebuilding images (`--build`).
 - **Forwarding new variables**: Any new environment variable required by the web container must be declared under `services.web.environment` in `docker-compose.yml`.
@@ -276,14 +352,16 @@ POSTGRES_USER=parking_user
 POSTGRES_PASSWORD=your_password_here
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+CSRF_TRUSTED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
 CLOUDINARY_CLOUD_NAME=your_cloud_name
 CLOUDINARY_API_KEY=your_api_key
 CLOUDINARY_API_SECRET=your_api_secret
 ```
 
-`DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404. While the backend starts with minimal database and secret settings, a browser frontend accessing the API from another origin (such as `http://localhost:3000`) requires `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` to prevent HTTP 403 Forbidden CSRF rejection errors (`PROP-4.1-P06`).
+Cloudinary credentials (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) are obtained from Cloudinary Console Dashboard -> Settings -> API Keys at `https://console.cloudinary.com/`. Note: Backend startup halts immediately with `django.core.exceptions.ImproperlyConfigured` if any of these three credentials are unset.
+
+`DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404. While the backend starts with minimal database and secret settings, a browser frontend accessing the API from another origin (such as `http://localhost:5173` or `http://localhost:3000`) requires `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` to prevent HTTP 403 Forbidden CSRF rejection errors (`PROP-4.1-P06`).
 
 Generate a secure random `SECRET_KEY`:
 
@@ -336,6 +414,12 @@ Start the Django development server:
 python manage.py runserver
 ```
 
+Once running, access the local API endpoints and documentation via:
+
+- **Backend REST API**: `http://127.0.0.1:8000` (or `http://localhost:8000`)
+- **Interactive Swagger UI**: `http://127.0.0.1:8000/api/v1/schema/swagger-ui/`
+- **ReDoc API Documentation**: `http://127.0.0.1:8000/api/v1/schema/redoc/`
+
 Run the automated test suite to confirm end-to-end functionality:
 
 ```bash
@@ -347,6 +431,25 @@ pytest
 - `DEBUG=True` is required when running with `runserver` so that the development server serves Swagger UI static CSS and JavaScript assets.
 - License plate recognition automatically downloads ONNX weight files from the network to `~/.cache` on the first scan request if `PARKING_OCR_MODELS_DIR` does not contain pre-baked weights (refer to `apps/parking/services/ocr.py`), requiring internet connectivity during the initial scan.
 - Native Windows PostgreSQL installer, pgAdmin 4 GUI configuration screens, and Windows service (`services.msc`) management are marked as `(not verified)` in automated headless test pipelines.
+
+#### 8. Running the frontend application locally (optional)
+
+To run the frontend Single Page Application alongside the backend without container virtualization:
+
+1. Open a separate terminal and navigate to the sibling `parking_management_frontend` repository:
+
+   ```bash
+   cd ../parking_management_frontend
+   ```
+
+2. Install dependencies and start the Vite development server:
+
+   ```bash
+   npm ci
+   npm run dev
+   ```
+
+3. Access the web interface at `http://localhost:5173`. The Vite development server (`vite.config.js`) automatically proxies all `/api` requests to the local backend at `http://127.0.0.1:8000`.
 
 If you prefer running the backend with Docker, see [Option 1: run with Docker](#option-1-run-with-docker). <!-- closing-docker-pointer -->
 
@@ -403,7 +506,7 @@ Upon successful authentication, the server responds with HTTP `200 OK`, returnin
 - **Frontend Integration Guide**: For comprehensive integration patterns, see [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md).
 - **Security & Authentication Architecture**: See [Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"](#step-8-interactive-api-documentation-csrf--swagger-try-it-out) for detailed cookie security, Argon2 password hashing, and token rotation specifications.
 - **Same Host Requirement**: Run the frontend and backend on the same host name (`127.0.0.1` or `localhost`) during local development to avoid cross-site cookie restrictions in modern browsers.
-- **Trusted Origins**: Default CORS and CSRF configurations (`CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`) permit cross-origin requests from `http://localhost:3000` and `http://127.0.0.1:3000`.
+- **Trusted Origins**: Default CORS and CSRF configurations (`CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`) permit cross-origin requests from `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, and `http://127.0.0.1:3000`.
 
 ---
 
