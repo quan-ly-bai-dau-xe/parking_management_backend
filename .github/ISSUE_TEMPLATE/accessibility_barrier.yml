@@ -1,0 +1,115 @@
+name: 'Accessibility Barrier Report'
+description: 'Report an accessibility barrier in API responses, OpenAPI docs, or repository documentation'
+title: '[A11y]: '
+labels:
+  - 'accessibility'
+body:
+  - type: markdown
+    attributes:
+      value: |
+        This repository hosts the backend REST API. Review [ACCESSIBILITY.md](../../ACCESSIBILITY.md) for scope, machine-readable error codes, and known limitations before submitting.
+        End-user visual UI accessibility (HTML landmarks, keyboard focus, contrast) belongs to the separate frontend repository.
+  - type: input
+    id: summary
+    attributes:
+      label: 'Summary'
+      description: 'Short summary of the accessibility barrier'
+      placeholder: 'e.g., Error response on endpoint /api/v1/... omits machine-readable code'
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: 'Module'
+      description: 'Affected backend module or documentation area'
+      options:
+        - auth
+        - employees
+        - customers
+        - vehicles
+        - tickets
+        - parking
+        - content
+        - audit
+        - reports
+        - docs
+        - infrastructure
+    validations:
+      required: true
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: 'Steps to reproduce'
+      description: 'Exact endpoint, documentation page, or workflow where the barrier occurs'
+      placeholder: |
+        1. Call endpoint or open documentation section ...
+        2. Inspect response structure or assistive tool output
+    validations:
+      required: true
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: 'Expected vs actual behavior'
+      description: 'Describe expected machine-readable or accessible output versus actual output'
+      placeholder: |
+        Expected: Stable error code in { "code": "MSG-...", "message": "...", "details": {} } per ACCESSIBILITY.md
+        Actual: Missing or inconsistent field structure
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime_environment
+    attributes:
+      label: 'Environment'
+      description: 'How the backend or documentation was accessed'
+      options:
+        - 'Docker Compose (PostgreSQL 18.6)'
+        - 'Local Python 3.14 + PostgreSQL 18.6'
+        - 'Automated CI / Linux container'
+        - 'GitHub repository documentation'
+        - 'Other'
+    validations:
+      required: true
+  - type: input
+    id: operating_system
+    attributes:
+      label: 'Operating system'
+      description: 'Operating system and version'
+      placeholder: 'e.g., Windows 11, Ubuntu 24.04 LTS, macOS 15'
+    validations:
+      required: true
+  - type: input
+    id: branch_or_commit
+    attributes:
+      label: 'Branch or commit'
+      description: 'Branch name or commit SHA tested'
+      placeholder: 'e.g., dev or commit dff3aac'
+    validations:
+      required: true
+  - type: textarea
+    id: client_and_assistive_tech
+    attributes:
+      label: 'Client and assistive technology'
+      description: 'Screen reader, browser, CLI client, or assistive tooling used (if applicable)'
+      placeholder: 'e.g., NVDA 2024.4, VoiceOver, curl, custom API client'
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: 'Logs and API payload'
+      description: 'Relevant JSON response, headers, or logs. Warning: remove secrets, tokens, personal data and real license plates before submitting.'
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 'Pre-submission checks'
+      description: 'Confirm every item before submitting'
+      options:
+        - label: 'I have searched existing issues and pull requests to avoid duplicates.'
+          required: true
+        - label: 'I have verified that this report contains no secrets, tokens, personal data, or real license plates.'
+          required: true
+        - label: 'I confirm this is not a security vulnerability (vulnerabilities must be reported privately per SECURITY.md).'
+          required: true

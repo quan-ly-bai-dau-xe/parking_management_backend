@@ -1,0 +1,107 @@
+name: 'Bug Report'
+description: 'Report a defect in the parking_management_backend REST API'
+title: '[Bug]: '
+labels:
+  - 'bug'
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to report a reproducible defect in the backend REST API. Do not include credentials, tokens, personal data, or real license plates.
+        For security vulnerabilities, use [GitHub Private Vulnerability Reporting](https://github.com/quan-ly-bai-dau-xe/parking_management_backend/security/advisories/new) instead of a public issue.
+  - type: input
+    id: summary
+    attributes:
+      label: 'Summary'
+      description: 'Short, factual summary of the defect'
+      placeholder: 'e.g., POST /api/v1/auth/login/ returns 500 when payload is empty'
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: 'Module'
+      description: 'Primary backend module affected'
+      options:
+        - auth
+        - employees
+        - customers
+        - vehicles
+        - tickets
+        - parking
+        - content
+        - audit
+        - reports
+        - docs
+        - infrastructure
+    validations:
+      required: true
+  - type: textarea
+    id: steps_to_reproduce
+    attributes:
+      label: 'Steps to reproduce'
+      description: 'Exact steps, HTTP method, endpoint, and synthetic payload to reproduce the behavior'
+      placeholder: |
+        1. Start the backend service via Docker Compose or local Python
+        2. Send POST /api/v1/... with synthetic payload ...
+        3. Observe HTTP status code and JSON body
+    validations:
+      required: true
+  - type: textarea
+    id: expected_vs_actual
+    attributes:
+      label: 'Expected vs actual behavior'
+      description: 'State what should happen and what happened instead'
+      placeholder: |
+        Expected: HTTP 400 with error envelope { "code": "MSG-...", "message": "...", "details": {} }
+        Actual: HTTP 500 Internal Server Error
+    validations:
+      required: true
+  - type: dropdown
+    id: runtime_environment
+    attributes:
+      label: 'Environment'
+      description: 'How the backend is running'
+      options:
+        - 'Docker Compose (PostgreSQL 18.6)'
+        - 'Local Python 3.14 + PostgreSQL 18.6'
+        - 'Automated CI / Linux container'
+        - 'Other'
+    validations:
+      required: true
+  - type: input
+    id: operating_system
+    attributes:
+      label: 'Operating system'
+      description: 'Host operating system and version'
+      placeholder: 'e.g., Windows 11, Ubuntu 24.04 LTS, macOS 15'
+    validations:
+      required: true
+  - type: input
+    id: branch_or_commit
+    attributes:
+      label: 'Branch or commit'
+      description: 'Branch name or commit SHA tested'
+      placeholder: 'e.g., dev or commit dff3aac'
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 'Logs and diagnostics'
+      description: 'Relevant terminal output, stack trace, or HTTP response. Warning: remove secrets, tokens, personal data and real license plates before submitting.'
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 'Pre-submission checks'
+      description: 'Confirm every item before submitting'
+      options:
+        - label: 'I have searched existing issues and pull requests to avoid duplicates.'
+          required: true
+        - label: 'I have verified that this report contains no secrets, tokens, personal data, or real license plates.'
+          required: true
+        - label: 'I confirm this is not a security vulnerability (vulnerabilities must be reported privately per SECURITY.md).'
+          required: true
