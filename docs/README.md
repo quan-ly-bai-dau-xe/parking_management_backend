@@ -54,3 +54,13 @@ Integration and development guides for client applications:
   - [`09-reference-data-and-tooling.md`](guides/frontend-api/09-reference-data-and-tooling.md): Administrative unit cascading hierarchy, TypeScript types generation, Postman import.
   - [`10-troubleshooting-and-cloudinary.md`](guides/frontend-api/10-troubleshooting-and-cloudinary.md): 9 common troubleshooting scenarios, unimplemented feature caveats, Cloudinary HTTPS image URLs & null-guard handling.
 - [`api-endpoints.md`](api-endpoints.md): Compact index of currently registered routes; use the integration guide for detailed examples and workflows.
+
+## 5. Community & Governance Standards
+
+Repository health, code of conduct, contributing standards, and accessibility statements:
+
+- [`LICENSE`](../LICENSE): Proprietary license and copyright statement.
+- [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md): Contributor Covenant v2.1 code of conduct, enforcement reporting, and security redirect.
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md): Collaboration standards, Git branching workflow (`ADR-0002`), Safe Delete policy (`ADR-0003`), code ownership, and automated quality gates.
+- [`SECURITY.md`](../SECURITY.md): Vulnerability reporting policy via GitHub Private Vulnerability Reporting.
+- [`ACCESSIBILITY.md`](../ACCESSIBILITY.md): Backend REST API accessibility features, machine-readable error codes, and barrier reporting.

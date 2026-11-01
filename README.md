@@ -6,7 +6,7 @@ Intelligent Parking Lot Management System (`Bãi xe Smart Mobility`) — Backend
 [![Django 6.1.2](https://img.shields.io/badge/django-6.1.2-green.svg)](https://www.djangoproject.com/)
 [![PostgreSQL 18.6](https://img.shields.io/badge/postgresql-18.6-blue.svg)](https://www.postgresql.org/)
 [![DRF 3.18.3](https://img.shields.io/badge/drf-3.18.3-red.svg)](https://www.django-rest-framework.org/)
-[![License: All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey.svg)](#6-governance--license)
+[![License: All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey.svg)](LICENSE)
 
 ---
 
@@ -1080,7 +1080,13 @@ To maintain production stability and prevent untested code merges, the **Reposit
 <details id="6-governance--license">
 <summary>6. Governance & License</summary>
 
-- **License**: All Rights Reserved. (No open-source license granted).
+- **License**: [All Rights Reserved](LICENSE). (Proprietary software; no open-source license granted).
+- **Community**:
+  - [Contributing Guidelines](CONTRIBUTING.md)
+  - [Code of Conduct](CODE_OF_CONDUCT.md)
+  - [Security Policy](SECURITY.md)
+  - [Accessibility Statement](ACCESSIBILITY.md)
+  - [License](LICENSE)
 - **Vulnerability Reporting**: Strictly via GitHub Private Vulnerability Reporting. See [SECURITY.md](SECURITY.md).
 
 ### 6.1 Third-Party Dataset Attribution (CC-BY-4.0)
