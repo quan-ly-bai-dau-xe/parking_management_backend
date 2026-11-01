@@ -26,6 +26,9 @@ from apps.parking.services.ocr import (
 )
 from apps.parking.services.upload import validate_and_save_image
 from apps.vehicles.models import Vehicle
+from tests.parking.contract_reference_validator import (
+    validate_plate_scan_reference_contract,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -542,3 +545,216 @@ def test_ocr_recognizer_thread_safe_singleton_and_warmup():
 
     first_inst = instances[0]
     assert all(inst is first_inst for inst in instances)
+
+
+# ============================================================================
+# R1 & Decision B1 (TL-55): Backend Plate Scan Preview Mode Tests
+# ============================================================================
+
+
+def test_plate_scan_preview_true_does_not_upload_to_cloudinary_and_returns_null_image_url(
+    auth_employee, monkeypatch, fake_cloudinary_storage
+):
+    """
+    R1: Khi preview=true, endpoint thực thi OCR, sửa ký tự, tra cứu xe nhưng KHÔNG upload Cloudinary
+    và trả về image_url = null, tuân thủ đúng canonical contract H6.
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(
+        DummyPlateRecognizer(default_plate="51K-992.14", default_confidence=98.5)
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "preview": "true"},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["image_url"] is None
+    assert resp.data["plate_final"] == "51K99214"
+    assert len(fake_cloudinary_storage.upload_calls) == 0
+    validate_plate_scan_reference_contract(resp.data)
+    set_global_recognizer(None)
+
+
+def test_plate_scan_preview_false_uploads_to_cloudinary_and_returns_image_url(
+    auth_employee, monkeypatch, fake_cloudinary_storage
+):
+    """
+    R1: Khi preview=false, endpoint upload ảnh lên Cloudinary và trả về image_url hợp lệ.
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(
+        DummyPlateRecognizer(default_plate="51K-992.14", default_confidence=98.5)
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "preview": "false"},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["image_url"] is not None
+    assert resp.data["image_url"].startswith("https://res.cloudinary.com/test-cloud/")
+    assert len(fake_cloudinary_storage.upload_calls) == 1
+    validate_plate_scan_reference_contract(resp.data)
+    set_global_recognizer(None)
+
+
+def test_plate_scan_preview_omitted_defaults_to_false(
+    auth_employee, monkeypatch, fake_cloudinary_storage
+):
+    """
+    R1: Khi không truyền preview, mặc định là preview=false (upload Cloudinary, tương thích ngược).
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(
+        DummyPlateRecognizer(default_plate="51K-992.14", default_confidence=98.5)
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["image_url"] is not None
+    assert len(fake_cloudinary_storage.upload_calls) == 1
+    validate_plate_scan_reference_contract(resp.data)
+    set_global_recognizer(None)
+
+
+@pytest.mark.parametrize(
+    "invalid_preview",
+    ["invalid", "1", "0", "yes", "no", "true_invalid", "2", 123],
+)
+def test_plate_scan_invalid_preview_rejected_with_400_prop_gen_p01(
+    auth_employee, invalid_preview, fake_cloudinary_storage
+):
+    """
+    R1: Giá trị preview không hợp lệ bị từ chối với HTTP 400 Bad Request và PROP-GEN-P01.
+    """
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "preview": invalid_preview},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_400_BAD_REQUEST
+    assert resp.data["code"] == "PROP-GEN-P01"
+    assert "preview" in resp.data["details"]
+    assert len(fake_cloudinary_storage.upload_calls) == 0
+
+
+def test_plate_scan_preview_true_with_no_plate_returns_422(
+    auth_employee, monkeypatch, fake_cloudinary_storage
+):
+    """
+    R1: Khi preview=true nhưng ảnh không nhận diện được biển số, trả về HTTP 422 PROP-4.5.1-P06.
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(DummyPlateRecognizer(default_plate=""))
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "preview": "true"},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
+    assert resp.data["code"] == "PROP-4.5.1-P06"
+    assert len(fake_cloudinary_storage.upload_calls) == 0
+    set_global_recognizer(None)
+
+
+def test_plate_scan_preview_true_enforces_permissions(auth_customer):
+    """
+    R1: Kiểm tra phân quyền với preview=true (anonymous -> 401, CUSTOMER -> 403).
+    """
+    file_obj1 = _create_jpeg_file()
+    anon_client = APIClient()
+    anon_resp = anon_client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj1, "preview": "true"},
+        format="multipart",
+    )
+    assert anon_resp.status_code == status.HTTP_401_UNAUTHORIZED
+    assert anon_resp.data["code"] == "MSG-4.1-M02"
+
+    file_obj2 = _create_jpeg_file()
+    cust_client = APIClient()
+    cust_client.force_authenticate(user=auth_customer)
+    cust_resp = cust_client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj2, "preview": "true"},
+        format="multipart",
+    )
+    assert cust_resp.status_code == status.HTTP_403_FORBIDDEN
+    assert cust_resp.data["code"] == "MSG-4.2-M01"
+
+
+@pytest.mark.parametrize(
+    ("preview_value", "expected_is_preview"),
+    [
+        ("TRUE", True),
+        ("True", True),
+        ("tRuE", True),
+        (True, True),
+        ("FALSE", False),
+        ("False", False),
+        ("fAlSe", False),
+        (False, False),
+        ("", False),
+    ],
+)
+def test_plate_scan_preview_case_insensitive_and_boolean_types(
+    auth_employee,
+    monkeypatch,
+    fake_cloudinary_storage,
+    preview_value,
+    expected_is_preview,
+):
+    """
+    R1: parse_preview_flag chấp nhận boolean, string hoa/thường, chuỗi rỗng một cách nhất quán.
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(
+        DummyPlateRecognizer(default_plate="51K-992.14", default_confidence=98.5)
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "preview": preview_value},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    if expected_is_preview:
+        assert resp.data["image_url"] is None
+        assert len(fake_cloudinary_storage.upload_calls) == 0
+    else:
+        assert resp.data["image_url"] is not None
+        assert len(fake_cloudinary_storage.upload_calls) == 1
+
+    set_global_recognizer(None)

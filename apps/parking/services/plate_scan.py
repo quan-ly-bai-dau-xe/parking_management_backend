@@ -55,7 +55,7 @@ class PlateScanExecutionResult:
 
 def compose_scan_contract_payload(
     scan_result: PlateScanResult,
-    image_relative_url: str,
+    image_relative_url: str | None,
     vehicle_lookup_data: dict[str, Any] | None,
     is_blacklisted: bool,
     open_session_data: dict[str, Any] | None,
@@ -169,13 +169,14 @@ def execute_plate_scan(
     lookup_func: Callable[[str], Any] | None = None,
     stages: dict[str, float] | None = None,
     threshold: float | None = None,
+    preview: bool = False,
 ) -> PlateScanExecutionResult:
     """
     Orchestrate end-to-end plate scan execution:
     1. Image decode & safety validation (process_uploaded_image).
     2. Concurrency-gated OCR inference (get_plate_recognizer).
     3. Candidate presence validation (PROP-4.5.1-P06 on empty candidates).
-    4. Disk persistence with defensive unlink on exception (save_processed_image).
+    4. Disk persistence with defensive unlink on exception (save_processed_image), skipped when preview=True.
     5. Combined vehicle context lookup (get_combined_vehicle_context).
     6. Canonical contract payload composition (compose_scan_contract_payload).
     7. Observability timing collection across decode, detect, ocr1, ocr2, write, db.
@@ -216,10 +217,14 @@ def execute_plate_scan(
     # 4. Save processed image to Cloudinary (with compensating destroy rollback on failure)
     relative_url: str | None = None
     try:
-        t_wr0 = time.perf_counter()
-        _, relative_url = save_processed_image(processed_image)
-        if stages is not None:
-            stages["write"] = (time.perf_counter() - t_wr0) * 1000.0
+        if preview:
+            if stages is not None:
+                stages["write"] = 0.0
+        else:
+            t_wr0 = time.perf_counter()
+            _, relative_url = save_processed_image(processed_image)
+            if stages is not None:
+                stages["write"] = (time.perf_counter() - t_wr0) * 1000.0
 
         best_cand = scan_result.best_candidate
         raw_text = best_cand.plate_text
