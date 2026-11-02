@@ -73,7 +73,11 @@ Content-Type: application/json
 - **Request Format**: `multipart/form-data` (with `X-CSRFToken` header).
 - **Form Fields**:
   - `image` (required): Plate image file (JPEG, PNG, WebP; max size 5MB).
-  - `gate_id` (optional): ID of barrier gate submitting the scan.
+  - `gate_id` (optional, positive integer): ID of barrier gate submitting the scan. Forwarded to service execution and tracked in request observability logs (`_obs_gate_id`). Invalid values (non-numeric, <= 0) return HTTP 400 Bad Request with code `PROP-GEN-P01`.
+  - `preview` (optional, boolean string `"true"` or `"false"`, default: `false`):
+    - When `true`: Run image decode, OCR, position-aware corrections, review policy evaluation, and vehicle/session/blacklist lookups without uploading the image to Cloudinary; returns `"image_url": null`. Optimized for continuous camera auto-detection loops.
+    - When `false` or omitted: Authoritative scan mode, uploads image to Cloudinary and returns permanent HTTPS image URL.
+    - Note: Invalid values trigger HTTP 400 Bad Request with code `PROP-GEN-P01`.
 
 #### Example 1: Successful Automatic Approval (`review_status: "AUTO"`)
 
@@ -326,6 +330,124 @@ X-Request-ID: bb89b602b5694d7fb7c66f7158faf1ec
   "code": "PROP-4.5.1-P06",
   "message": "Không nhận diện được biển số xe từ hình ảnh đã cung cấp.",
   "details": {}
+}
+```
+
+#### Example 4: Continuous Camera Preview Scan (`preview: "true"`, `image_url: null`)
+
+Used by the laptop webcam continuous detection loop to obtain OCR recognition, review status, and vehicle lookup without persisting images to Cloudinary:
+
+```http
+POST /api/v1/parking/plate-scans/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]; sessionid=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+[Multipart Form Data: image=frame_preview.jpg (image/jpeg), gate_id=1, preview="true"]
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Request-ID: e12d8a901f4c478bb2f3e8b0918c4621
+
+{
+  "plate_raw": "43K-860.50",
+  "plate_final": "43K86050",
+  "candidates": [
+    {
+      "plate_text": "43K-860.50",
+      "plate_normalized": "43K86050",
+      "confidence": 98.5,
+      "char_confidences": [
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5
+      ],
+      "min_char_confidence": 98.5,
+      "bounding_box": {
+        "x1": 50,
+        "y1": 50,
+        "x2": 350,
+        "y2": 150
+      }
+    }
+  ],
+  "best_candidate": {
+    "plate_text": "43K86050",
+    "plate_normalized": "43K86050",
+    "confidence": 98.5,
+    "char_confidences": [
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5
+    ],
+    "min_char_confidence": 98.5,
+    "bounding_box": {
+      "x1": 50,
+      "y1": 50,
+      "x2": 350,
+      "y2": 150
+    }
+  },
+  "image_url": null,
+  "vehicle_lookup": {
+    "vehicle": {
+      "id": 1,
+      "code": "XE0001",
+      "license_plate": "43K-860.50",
+      "license_plate_norm": "43K86050",
+      "model_name": "Vios 1.5G",
+      "brand": "Toyota",
+      "color": "Trắng",
+      "vehicle_type": "Ô tô",
+      "vehicle_type_code": "CAR"
+    },
+    "customer": {
+      "id": 16,
+      "code": "KH0001",
+      "full_name": "Trịnh Xuân Trường",
+      "phone": "0868851325",
+      "is_anonymized": false
+    },
+    "parking_position": {
+      "slot_id": 1,
+      "slot_code": "A-01",
+      "zone_code": "A",
+      "floor_code": "B1",
+      "floor_name": "Tầng B1",
+      "display_text": "Tầng B1 - Zone A - A-01"
+    },
+    "active_ticket": {
+      "id": 1,
+      "code": "VT0001",
+      "ticket_type_name": "Vé tháng",
+      "price": "500000.00",
+      "effective_from": "2026-03-31T17:00:00+00:00",
+      "effective_to": "2026-11-30T17:00:00+00:00",
+      "status": "ACTIVE"
+    },
+    "open_session": null,
+    "is_blacklisted": false
+  },
+  "is_blacklisted": false,
+  "open_session": null,
+  "engine_name": "dummy",
+  "latency_ms": 1.0,
+  "review_status": "AUTO",
+  "review_reasons": [],
+  "corrections": [],
+  "suggestions": []
 }
 ```
 
