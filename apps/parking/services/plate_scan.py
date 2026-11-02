@@ -51,6 +51,7 @@ class PlateScanExecutionResult:
     review_reasons: list[str]
     plate_normalized: str
     saved_file_path: Path | None = None
+    gate_id: int | None = None
 
 
 def compose_scan_contract_payload(
@@ -170,6 +171,7 @@ def execute_plate_scan(
     stages: dict[str, float] | None = None,
     threshold: float | None = None,
     preview: bool = False,
+    gate_id: int | None = None,
 ) -> PlateScanExecutionResult:
     """
     Orchestrate end-to-end plate scan execution:
@@ -274,6 +276,7 @@ def execute_plate_scan(
             review_reasons=payload["review_reasons"],
             plate_normalized=final_norm_plate,
             saved_file_path=None,
+            gate_id=gate_id,
         )
     except Exception:
         # Anchored match on the whole url (host included), never a substring test.

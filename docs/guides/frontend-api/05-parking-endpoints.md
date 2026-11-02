@@ -73,7 +73,7 @@ Content-Type: application/json
 - **Request Format**: `multipart/form-data` (with `X-CSRFToken` header).
 - **Form Fields**:
   - `image` (required): Plate image file (JPEG, PNG, WebP; max size 5MB).
-  - `gate_id` (optional): ID of barrier gate submitting the scan.
+  - `gate_id` (optional, positive integer): ID of barrier gate submitting the scan. Forwarded to service execution and tracked in request observability logs (`_obs_gate_id`). Invalid values (non-numeric, <= 0) return HTTP 400 Bad Request with code `PROP-GEN-P01`.
   - `preview` (optional, boolean string `"true"` or `"false"`, default: `false`):
     - When `true`: Run image decode, OCR, position-aware corrections, review policy evaluation, and vehicle/session/blacklist lookups without uploading the image to Cloudinary; returns `"image_url": null`. Optimized for continuous camera auto-detection loops.
     - When `false` or omitted: Authoritative scan mode, uploads image to Cloudinary and returns permanent HTTPS image URL.

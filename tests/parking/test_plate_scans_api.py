@@ -758,3 +758,125 @@ def test_plate_scan_preview_case_insensitive_and_boolean_types(
         assert len(fake_cloudinary_storage.upload_calls) == 1
 
     set_global_recognizer(None)
+
+
+# ==============================================================================
+# Barrier Gate ID and Preview Mode Regression Tests
+# ==============================================================================
+
+
+def test_plate_scan_detection_fallback_yields_needs_review(auth_employee, monkeypatch):
+    """
+    When used_detection_fallback=True, the review policy yields review_status='NEEDS_REVIEW'
+    and includes NO_DETECTION_RETRY in review_reasons.
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(
+        DummyPlateRecognizer(
+            default_plate="51F-698.81",
+            default_confidence=96.0,
+            used_detection_fallback=True,
+            model_agreement=True,
+        )
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "preview": "true"},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["review_status"] == "NEEDS_REVIEW"
+    assert "NO_DETECTION_RETRY" in resp.data["review_reasons"]
+    set_global_recognizer(None)
+
+
+def test_plate_scan_gate_id_forwarding_valid(auth_employee, monkeypatch):
+    """
+    Tham số gate_id được parse chính xác và chuyển tiếp vào execute_plate_scan / observability.
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(
+        DummyPlateRecognizer(default_plate="51K-992.14", default_confidence=98.5)
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "gate_id": 2, "preview": "true"},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_200_OK
+    assert resp.data["plate_final"] == "51K99214"
+    set_global_recognizer(None)
+
+
+@pytest.mark.parametrize("invalid_gate_id", ["abc", "-1", "0", "-99", "1.5"])
+def test_plate_scan_gate_id_invalid_validation(
+    auth_employee, monkeypatch, invalid_gate_id
+):
+    """
+    gate_id không hợp lệ (chuỗi chữ, <= 0, float) bị từ chối với HTTP 400 và mã PROP-GEN-P01.
+    """
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+    file_obj = _create_jpeg_file()
+    resp = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_obj, "gate_id": invalid_gate_id},
+        format="multipart",
+    )
+
+    assert resp.status_code == status.HTTP_400_BAD_REQUEST
+    assert resp.data["code"] == "PROP-GEN-P01"
+    assert "gate_id" in resp.data["details"]
+
+
+def test_plate_scan_preview_true_vs_false_cloudinary_suppression(
+    auth_employee, monkeypatch, fake_cloudinary_storage
+):
+    """
+    Kiểm thử so sánh nghiêm ngặt giữa preview=true và preview=false:
+    - Khi preview=true: không gọi Cloudinary upload, image_url là None.
+    - Khi preview=false: gọi Cloudinary upload đúng 1 lần, image_url bắt đầu bằng HTTPS URL.
+    """
+    monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
+    set_global_recognizer(
+        DummyPlateRecognizer(default_plate="51K-992.14", default_confidence=98.5)
+    )
+
+    client = APIClient()
+    client.force_authenticate(user=auth_employee)
+
+    # 1. Preview mode (preview=true)
+    initial_uploads = len(fake_cloudinary_storage.upload_calls)
+    file_preview = _create_jpeg_file("preview.jpg")
+    resp_prev = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_preview, "preview": "true", "gate_id": 1},
+        format="multipart",
+    )
+    assert resp_prev.status_code == status.HTTP_200_OK
+    assert resp_prev.data["image_url"] is None
+    assert len(fake_cloudinary_storage.upload_calls) == initial_uploads
+
+    # 2. Authoritative mode (preview=false)
+    file_authoritative = _create_jpeg_file("authoritative.jpg")
+    resp_auth = client.post(
+        "/api/v1/parking/plate-scans/",
+        {"image": file_authoritative, "preview": "false", "gate_id": 1},
+        format="multipart",
+    )
+    assert resp_auth.status_code == status.HTTP_200_OK
+    assert resp_auth.data["image_url"] is not None
+    assert resp_auth.data["image_url"].startswith("https://res.cloudinary.com/")
+    assert len(fake_cloudinary_storage.upload_calls) == initial_uploads + 1
+
+    set_global_recognizer(None)
