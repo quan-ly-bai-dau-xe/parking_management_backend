@@ -400,10 +400,6 @@ class TestPlateScanIndependentReferenceContractProof:
         assert result.payload["plate_final"] == "51F69881"
         assert result.payload["review_status"] == ReviewStatus.AUTO
 
-        # Clean up temporary saved file
-        if result.saved_file_path and result.saved_file_path.is_file():
-            result.saved_file_path.unlink(missing_ok=True)
-
     def test_all_golden_fixtures_satisfy_independent_reference_contract(self) -> None:
         """All serialized golden JSON fixtures on disk must strictly satisfy the Reference Contract."""
         fixture_files = list(self.GOLDEN_FIXTURES_DIR.glob("*.json"))
@@ -540,7 +536,10 @@ class TestPlateScanContractMutationProof:
                 "min_char_confidence": 98.0,
                 "bounding_box": {"x1": 50, "y1": 50, "x2": 350, "y2": 150},
             },
-            "image_url": "/media/parking_scans/2026/10/20/sample.jpg",
+            "image_url": (
+                "https://res.cloudinary.com/test-cloud/image/upload/"
+                "v1730178490/parking_scans/2026/10/20/12345678901234567890123456789012.jpg"
+            ),
             "vehicle_lookup": None,
             "is_blacklisted": False,
             "open_session": None,

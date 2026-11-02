@@ -1,8 +1,6 @@
+# Báo Cáo Đối Chiếu API Endpoint Backend và Frontend
 
-Ran search for comparison files
-Checked task Search for comparison files
-Analyzed hd_lay_api.md:L1-187
-Analyzed fe_enpoints.md:L1-78
+> Ghi chú của Team Lead: tài liệu này phản ánh backend tại thời điểm tác giả viết. Từ đó các API vehicles, customers, employees và administrative units đã được triển khai; nguồn hiện hành là `docs/api-endpoints.md` và OpenAPI schema.
 
 Dưới đây là phân tích và đối chiếu chi tiết giữa hai tài liệu:
 
@@ -11,7 +9,7 @@ Dưới đây là phân tích và đối chiếu chi tiết giữa hai tài li�
 
 ---
 
-### 1. Bảng đối chiếu tổng hợp giữa hai tài liệu
+## 1. Bảng đối chiếu tổng hợp giữa hai tài liệu
 
 | Nhóm chức năng        | Endpoint                                     | Có ở Backend (`hd_lay_api.md`) | Có ở Frontend (`fe_enpoints.md`) | Tình trạng thực tế                                       |
 | :----------------------- | :------------------------------------------- | :--------------------------------: | :----------------------------------: | :----------------------------------------------------------- |
@@ -38,9 +36,9 @@ Dưới đây là phân tích và đối chiếu chi tiết giữa hai tài li�
 
 ---
 
-### 2. Những điểm khác biệt và thiếu sót chính
+## 2. Những điểm khác biệt và thiếu sót chính
 
-#### A. Backend đã có nhưng Frontend (`fe_enpoints.md`) đang thiếu / chưa nối:
+### A. Backend đã có nhưng Frontend (`fe_enpoints.md`) đang thiếu / chưa nối
 
 1. **API Auth**:
    - `POST /api/v1/auth/logout/`: Đăng xuất và xóa session/cookie. Hiện FE có thể chỉ đang clear state/token ở client mà chưa gọi API thu hồi phiên ở BE.
@@ -53,7 +51,7 @@ Dưới đây là phân tích và đối chiếu chi tiết giữa hai tài li�
 3. **Health Check**:
    - `GET /api/health/` và `GET /api/v1/health/`: Chưa được tích hợp vào frontend để kiểm tra kết nối hệ thống trước khi thực hiện tác vụ nặng.
 
-#### B. Frontend đã code gọi nhưng Backend (`hd_lay_api.md`) CHƯA CÓ (Nguy cơ lỗi 404):
+### B. Frontend đã code gọi nhưng Backend (`hd_lay_api.md`) CHƯA CÓ (Nguy cơ lỗi 404)
 
 > [!WARNING]
 > **Toàn bộ nhóm Quản lý Phương tiện (`/api/v1/vehicles/*`)**:
@@ -66,7 +64,7 @@ Dưới đây là phân tích và đối chiếu chi tiết giữa hai tài li�
 >
 > Tuy nhiên, ở Backend ([`apps/vehicles/urls.py`](file:///E:/parking_management_backend/apps/vehicles/urls.py)), các endpoint này **chưa được cài đặt** (file `urls.py` vẫn đang để trống). Khi Frontend kích hoạt các chức năng này sẽ bị lỗi `404 Not Found`.
 
-#### C. Các Module cả hai bên đều chưa nối (Đang chạy Mock Data ở Frontend):
+### C. Các Module cả hai bên đều chưa nối (Đang chạy Mock Data ở Frontend)
 
 Cả hai tài liệu đều xác nhận các module sau đây chưa có API thực tế và Frontend đang phải dùng mock:
 
@@ -78,7 +76,7 @@ Cả hai tài liệu đều xác nhận các module sau đây chưa có API th�
 
 ---
 
-### 3. Đề xuất hành động tiếp theo
+## 3. Đề xuất hành động tiếp theo
 
 1. **Phía Backend**: Cần ưu tiên triển khai module `apps/vehicles/` (Viết Serializer, Service, Selector và ViewSet theo chuẩn 3-tier) để khớp ngay với `vehicleService.js` mà Frontend đã dựng sẵn.
 2. **Phía Frontend**:

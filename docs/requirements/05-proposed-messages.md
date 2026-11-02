@@ -39,6 +39,22 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-4.3.3-P02** | 4.3.3 Edit Employee (Update) | Employee record not found during update | SRS does not define not-found message | `Nhân viên không tồn tại hoặc đã bị xóa.` | 404 Not Found | **OQ-13** |
 | **PROP-4.3.1-P01** | 4.3.1 Employee List (Edit) | `CASE-4.3.1-TH_INV`: Invalid update payload | "hiển thị thông báo phù hợp từng trường" | `Dữ liệu {item} không hợp lệ, xin mời nhập lại.` | 400 Bad Request | **OQ-13** |
 
+#### 2.1.1. Employee Module SRS Verbatim & Concurrency Messages Reference (SRS 4.3.1–4.3.4)
+
+| Message ID | Screen & Trigger | SRS Verbatim Message / System Response | HTTP Status | Implementation Reference |
+| :---: | :--- | :--- | :---: | :--- |
+| **MSG-4.3.1-M01** | 4.3.1 Employee List | `Xóa thành công` | 200 OK | Standard deletion success envelope |
+| **MSG-4.3.1-M02** | 4.3.1 Employee List | `Không tìm thấy dữ liệu` | 200 OK | Empty results list envelope (`count: 0, results: []`) |
+| **MSG-4.3.1-M03** | 4.3.1 Employee List | `Dữ liệu hiện đang được cập nhật bởi user khác` | 409 Conflict | Optimistic concurrency control (`row_version` mismatch) |
+| **MSG-4.3.1-M04** | 4.3.1 Employee List | `Không kết nối được Server` | 500 Internal Error | Handled by frontend network client layer |
+| **MSG-4.3.1-M05** | 4.3.1 Employee List | `Dữ liệu đã tồn tại trong hệ thống, không thể tạo trùng lặp.` | 409 Conflict | Unique constraint conflict on email, phone, CCCD, or code |
+| **MSG-4.3.1-M06** | 4.3.1 Employee List | `Lỗi kết nối` | 500 Internal Error | Handled by frontend network client layer |
+| **MSG-4.3.2-M01** | 4.3.2 Add Employee | `Thêm mới nhân viên thành công` | 201 Created | Successful employee and account creation |
+| **MSG-4.3.2-M02** | 4.3.2 Add Employee | `Mã nhân viên không đúng định dạng.` | 400 Bad Request | Code format regex violation (`ck_employee_code_format`) |
+| **MSG-4.3.3-M01** | 4.3.3 Edit Employee | `Mật khẩu phải chứa ít nhất 8 ký tự, bao gồm chữ hoa, chữ thường, số và ký tự đặc biệt` | 400 Bad Request | Password policy validation failure |
+| **MSG-4.3.4-M01** | 4.3.4 Delete Employee | `Xóa thành công` | 200 OK | Successful soft-deletion of employee and account |
+| **MSG-4.3.4-M02** | 4.3.4 Delete Employee | `Dữ liệu đang được xóa bởi người dùng khác` | 409 Conflict | Concurrent deletion contention on employee record |
+
 ---
 
 ### 2.2. Customer Management Module (SRS 4.4)
@@ -108,6 +124,7 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-4.5.1-P14** | 4.5.1 Vehicle In/Out (`check-in`) | Employee attempts to override blacklist without manager authorization | SRS 4.5.1 does not define employee override error | `Nhân viên không có quyền ghi đè danh sách đen.` | 403 Forbidden | **TL-50** |
 | **PROP-4.5.1-P15** | 4.5.1 Vehicle In/Out (`plate-scans`) | OCR engine concurrency gate timeout / back-pressure | SRS does not define OCR overload error | `Hệ thống nhận diện biển số xe đang quá tải, vui lòng thử lại sau.` | 503 Service Unavailable | **TL-50** |
 | **PROP-4.5.1-P16** | 4.5.1 Vehicle In/Out (`plate-scans`) | License plate has uncataloged pattern, reserved code, or military syntax | SRS does not define uncataloged plate pattern review message | `Biển số xe có định dạng chưa được định nghĩa trong danh mục quy chuẩn hoặc thuộc nhóm cần xác minh thủ công.` | 200 OK (`NEEDS_REVIEW`) | **TL-51**, **OQ-86** |
+| **PROP-4.5.1-P17** | 4.5.1 Vehicle In/Out (`plate-scans`) | Cloud storage upload failure or network unreachable | SRS does not define cloud storage failure error | `Không thể lưu trữ hình ảnh tải lên dịch vụ đám mây, vui lòng thử lại sau.` | 502 Bad Gateway | **ADR-0009** |
 | **PROP-4.5.2-P01** | 4.5.2 Parking Map / 4.5.1 Vehicle In/Out | Attempting to occupy or select a slot currently under maintenance | SRS does not define error dialogue string for maintenance slots | `Vị trí này đang bảo trì.` | 400 Bad Request | **OQ-63**, **OQ-67** |
 | **PROP-4.5.2-P02** | `Sơ đồ bãi đậu xe` (`TL-03`) | Changing slot status away from `OCCUPIED` while an open session exists | FE & SRS do not define guard message | `Không thể chuyển trạng thái vị trí khi đang có xe đỗ trong ô.` | 400 Bad Request | **OQ-81** |
 | **PROP-4.5.2-P03** | `Sơ đồ bãi đậu xe` (`TL-03`) | Manually setting slot to `OCCUPIED` without an open parking session | FE & SRS do not define guard message | `Không thể chuyển vị trí sang trạng thái đang có xe khi không có phiên đỗ xe đang mở.` | 400 Bad Request | **OQ-81** |
@@ -175,10 +192,12 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 
 | Proposal ID | Target Table & Flow | Guard Condition (`BEFORE UPDATE OF deleted_at`) | Proposed Message [PROPOSAL] | HTTP Status | Decision ID |
 | :---: | :--- | :--- | :--- | :---: | :---: |
-| **PROP-DEL-01-SELF** | `account` (`DEL-01`) | Self-deletion of authenticated account (`NEW.deleted_by = OLD.id`) | `Tài khoản đang đăng nhập không được phép tự xóa chính mình.` | 400 Bad Request | **OQ-10**, **TL-25** |
-| **PROP-DEL-01-LAST-MGR** | `account` (`DEL-01`) | Deleting the last active `MANAGER` account | `Không thể xóa tài khoản Quản lý hoạt động cuối cùng trong hệ thống.` | 400 Bad Request | **OQ-10**, **TL-25** |
-| **PROP-DEL-01-SELF-EMP** | `employee` (`DEL-01`) | Self-deletion of authenticated employee profile (`NEW.deleted_by = OLD.account_id`) | `Nhân viên đang đăng nhập không được phép tự xóa hồ sơ của chính mình.` | 400 Bad Request | **OQ-10**, **TL-25** |
-| **PROP-DEL-01-LAST-MGR-EMP** | `employee` (`DEL-01`) | Deleting employee linked to the last active `MANAGER` account | `Không thể xóa nhân viên gắn với tài khoản Quản lý hoạt động cuối cùng.` | 400 Bad Request | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-SELF** | `account` (`DEL-01`) | Self-deletion of authenticated account (`NEW.deleted_by = OLD.id`) | `Tài khoản đang đăng nhập không được phép tự xóa chính mình.` | 409 Conflict | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-LAST-MGR** | `account` (`DEL-01`) | Deleting the last active `MANAGER` account | `Không thể xóa tài khoản Quản lý hoạt động cuối cùng trong hệ thống.` | 409 Conflict | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-SELF-EMP** | `employee` (`DEL-01`) | Self-deletion of authenticated employee profile (`NEW.deleted_by = OLD.account_id`) | `Nhân viên đang đăng nhập không được phép tự xóa hồ sơ của chính mình.` | 409 Conflict | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-SELF-DEACT** | `employee` / `account` (`DEL-01`) | Self-deactivation of authenticated employee account (`actor_account_id = emp.account_id` and `target_status = 'INACTIVE'`) | `Nhân viên đang đăng nhập không được phép tự vô hiệu hóa tài khoản của chính mình.` | 409 Conflict | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-SELF-DEMOTE** | `employee` / `account` (`DEL-01`) | Self-demotion of authenticated manager (`actor_account_id = emp.account_id` and `emp.position.code = 'QL'` to non-manager) | `Quản lý đang đăng nhập không được phép tự giáng chức chính mình.` | 409 Conflict | **OQ-10**, **TL-25** |
+| **PROP-DEL-01-LAST-MGR-EMP** | `employee` (`DEL-01`) | Deleting employee linked to the last active `MANAGER` account | `Không thể xóa nhân viên gắn với tài khoản Quản lý hoạt động cuối cùng.` | 409 Conflict | **OQ-10**, **TL-25** |
 | **PROP-DEL-02-ACTIVE-VEH** | `customer` (`DEL-02`) | Customer still owns active (`deleted_at IS NULL`) vehicles | `Khách hàng đang có phương tiện hoạt động trong hệ thống, không được phép xóa.` | 409 Conflict | **OQ-40**, **TL-25** |
 | **PROP-DEL-03-OPEN-SES** | `vehicle` (`DEL-03`) | Vehicle has an open parking session (`exit_time IS NULL`) | `Phương tiện đang đỗ trong bãi xe (có phiên đỗ đang mở), không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |
 | **PROP-DEL-03-ACTIVE-TKT** | `vehicle` (`DEL-03`) | Vehicle holds an active unexpired ticket | `Phương tiện đang có vé đỗ xe còn hiệu lực, không được phép xóa.` | 409 Conflict | **OQ-41**, **TL-25** |

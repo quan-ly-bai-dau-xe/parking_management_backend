@@ -80,7 +80,6 @@ RUN mkdir -p \
         /home/appuser/.cache/open-image-models/yolo-v9-t-640-license-plate-end2end \
         /home/appuser/.cache/fast-plate-ocr/cct-xs-v2-global-model \
         /home/appuser/.cache/fast-plate-ocr/global-plates-mobile-vit-v2-model \
-        /app/media/parking_scans \
         /app/staticfiles && \
     ln -s /app/models/ocr/yolo-v9-t-384-license-plates-end2end.onnx \
         /home/appuser/.cache/open-image-models/yolo-v9-t-384-license-plate-end2end/yolo-v9-t-384-license-plates-end2end.onnx && \
@@ -94,7 +93,7 @@ RUN mkdir -p \
         /home/appuser/.cache/fast-plate-ocr/global-plates-mobile-vit-v2-model/global_mobile_vit_v2_ocr.onnx && \
     ln -s /app/models/ocr/global_mobile_vit_v2_ocr_config.yaml \
         /home/appuser/.cache/fast-plate-ocr/global-plates-mobile-vit-v2-model/global_mobile_vit_v2_ocr_config.yaml && \
-    chown -R appuser:appgroup /home/appuser /app/media /app/staticfiles
+    chown -R appuser:appgroup /home/appuser /app/staticfiles
 
 # Copy entrypoint script
 COPY docker/entrypoint.sh /usr/local/bin/entrypoint.sh

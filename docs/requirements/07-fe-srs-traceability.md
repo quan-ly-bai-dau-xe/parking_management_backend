@@ -85,13 +85,13 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-FE-07-04 | Dialog 1: Add | ticket, payment | COVERED | Issue ticket (TL-10,38) |
 | TRC-FE-07-05 | Dialog 2: Renew | ticket_renewal, payment | COVERED | Renewal flow (TL-10) |
 | TRC-FE-07-06 | Dialog 3: Detail | ticket, renewal, employee | COVERED | Detail view |
-| TRC-FE-08-01 | Employee KPIs | employee, position | COVERED | Staff counts (TL-11) |
-| TRC-FE-08-02 | Employee Filters | employee(code, name, email, pos) | COVERED | Staff lookup (TL-31) |
-| TRC-FE-08-03 | Employee Code | employee.code, ck constraint | COVERED | Regex `^NV[0-9]{3,4}$` (TL-11) |
-| TRC-FE-08-04 | Four Positions | position | COVERED | Positions (TL-11) |
-| TRC-FE-08-05 | Employee Area | district, province | GAP / DERIVED | 3 tiers (TL-15,30) |
-| TRC-FE-08-06 | Employee Status | employee.status | COVERED | ACTIVE/INACTIVE (TL-11) |
-| TRC-FE-08-07 | Delete Emp Guard | employee.deleted_at, trigger | COVERED | Soft delete (DEL-01) |
+| TRC-FE-08-01 | Employee KPIs | employee, position | COVERED | Staff counts (`GET /api/v1/employees/summary/`, TL-11) |
+| TRC-FE-08-02 | Employee Filters | employee(code, name, email, pos) | COVERED | Staff lookup (`GET /api/v1/employees/`, TL-31) |
+| TRC-FE-08-03 | Employee Code | employee.code, ck constraint | COVERED | Regex `^NV[0-9]{3,4}$`, advisory lock `NV%03d`/`NV%04d` (TL-11) |
+| TRC-FE-08-04 | Four Positions | position | COVERED | Positions (`GET /api/v1/positions/`, TL-11) |
+| TRC-FE-08-05 | Employee Area | district, province | COVERED | 3 tiers resolution (`GET /api/v1/employees/{id}/`, TL-15,30) |
+| TRC-FE-08-06 | Employee Status | employee.status | COVERED | ACTIVE/INACTIVE (`PATCH /api/v1/employees/{id}/`, TL-11) |
+| TRC-FE-08-07 | Delete Emp Guard | employee.deleted_at, trigger | COVERED | Soft delete (`DELETE /api/v1/employees/{id}/`, DEL-01) |
 | TRC-FE-09-01 | Executive KPIs | v_slot_occupancy_by_floor, payment | COVERED | Aggregation (TL-14) |
 | TRC-FE-09-02 | Gate Scanners | parking_gate, log | COVERED | Gate scans (TL-06) |
 | TRC-FE-09-03 | Floor Tab (B1-B3) | parking_floor | COVERED | Floor tabs (TL-02,29) |
@@ -111,11 +111,11 @@ Traceability matrix for `parking_management_backend` (Round 28). Cross-reference
 | TRC-SRS-01-04 | Persistent Login (4.1.1) | persistent_login_token | COVERED | Split-token with 30s grace window in token_hash (OQ-01, OQ-87, TL-36, TL-52) |
 | TRC-SRS-02-01 | Role-Based Access (4.2.1) | account.role, ck constraint | COVERED | Enum roles (TL-01) |
 | TRC-SRS-02-02 | Manager vs Staff Menu (4.2.1) | API Permissions / DRF | COVERED | Manager only (OQ-45) |
-| TRC-SRS-03-01 | Employee List & Filter (4.3.1) | employee, position | COVERED | Filter (TL-11) |
-| TRC-SRS-03-02 | Add Employee Form (4.3.2) | employee, account | COVERED | Validation (TL-15) |
-| TRC-SRS-03-03 | Edit Employee Profile (4.3.3) | employee, row_version trigger | COVERED | OCC row_version |
-| TRC-SRS-03-04 | Delete Employee (DEL-01, 4.3.4) | employee.deleted_at, trigger | COVERED | Soft delete (TL-25) |
-| TRC-SRS-03-05 | Employee Delete Msgs (4.3.4) | MSG-4.3.4-M01..M03 | COVERED | 'Xóa nhân viên thành công', 'Lỗi hệ thống' |
+| TRC-SRS-03-01 | Employee List & Filter (4.3.1) | apps/employees/views/employees.py (`GET /api/v1/employees/`) | COVERED | Filter by q, name, code, address, birth dates, position, status with zero N+1 (TL-11) |
+| TRC-SRS-03-02 | Add Employee Form (4.3.2) | apps/employees/views/employees.py (`POST /api/v1/employees/`) | COVERED | Atomic Employee+Account creation, Argon2, role derivation, advisory lock NV code (TL-15) |
+| TRC-SRS-03-03 | Edit Employee Profile (4.3.3) | apps/employees/views/employees.py (`PATCH /api/v1/employees/{id}/`) | COVERED | OCC row_version, immutable code, account sync & session revocation, DEL-01 guards |
+| TRC-SRS-03-04 | Delete Employee (DEL-01, 4.3.4) | apps/employees/views/employees.py (`DELETE /api/v1/employees/{id}/`) | COVERED | Soft-delete Employee+Account, DEL-01 triggers -> 409, immediate session revocation (TL-25) |
+| TRC-SRS-03-05 | Employee Delete Msgs (4.3.4) | MSG-4.3.4-M01, MSG-4.3.1-M01, PROP-DEL-01-* | COVERED | 'Xóa thành công' (200), DEL-01 trigger guards mapped to 409 Conflict |
 | TRC-SRS-04-01 | Customer Search (4.4.1) | apps/customers/views/customers.py (`GET /api/v1/customers/`) | COVERED | Search by code, trigram name, phone, CCCD, status with standard pagination (TL-31, 41) |
 | TRC-SRS-04-02 | View Customer Cars (4.4.2) | apps/customers/views/customers.py (`GET /api/v1/customers/{id}/`) | COVERED | Customer profile, administrative hierarchy, vehicles sub-grid with representative tickets |
 | TRC-SRS-04-03 | Add Customer & Cars (4.4.3) | apps/customers/views/customers.py (`POST /api/v1/customers/`) | COVERED | Atomic creation of customer and optional vehicle array under KH%04d advisory lock |
@@ -321,9 +321,97 @@ The table below maps all visual elements from the frontend mockup `Khách hàng 
 7. **PII Anonymization & Data Protection (`OQ-12`, Decree 13/2023/NĐ-CP)**:
    - When `is_anonymized = True`, customer profile returns masked PII (`full_name = "Khách hàng ẩn danh"`, `phone = "***"`, `identity_card_number = "***"`).
    - Strict PII protection: raw PII is never echoed in error details or log messages.
-8. **Administrative Unit Dropdown Endpoints — Documented GAP (`TL-48`)**:
-   - Dropdown endpoints under `/api/v1/administrative-.../` in `apps/core` were excluded during skeleton reduction.
-   - Customer API accepts foreign keys (`province_id`, `district_id`, `ward_id`) and returns their IDs and names without violating the prohibition on modifying `apps/core/**`.
+8. **Administrative Unit Dropdown Endpoints (`TL-48`, Task T2)**:
+   - Administrative Unit dropdown endpoints are fully implemented in `apps/core` under `/api/v1/administrative/provinces/`, `districts/?province_id=`, and `wards/?district_id=`.
+   - Customer and employee APIs validate foreign keys (`province_id`, `district_id`, `ward_id`) against these active records.
+
+---
+
+### 3.4. Detailed Traceability for Employee Management (Screen "Quản lý nhân viên", TRC-FE-08-01..07, TRC-SRS-03-01..05, Round 67)
+
+#### A. Comprehensive 25-Element UI Contract Inventory
+
+The table below maps all 25 visual elements from the frontend mockup `Quản lý nhân viên - Smart mobility.png` to their backend REST endpoints, methods, and response fields.
+
+| # | Mockup Element | API Endpoint | HTTP Method | Request / Query Param | Response Field / Structure | Business Rule / Status |
+|:---:|---|---|:---:|---|---|:---:|
+| 1 | Logo & Brand Icon (`LOGO`) | SPA Shell / Static Asset | N/A | None | Client static asset | **COVERED** |
+| 2 | Navigation Menu (`Quản lý nhân viên` active) | SPA Shell / Client Router | N/A | Route `/employees` | Strictly visible to `MANAGER` | **COVERED** |
+| 3 | Camera Button & User Badge ("Admin") | `GET /api/v1/auth/me/` | GET | Session Cookie `sessionid` | `UserResponse: { id, email, phone, role: "MANAGER" }` | **COVERED** |
+| 4 | Page Title & Subtitle (`Quản lý nhân viên`) | Static UI Header | N/A | None | Client static header text | **COVERED** |
+| 5 | Primary CTA: `+ Thêm nhân viên` | `POST /api/v1/employees/` | POST | Header: `X-CSRFToken`<br>Body: Employee payload + password | `201 Created`<br>`EmployeeDetailResponse` | **COVERED** (RBAC: `MANAGER`-only, atomic creation) |
+| 6 | KPI Card 1: `Tổng nhân viên` | `GET /api/v1/employees/summary/` | GET | None | `total_employees: int` | **COVERED** (SOT, active employee count) |
+| 7 | KPI Card 2: `Đang hoạt động` | `GET /api/v1/employees/summary/` | GET | None | `active_employees: int` | **COVERED** (SOT, status `ACTIVE`) |
+| 8 | KPI Card 3: `Không hoạt động` | `GET /api/v1/employees/summary/` | GET | None | `inactive_employees: int` | **COVERED** (SOT, status `INACTIVE`) |
+| 9 | KPI Card 4: `Chức vụ` | `GET /api/v1/employees/summary/` | GET | None | `total_positions: int` | **COVERED** (SOT, active position count) |
+| 10 | Search Box: `"Tìm tên, mã, email..."` | `GET /api/v1/employees/` | GET | Query: `q=val` | Substring match across `full_name`, `code`, `email` | **COVERED** |
+| 11 | Filter Dropdown: `Chức vụ` | `GET /api/v1/employees/` | GET | Query: `position=QL` or `position=1` | Filter by position code or ID (catalog from `GET /api/v1/positions/`) | **COVERED** |
+| 12 | Filter Dropdown: `Trạng thái` | `GET /api/v1/employees/` | GET | Query: `status=ACTIVE` | Filter by status (`ACTIVE`, `INACTIVE`) | **COVERED** |
+| 13 | Button: `Tìm kiếm` | `GET /api/v1/employees/` | GET | Combined filter params | Paginated list envelope | **COVERED** |
+| 14 | Button: `Reset` | `GET /api/v1/employees/` | GET | Default params (`page=1`) | Unfiltered default employee list | **COVERED** |
+| 15 | Table Column 1: `NHÂN VIÊN` | `GET /api/v1/employees/` | GET | None | `row.full_name: str` | **COVERED** (Clean UTF-8 Vietnamese diacritics) |
+| 16 | Table Column 2: `MÃ NV` (`NV001`) | `GET /api/v1/employees/` | GET | None | `row.code: str` | **COVERED** (Immutable, sequential `NV%03d`/`NV%04d`) |
+| 17 | Table Column 3: `CHỨC VỤ` | `GET /api/v1/employees/` | GET | None | `row.position.name: str` | **COVERED** (`select_related('position')`, zero N+1) |
+| 18 | Table Column 4: `LIÊN HỆ` | `GET /api/v1/employees/` | GET | None | `row.phone: str`, `row.email: str` | **COVERED** |
+| 19 | Table Column 5: `KHU VỰC` | `GET /api/v1/employees/` | GET | None | `row.area.district_name`, `row.area.province_name` | **COVERED** (`select_related`, zero N+1) |
+| 20 | Table Column 6: `TRẠNG THÁI` | `GET /api/v1/employees/` | GET | None | `row.status`, `row.status_display` | **COVERED** (`ACTIVE` / `INACTIVE`) |
+| 21 | Table Column 7: `THAO TÁC` | `GET/PATCH/DELETE /api/v1/employees/{id}/` | GET/PATCH/DELETE | Path: `id` | Row actions (View, Edit, Delete) | **COVERED** (DEL-01 guards, OCC, immediate revocation) |
+| 22 | OCC Token: `Phiên bản` | `GET /api/v1/employees/` | GET | None | `row.row_version: int` | **COVERED** (Optimistic concurrency control token) |
+| 23 | Pagination Envelope | `GET /api/v1/employees/` | GET | Query: `page`, `page_size` | `count, total_pages, current_page, page_size, next, previous, results` | **COVERED** (`StandardResultsSetPagination`) |
+| 24 | Employee Profile Detail Modal | `GET /api/v1/employees/{id}/` | GET | Path: `id` | Full personal, administrative (3 tiers), and account metadata | **COVERED** (Zero password exposure) |
+| 25 | Soft Delete Confirmation Modal | `DELETE /api/v1/employees/{id}/` | DELETE | Header: `X-CSRFToken`<br>Path: `id` | `200 OK`<br>`{"code": "MSG-4.3.4-M01", "message": "Xóa thành công"}` | **COVERED** (DEL-01 trigger guards -> 409) |
+
+#### B. Architectural Rules & Implementation Notes
+
+1. **Role-Based Access Control (RBAC)**:
+   - All 7 employee operations (`GET /api/v1/positions/`, `GET /api/v1/employees/summary/`, `GET /api/v1/employees/`, `GET /api/v1/employees/{id}/`, `POST /api/v1/employees/`, `PATCH /api/v1/employees/{id}/`, `DELETE /api/v1/employees/{id}/`) are strictly `MANAGER`-only (`[IsAuthenticated, IsManager]`).
+   - Authenticated callers with `EMPLOYEE` or `CUSTOMER` roles receive HTTP `403 Forbidden` (`MSG-4.2-M01`).
+   - Unauthenticated callers receive HTTP `401 Unauthorized` (`MSG-4.1-M02`).
+2. **Double-Submit CSRF Protection**:
+   - Mutating operations (`POST`, `PATCH`, `DELETE`) enforce `X-CSRFToken` header validation matching the active `csrftoken` session cookie (`PROP-4.1-P06`).
+3. **Single Source of Truth (SOT) for KPI Cards**:
+   - `GET /api/v1/employees/summary/` metrics (`total_employees`, `active_employees`, `inactive_employees`, `total_positions`) query identical selector filters as the directory listing. All numbers match independent raw database counts across all seeded and test-created records.
+4. **Atomic Employee & Account Lifecycle with Role Derivation**:
+   - `POST /api/v1/employees/` creates both `Account` and `Employee` in a single atomic database transaction (`@transaction.atomic()`).
+   - Account `role` is strictly derived from `Position.code`: `QL -> MANAGER`; `NVVH`, `NVTN`, `KTV -> EMPLOYEE`. Direct client specification of `role` is rejected.
+   - Account `is_active` is synchronized with `Employee.status` (`ACTIVE -> True`, `INACTIVE -> False`).
+   - Password is validated against complexity rules and hashed via Argon2 (`make_password`). If employee insertion fails, account creation is automatically rolled back with zero orphan records.
+5. **Advisory Lock for Monotonic `NV` Code Generation**:
+   - When `code` is omitted in `POST /api/v1/employees/`, sequential code `NV%03d` (expanding to `NV%04d` after 999) is generated under PostgreSQL transaction advisory lock: `SELECT pg_advisory_xact_lock(hashtext('employee_code_sequence'));`.
+   - Guarantees zero race condition collisions (`ck_employee_code_format`) under high-concurrency workloads.
+6. **Optimistic Concurrency Control (OCC) & Immutable Code**:
+   - `PATCH /api/v1/employees/{id}/` mandates `row_version`. Stale version returns HTTP `409 Conflict` with `MSG-4.3.1-M03`.
+   - Field `code` is immutable and cannot be updated.
+7. **DEL-01 Soft-Delete & Deactivation Database Guards**:
+   - Database triggers (`fn_guard_soft_delete_and_restore`) and service-level guards enforce:
+     - `PROP-DEL-01-SELF-EMP`: An employee cannot soft-delete their own profile.
+     - `PROP-DEL-01-SELF-DEACT`: An employee cannot deactivate their own account.
+     - `PROP-DEL-01-SELF-DEMOTE`: A manager cannot demote themselves.
+     - `PROP-DEL-01-LAST-MGR-EMP`: Deactivating, demoting, or soft-deleting the last remaining active manager is prohibited.
+   - Violations return clean HTTP `409 Conflict`.
+   - Plain SQL hard `DELETE` is blocked by database trigger `trg_prevent_plain_delete_employee` (SQLSTATE `55000`).
+8. **Immediate Session & Remember-Token Revocation**:
+   - Deactivating (`status = "INACTIVE"`), soft-deleting, or demoting an employee immediately revokes all active Django `Session` records and `RememberToken` records in the same transaction. The very next HTTP request on an existing session is immediately rejected.
+9. **Zero PII Leakage & Safe Error Mapping**:
+   - Unique constraint conflicts on email, phone, CCCD, or code return generic `409 Conflict` (`MSG-4.3.1-M05`) without echoing user PII values.
+
+#### C. SRS 4.3 Field, Action & Message Matrix
+
+| SRS Item | Name / Description | Target Field / Action | Error / Success Code | HTTP Status | Implementation Target |
+|:---:|---|---|:---:|:---:|---|
+| **SRS 4.3.1** | Employee Directory & Search | Multi-field filtering (`q`, `name`, `code`, `address`, `birth_from`, `birth_to`, `position`, `status`) | `MSG-4.3.1-M02` | 200 OK | `apps/employees/selectors/employees.py` |
+| **SRS 4.3.1** | Concurrency Conflict (OCC) | Update collision on `row_version` mismatch | `MSG-4.3.1-M03` | 409 Conflict | `apps/employees/services/employees.py` |
+| **SRS 4.3.1** | Duplicate Value Conflict | Unique collision on email, phone, CCCD, or code | `MSG-4.3.1-M05` | 409 Conflict | `apps/employees/services/error_translation.py` |
+| **SRS 4.3.2** | Add Employee Success | Atomic creation of Employee and Account | `MSG-4.3.2-M01` | 201 Created | `apps/employees/views/employees.py` |
+| **SRS 4.3.2** | Invalid Employee Code Format | Code does not match `^NV[0-9]{3,4}$` | `MSG-4.3.2-M02` | 400 Bad Request | `apps/employees/serializers/employees.py` |
+| **SRS 4.3.3** | Password Complexity Policy | Missing uppercase, lowercase, digit, or special character | `MSG-4.3.3-M01` | 400 Bad Request | `apps/employees/serializers/employees.py` |
+| **SRS 4.3.3** | Update Employee Success | Successful profile update | `PROP-4.3.3-P01` | 200 OK | `apps/employees/views/employees.py` |
+| **SRS 4.3.4** | Delete Employee Success | Atomic soft-deletion of Employee and Account | `MSG-4.3.4-M01` | 200 OK | `apps/employees/views/employees.py` |
+| **SRS 4.3.4** | Concurrent Delete Conflict | Concurrent deletion on same employee | `MSG-4.3.4-M02` | 409 Conflict | `apps/employees/services/error_translation.py` |
+| **DEL-01** | Self-Deletion | Logged-in employee self-deletion | `PROP-DEL-01-SELF-EMP` | 409 Conflict | `apps/employees/services/error_translation.py` |
+| **DEL-01** | Self-Deactivation | Logged-in employee self-deactivation | `PROP-DEL-01-SELF-DEACT` | 409 Conflict | `apps/employees/services/employees.py` |
+| **DEL-01** | Self-Demotion | Logged-in manager self-demotion | `PROP-DEL-01-SELF-DEMOTE` | 409 Conflict | `apps/employees/services/employees.py` |
+| **DEL-01** | Last Active Manager Guard | Deactivating, demoting, or deleting the last active manager | `PROP-DEL-01-LAST-MGR-EMP` | 409 Conflict | `apps/employees/services/employees.py` / `error_translation.py` |
 
 ---
 

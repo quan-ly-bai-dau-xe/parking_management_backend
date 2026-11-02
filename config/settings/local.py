@@ -4,6 +4,14 @@ Local development settings.
 
 from .base import *
 
+# Validate and configure Cloudinary SDK for runtime
+validate_cloudinary_credentials(
+    CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+)
+configure_cloudinary_sdk(
+    CLOUDINARY_CLOUD_NAME, CLOUDINARY_API_KEY, CLOUDINARY_API_SECRET
+)
+
 # SECURITY WARNING: keep the secret key used in production secret!
 # SECRET_KEY is loaded from environment variables via environ.Env (inherited from base.py)
 SECRET_KEY = env("SECRET_KEY")
@@ -12,6 +20,27 @@ SECRET_KEY = env("SECRET_KEY")
 DEBUG = env("DEBUG", default=True)
 
 ALLOWED_HOSTS = env.list("ALLOWED_HOSTS", default=["localhost", "127.0.0.1", "[::1]"])
+
+# CORS & CSRF allowed origins for local development (ADR-0004, TL-52)
+# Defaults match docker-compose.yml and .env.example (ports 5173 and 3000 on localhost and 127.0.0.1)
+CORS_ALLOWED_ORIGINS = env.list(
+    "CORS_ALLOWED_ORIGINS",
+    default=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+)
+CSRF_TRUSTED_ORIGINS = env.list(
+    "CSRF_TRUSTED_ORIGINS",
+    default=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "http://localhost:3000",
+        "http://127.0.0.1:3000",
+    ],
+)
 
 # PostgreSQL 18.6 database configuration loaded from environment variables
 # (POSTGRES_DB, POSTGRES_USER, POSTGRES_PASSWORD, POSTGRES_HOST, POSTGRES_PORT)

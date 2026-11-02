@@ -42,7 +42,10 @@ BASE_PAYLOAD: dict[str, Any] = {
         "min_char_confidence": 98.0,
         "bounding_box": {"x1": 50, "y1": 50, "x2": 350, "y2": 150},
     },
-    "image_url": "/media/parking_scans/2026/10/20/sample.jpg",
+    "image_url": (
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+        "v1730178490/parking_scans/2026/10/20/12345678901234567890123456789012.jpg"
+    ),
     "vehicle_lookup": None,
     "is_blacklisted": False,
     "open_session": None,

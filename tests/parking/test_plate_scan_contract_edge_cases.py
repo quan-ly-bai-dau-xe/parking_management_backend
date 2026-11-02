@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from django.conf import settings
 from PIL import Image
 
 from apps.parking.services.ocr import (
@@ -132,17 +131,16 @@ class MockContext:
 
 
 class TestDefensiveCleanupInjection:
-    """Test defensive file unlinking on injected failure."""
+    """Test defensive compensating destroy on injected failure (ADR-0010)."""
 
-    def test_defensive_unlink_on_database_lookup_exception(self) -> None:
+    def test_defensive_unlink_on_database_lookup_exception(
+        self, fake_cloudinary_storage
+    ) -> None:
         """
         Deliberately inject failure during database vehicle lookup.
-        Verify that temporary file written to disk is immediately unlinked.
+        Verify that uploaded Cloudinary asset is destroyed via compensating rollback.
         """
-        media_root = Path(settings.MEDIA_ROOT)
-        scans_dir = media_root / "parking_scans"
-
-        before_files = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
+        initial_destroyed_count = len(fake_cloudinary_storage.destroyed_public_ids)
 
         rec = DummyPlateRecognizer(
             default_plate="51F69881",
@@ -170,20 +168,19 @@ class TestDefensiveCleanupInjection:
                 lookup_func=faulty_lookup,
             )
 
-        after_files = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
-        new_files = after_files - before_files
-        # Only directories may be created, zero orphan files
-        orphan_files = [f for f in new_files if f.is_file()]
-        assert len(orphan_files) == 0, f"Leaked orphan files on disk: {orphan_files}"
+        assert (
+            len(fake_cloudinary_storage.destroyed_public_ids)
+            == initial_destroyed_count + 1
+        )
 
-    def test_defensive_unlink_on_payload_composition_exception(self) -> None:
+    def test_defensive_unlink_on_payload_composition_exception(
+        self, fake_cloudinary_storage
+    ) -> None:
         """
         Deliberately inject failure in payload composition.
-        Verify that saved file is unlinked and does not leak.
+        Verify that uploaded Cloudinary asset is destroyed via compensating rollback.
         """
-        media_root = Path(settings.MEDIA_ROOT)
-        scans_dir = media_root / "parking_scans"
-        before_files = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
+        initial_destroyed_count = len(fake_cloudinary_storage.destroyed_public_ids)
 
         rec = DummyPlateRecognizer(
             default_plate="51F69881",
@@ -212,16 +209,16 @@ class TestDefensiveCleanupInjection:
                 lookup_func=_failing_lookup,
             )
 
-        after_files = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
-        new_files = after_files - before_files
-        orphan_files = [f for f in new_files if f.is_file()]
-        assert len(orphan_files) == 0, f"Leaked orphan files on disk: {orphan_files}"
+        assert (
+            len(fake_cloudinary_storage.destroyed_public_ids)
+            == initial_destroyed_count + 1
+        )
 
-    def test_no_file_written_when_candidate_empty(self) -> None:
-        """Empty OCR result raises 422 before any file is saved to disk."""
-        media_root = Path(settings.MEDIA_ROOT)
-        scans_dir = media_root / "parking_scans"
-        before_files = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
+    def test_no_file_written_when_candidate_empty(
+        self, fake_cloudinary_storage
+    ) -> None:
+        """Empty OCR result raises 422 before any file is uploaded to Cloudinary."""
+        initial_uploaded_count = len(fake_cloudinary_storage.uploaded_public_ids)
 
         rec = DummyPlateRecognizer(default_plate="", preset_candidates=[])
         img_file = _make_in_memory_image()
@@ -234,13 +231,12 @@ class TestDefensiveCleanupInjection:
                 recognizer=rec,
                 lookup_func=lambda plate: MockContext(),
             )
+        assert exc_info.value.status_code == 422
+        assert (
+            len(fake_cloudinary_storage.uploaded_public_ids) == initial_uploaded_count
+        )
 
         assert exc_info.value.code == "PROP-4.5.1-P06"
-
-        after_files = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
-        new_files = after_files - before_files
-        orphan_files = [f for f in new_files if f.is_file()]
-        assert len(orphan_files) == 0
 
 
 class TestNonCircularReferenceContractStress35Cases:

@@ -803,25 +803,10 @@ def count_fatal_errors(
 
 def purge_test_scans() -> None:
     """
-    Safely triggers Django's purge_orphan_scans command to remove unreferenced
-    synthetic test scans generated during this load test run.
-    Ensures zero media pollution when testing against a local backend instance.
+    No-op under ADR-0010 (Cloudinary Exclusive Storage).
+    Scan images are streamed directly to Cloudinary; no local cleanup is required.
     """
-    try:
-        from io import StringIO
-
-        from django.core.management import call_command
-
-        out = StringIO()
-        call_command(
-            "purge_orphan_scans",
-            older_than_hours=0.0,
-            dry_run=False,
-            stdout=out,
-        )
-        print("\n[CLEANUP] Successfully purged orphan test scan files from MEDIA_ROOT.")
-    except Exception as exc:
-        print(f"\n[WARN] Failed to purge test scans: {exc}", file=sys.stderr)
+    print("\n[CLEANUP] Cloudinary exclusive backend: direct cloud streaming.")
 
 
 # Pytest entrypoint (executed when RUN_PERF_TESTS="1")
@@ -880,7 +865,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--purge-scans",
         action="store_true",
-        help="Purge unreferenced orphan scan images from MEDIA_ROOT after test run to prevent disk pollution",
+        help="No-op compatibility flag under ADR-0010 (Cloudinary Exclusive Storage)",
     )
     args = parser.parse_args()
 

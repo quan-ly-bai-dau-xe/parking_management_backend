@@ -10,12 +10,10 @@ import concurrent.futures
 import io
 import statistics
 import time
-from pathlib import Path
 from typing import Any
 from unittest.mock import patch
 
 import pytest
-from django.conf import settings
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError
 from PIL import Image
@@ -297,26 +295,23 @@ class TestLargeImageDecodeAndLatency:
 # 3. HTTP 422 RESIDUAL ARTIFACTS TEST (0 BYTES GARBAGE)
 # ==============================================================================
 class TestPlateScans422ZeroResidualArtifacts:
-    """Empirical verification that 422 unrecognized plate scans leave zero disk garbage."""
+    """Empirical verification that 422 unrecognized plate scans leave zero remote uploads (ADR-0010)."""
 
-    def test_unrecognized_plate_422_leaves_zero_bytes_in_media_root(
-        self, test_employee: Account
+    def test_unrecognized_plate_422_makes_no_remote_upload(
+        self, test_employee: Account, fake_cloudinary_storage
     ):
         """
         Post an image where OCR detects no plate (HTTP 422).
-        Prove that MEDIA_ROOT contains 0 new files and 0 bytes added.
+        Prove that zero uploads are made to Cloudinary.
         """
+        initial_count = len(fake_cloudinary_storage.uploaded_public_ids)
+
         client = APIClient()
         client.force_authenticate(user=test_employee)
 
         # Force dummy recognizer returning empty candidates
         dummy = DummyPlateRecognizer(preset_candidates=[])
         set_global_recognizer(dummy)
-
-        media_path = Path(settings.MEDIA_ROOT)
-        media_path.mkdir(parents=True, exist_ok=True)
-        files_before = set(media_path.rglob("*"))
-        bytes_before = sum(f.stat().st_size for f in files_before if f.is_file())
 
         buf = io.BytesIO()
         Image.new("RGB", (320, 240), color="white").save(buf, format="JPEG")
@@ -333,28 +328,23 @@ class TestPlateScans422ZeroResidualArtifacts:
         assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
         assert response.data["code"] == "PROP-4.5.1-P06"
 
-        files_after = set(media_path.rglob("*"))
-        bytes_after = sum(f.stat().st_size for f in files_after if f.is_file())
-
-        new_files = [f for f in (files_after - files_before) if f.is_file()]
-        bytes_diff = bytes_after - bytes_before
-
-        assert len(new_files) == 0, f"Found unexpected residual files: {new_files}"
-        assert bytes_diff == 0, f"Detected {bytes_diff} bytes garbage in media root"
+        assert len(fake_cloudinary_storage.uploaded_public_ids) == initial_count, (
+            f"Detected unexpected upload on 422: {fake_cloudinary_storage.uploaded_public_ids}"
+        )
 
         set_global_recognizer(None)
 
-    def test_burst_422_requests_leave_zero_garbage_files(self, test_employee: Account):
-        """Send 10 consecutive 422 scan requests; verify zero disk accumulation."""
+    def test_burst_422_requests_leave_zero_garbage_files(
+        self, test_employee: Account, fake_cloudinary_storage
+    ):
+        """Send 10 consecutive 422 scan requests; verify zero remote uploads."""
+        initial_count = len(fake_cloudinary_storage.uploaded_public_ids)
+
         client = APIClient()
         client.force_authenticate(user=test_employee)
 
         dummy = DummyPlateRecognizer(preset_candidates=[])
         set_global_recognizer(dummy)
-
-        media_path = Path(settings.MEDIA_ROOT)
-        media_path.mkdir(parents=True, exist_ok=True)
-        files_before = set(media_path.rglob("*"))
 
         for idx in range(10):
             buf = io.BytesIO()
@@ -371,9 +361,9 @@ class TestPlateScans422ZeroResidualArtifacts:
             )
             assert resp.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
 
-        files_after = set(media_path.rglob("*"))
-        leftover_files = [f for f in (files_after - files_before) if f.is_file()]
-        assert len(leftover_files) == 0, f"Leftover files after burst: {leftover_files}"
+        assert len(fake_cloudinary_storage.uploaded_public_ids) == initial_count, (
+            f"Leftover uploads after burst: {fake_cloudinary_storage.uploaded_public_ids}"
+        )
 
         set_global_recognizer(None)
 

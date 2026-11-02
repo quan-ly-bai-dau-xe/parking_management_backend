@@ -47,7 +47,7 @@
       "y2": 310
     }
   },
-  "image_url": "/media/parking_scans/2026/10/20/sample_scan.jpg",
+  "image_url": "https://res.cloudinary.com/test-cloud/image/upload/v1730178490/parking_scans/2026/10/20/12345678901234567890123456789012.jpg",
   "vehicle_lookup": null,
   "is_blacklisted": false,
   "open_session": null,

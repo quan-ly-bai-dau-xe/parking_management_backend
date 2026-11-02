@@ -9,7 +9,6 @@ Verifies:
 """
 
 import io
-from pathlib import Path
 
 import pytest
 from django.conf import settings
@@ -140,7 +139,9 @@ def test_plate_scan_success_registered_vehicle(auth_employee, monkeypatch):
     assert len(data["candidates"]) == 1
     assert data["best_candidate"]["plate_normalized"] == v.license_plate_norm
     assert data["best_candidate"]["confidence"] == 98.5
-    assert data["image_url"].startswith("/media/parking_scans/")
+    assert data["image_url"].startswith(
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+    )
     assert data["is_blacklisted"] is False
 
     assert data["vehicle_lookup"] is not None
@@ -180,17 +181,15 @@ def test_plate_scan_blacklisted_plate_flagged(auth_employee, monkeypatch):
     set_global_recognizer(None)
 
 
-def test_plate_scan_422_leaves_zero_files_in_media_root(auth_employee, monkeypatch):
+def test_plate_scan_422_makes_no_remote_upload(
+    auth_employee, monkeypatch, fake_cloudinary_storage
+):
     """
-    F10(a): Khi OCR không tìm thấy biển số (HTTP 422), đảm bảo KHÔNG để lại bất kỳ
-    tệp hình ảnh nào trong MEDIA_ROOT.
+    F10(a): Khi OCR không tìm thấy biển số (HTTP 422), đảm bảo KHÔNG tải bất kỳ
+    tệp hình ảnh nào lên Cloudinary (zero remote uploads).
     """
     monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
     set_global_recognizer(DummyPlateRecognizer(default_plate=""))
-
-    media_root = Path(settings.MEDIA_ROOT)
-    scans_dir = media_root / "parking_scans"
-    files_before = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
 
     client = APIClient()
     client.force_authenticate(user=auth_employee)
@@ -207,19 +206,19 @@ def test_plate_scan_422_leaves_zero_files_in_media_root(auth_employee, monkeypat
     assert response.status_code == status.HTTP_422_UNPROCESSABLE_ENTITY
     assert response.data["code"] == "PROP-4.5.1-P06"
 
-    files_after = set(scans_dir.rglob("*")) if scans_dir.exists() else set()
-    new_files = [f for f in (files_after - files_before) if f.is_file()]
-    assert len(new_files) == 0, (
-        f"Defect F10(a): Found leftover files after 422 scan: {new_files}"
+    assert len(fake_cloudinary_storage.uploaded_public_ids) == 0, (
+        f"Defect F10(a): Found leftover uploads after 422 scan: {fake_cloudinary_storage.uploaded_public_ids}"
     )
 
     set_global_recognizer(None)
 
 
-def test_plate_scan_exif_orientation_6_transposed_upright(auth_employee, monkeypatch):
+def test_plate_scan_exif_orientation_6_transposed_upright(
+    auth_employee, monkeypatch, fake_cloudinary_storage
+):
     """
     F10(b): Tệp ảnh chụp từ điện thoại có EXIF Orientation = 6 (xoay ngang 90 độ)
-    phải được tự động xoay đứng thẳng (ImageOps.exif_transpose) trước khi OCR và lưu đĩa.
+    phải được tự động xoay đứng thẳng (ImageOps.exif_transpose) trước khi OCR và lưu cloud.
     """
     monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
 
@@ -260,18 +259,14 @@ def test_plate_scan_exif_orientation_6_transposed_upright(auth_employee, monkeyp
         300,
     ), f"OCR received wrong dimensions: {received_image_dims[0]}"
 
-    # File lưu trên đĩa cũng phải có kích thước 150x300 và không còn thẻ EXIF
-    saved_rel_url = response.data["image_url"]
-    media_url = getattr(settings, "MEDIA_URL", "/media/")
-    rel_path = (
-        saved_rel_url[len(media_url) :].lstrip("/")
-        if saved_rel_url.startswith(media_url)
-        else saved_rel_url.removeprefix(media_url)
-    )
-    disk_file = Path(settings.MEDIA_ROOT) / rel_path
-    assert disk_file.exists(), f"Saved file {disk_file} does not exist"
+    # URL upload phải là Cloudinary HTTPS URL và ảnh upload không còn thẻ EXIF
+    saved_url = response.data["image_url"]
+    assert saved_url.startswith("https://res.cloudinary.com/test-cloud/image/upload/")
+    assert fake_cloudinary_storage.last_uploaded_bytes is not None
 
-    with Image.open(disk_file) as saved_img:
+    with Image.open(
+        io.BytesIO(fake_cloudinary_storage.last_uploaded_bytes)
+    ) as saved_img:
         assert saved_img.size == (150, 300)
         assert saved_img.getexif().get(0x0112) is None
 
@@ -482,11 +477,11 @@ def test_plate_scan_concurrency_gate_multithreaded_no_500_or_hung_connection(
 
 
 def test_plate_scan_single_pass_pipeline_downscales_image_over_1280(
-    auth_employee, monkeypatch
+    auth_employee, monkeypatch, fake_cloudinary_storage
 ):
     """
     P3 Image Pipeline: Ảnh lớn (1600x1200) được downscale cạnh lớn nhất <= 1280 (1280x960),
-    lưu file an toàn trên đĩa và OCR xử lý chuẩn xác.
+    lưu file an toàn trên cloud và OCR xử lý chuẩn xác.
     """
     monkeypatch.setattr(settings, "PARKING_OCR_ENGINE", "dummy")
     set_global_recognizer(DummyPlateRecognizer(default_plate="51K-888.99"))
@@ -507,17 +502,13 @@ def test_plate_scan_single_pass_pipeline_downscales_image_over_1280(
     )
     assert resp.status_code == status.HTTP_200_OK
 
-    media_url = getattr(settings, "MEDIA_URL", "/media/")
-    rel_url = resp.data["image_url"]
-    rel_path = (
-        rel_url[len(media_url) :].lstrip("/")
-        if rel_url.startswith(media_url)
-        else rel_url.removeprefix(media_url)
-    )
-    disk_path = Path(settings.MEDIA_ROOT) / rel_path
-    assert disk_path.is_file()
+    url = resp.data["image_url"]
+    assert url.startswith("https://res.cloudinary.com/test-cloud/image/upload/")
+    assert fake_cloudinary_storage.last_uploaded_bytes is not None
 
-    with Image.open(disk_path) as saved_img:
+    with Image.open(
+        io.BytesIO(fake_cloudinary_storage.last_uploaded_bytes)
+    ) as saved_img:
         assert max(saved_img.size) <= 1280
         assert saved_img.size == (1280, 960)
 

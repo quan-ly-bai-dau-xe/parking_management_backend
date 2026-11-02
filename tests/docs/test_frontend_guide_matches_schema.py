@@ -211,9 +211,18 @@ def guide_path() -> Path:
 
 @pytest.fixture(scope="module")
 def guide_content(guide_path: Path) -> str:
-    """Reads and returns the content of the Frontend API Guide."""
+    """Reads and concatenates the index guide and all split topic guides."""
     assert guide_path.exists(), f"Guide file does not exist at {guide_path}"
-    return guide_path.read_text(encoding="utf-8")
+    repo_root = guide_path.resolve().parents[2]
+    split_dir = repo_root / "docs" / "guides" / "frontend-api"
+    split_files = sorted(split_dir.glob("*.md"))
+    assert len(split_files) == 10, (
+        f"Expected 10 split guide files in {split_dir}, found {len(split_files)}"
+    )
+    all_texts = [guide_path.read_text(encoding="utf-8")]
+    for sf in split_files:
+        all_texts.append(sf.read_text(encoding="utf-8"))
+    return "\n\n".join(all_texts)
 
 
 @pytest.fixture(scope="module")

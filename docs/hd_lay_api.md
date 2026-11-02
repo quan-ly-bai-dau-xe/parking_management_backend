@@ -1,4 +1,4 @@
-# TỔNG QUAN VỀ ENDPOINTS & HƯỚNG DẪN TÍCH HỢP / KIỂM THỬ
+# Tổng Quan Về Endpoints & Hướng Dẫn Tích Hợp / Kiểm Thử
 
 Tóm tắt các Endpoint hiện có trong mã nguồn backend:
 
@@ -41,30 +41,42 @@ Tóm tắt các Endpoint hiện có trong mã nguồn backend:
    - `GET /api/v1/customers/summary/`: Tổng hợp chỉ số KPI khách hàng.
    - `GET /api/v1/customers/export/`: Xuất báo cáo CSV khách hàng.
 
-6. **Dashboard / Trang chủ (`apps/reports/urls.py` - TL-13, TL-14, TL-28.6)**:
+6. **Đơn vị Hành chính & Quản lý Nhân viên (`apps/core/urls.py`, `apps/employees/urls.py`)**:
+   - `GET /api/v1/administrative/provinces/`: Danh sách tỉnh/thành phố.
+   - `GET /api/v1/administrative/districts/?province_id={id}`: Danh sách quận/huyện.
+   - `GET /api/v1/administrative/wards/?district_id={id}`: Danh sách phường/xã.
+   - `GET /api/v1/positions/`: Danh sách chức vụ nhân viên.
+   - `GET /api/v1/employees/`: Danh sách nhân viên kèm bộ lọc, tìm kiếm, phân trang.
+   - `POST /api/v1/employees/`: Thêm mới nhân viên và tự động cấp tài khoản.
+   - `GET /api/v1/employees/{id}/`: Xem chi tiết hồ sơ nhân viên.
+   - `PATCH /api/v1/employees/{id}/`: Cập nhật nhân viên (bảo vệ OCC, DEL-01).
+   - `DELETE /api/v1/employees/{id}/`: Xóa mềm nhân viên và thu hồi phiên làm việc.
+   - `GET /api/v1/employees/summary/`: Tổng hợp chỉ số KPI nhân viên.
+
+7. **Dashboard / Trang chủ (`apps/reports/urls.py` - TL-13, TL-14, TL-28.6)**:
    - `GET /api/v1/dashboard/`: Toàn cảnh Trang chủ — trả về 5 nhóm dữ liệu (`kpis`, `floors`, `traffic_chart`, `alerts`, `recent_activities`) trong 1 lần gọi.
    - `GET /api/v1/dashboard/kpis/`: 4 nhóm chỉ số KPI (Kho vị trí, Lưu lượng, Doanh thu - chỉ MANAGER, Nhận diện AI).
    - `GET /api/v1/dashboard/floors/`: Thanh tỉ lệ lấp đầy theo tầng B1/B2/B3 (TL-28.6).
    - `GET /api/v1/dashboard/traffic/`: Biểu đồ lưu lượng xe 24 giờ gần nhất (theo giờ).
    - `GET /api/v1/dashboard/alerts/`: Danh sách cảnh báo khẩn cấp & bất thường (TL-13), tối đa 10 mục (hoặc theo `?limit=N`).
    - `GET /api/v1/dashboard/activities/`: Nhật ký hoạt động gần đây — 10 lượt ra/vào bãi xe gần nhất (hoặc theo `?limit=N`).
-
 Để chạy test các method của API trong dự án `parking_management_backend`, dự án sử dụng framework **`pytest`** kết hợp **`pytest-django`** (cấu hình tại [`pyproject.toml`](file:///E:/parking_management_backend/pyproject.toml) với `DJANGO_SETTINGS_MODULE = "config.settings.test"`).
 
 ---
 
-### 1. Điều kiện tiên quyết trước khi chạy Test
+## 1. Điều kiện tiên quyết trước khi chạy Test
 
 Hầu hết các API test đều có đánh dấu `pytest.mark.django_db` (yêu cầu kết nối PostgreSQL để kiểm thử tính toàn vẹn dữ liệu, trigger và hàm lưu trữ).
 
 - **Khởi động database container**:
+
   ```bash
   docker compose up -d db
   ```
 
 ---
 
-### 2. Cú pháp chạy một Test Method cụ thể
+## 2. Cú pháp chạy một Test Method cụ thể
 
 Cú pháp tổng quát của `pytest`:
 
@@ -79,69 +91,84 @@ pytest <đường_dẫn_file_test>::<Tên_Class>::<tên_hàm_test> [tham_số]
 
 ---
 
-### 3. Ví dụ chạy test method cho từng API cụ thể
+## 3. Ví dụ chạy test method cho từng API cụ thể
 
-#### A. API Check-in Bãi xe (`/api/v1/parking/sessions/check-in/`)
+### A. API Check-in Bãi xe (`/api/v1/parking/sessions/check-in/`)
 
 File test: [`tests/parking/test_check_in_api.py`](file:///E:/parking_management_backend/tests/parking/test_check_in_api.py)
 
 - **Test check-in xe vãng lai thành công**:
+
   ```bash
   pytest tests/parking/test_check_in_api.py::test_check_in_visitor_success -v --no-cov
   ```
+
 - **Test từ chối khi chưa đăng nhập (401 Unauthorized)**:
+
   ```bash
   pytest tests/parking/test_check_in_api.py::test_check_in_anonymous_rejected -v --no-cov
   ```
+
 - **Test từ chối quyền khách hàng (403 Forbidden)**:
+
   ```bash
   pytest tests/parking/test_check_in_api.py::test_check_in_customer_forbidden -v --no-cov
   ```
+
 - **Test xe trong danh sách đen (Blacklist - 409 Conflict)**:
+
   ```bash
-  pytest tests/parking/test_check_in_api.py::test_check_in_blacklisted_no_override -v --no-cov
+  pytest tests/parking/test_check_in_api.py::test_check_in_blacklisted_plate_rejected_and_alerted -v --no-cov
   ```
 
-#### B. API Check-out & Tính phí (`/api/v1/parking/sessions/check-out/`)
+### B. API Check-out & Tính phí (`/api/v1/parking/sessions/check-out/`)
 
 File test: [`tests/parking/test_check_out_api.py`](file:///E:/parking_management_backend/tests/parking/test_check_out_api.py)
 
 - **Test check-out xe và tính phí thành công**:
+
   ```bash
-  pytest tests/parking/test_check_out_api.py::test_check_out_visitor_success -v --no-cov
+  pytest tests/parking/test_check_out_api.py::test_check_out_visitor_paid_by_cash -v --no-cov
   ```
 
-#### C. API Tra cứu xe (`/api/v1/parking/vehicle-lookup/` & `vehicle-search/`)
+### C. API Tra cứu xe (`/api/v1/parking/vehicle-lookup/` & `vehicle-search/`)
 
 File test: [`tests/parking/test_vehicle_lookup_api.py`](file:///E:/parking_management_backend/tests/parking/test_vehicle_lookup_api.py) & [`test_vehicle_search_api.py`](file:///E:/parking_management_backend/tests/parking/test_vehicle_search_api.py)
 
 - **Test tra cứu xe theo biển số chuẩn hóa**:
+
   ```bash
-  pytest tests/parking/test_vehicle_lookup_api.py::test_vehicle_lookup_success -v --no-cov
-  ```
-- **Test tìm kiếm xe theo nhiều tiêu chí (Full-text / Trigram GIN)**:
-  ```bash
-  pytest tests/parking/test_vehicle_search_api.py::test_search_by_license_plate -v --no-cov
+  pytest tests/parking/test_vehicle_lookup_api.py::test_vehicle_lookup_success_existing_vehicle -v --no-cov
   ```
 
-#### D. API Xác thực / Authentication (`/api/v1/auth/login/`, `logout/`, `me/`)
+- **Test tìm kiếm xe theo nhiều tiêu chí (Full-text / Trigram GIN)**:
+
+  ```bash
+  pytest tests/parking/test_vehicle_search_api.py::test_search_explicit_license_plate -v --no-cov
+  ```
+
+### D. API Xác thực / Authentication (`/api/v1/auth/login/`, `logout/`, `me/`)
 
 File test: [`tests/accounts/test_core_auth.py`](file:///E:/parking_management_backend/tests/accounts/test_core_auth.py)
 
 - **Test đăng nhập thành công**:
+
   ```bash
-  pytest tests/accounts/test_core_auth.py::CoreAuthEndpointsTest::test_login_success -v --no-cov
-  ```
-- **Test sai mật khẩu hoặc tài khoản bị khóa**:
-  ```bash
-  pytest tests/accounts/test_core_auth.py::CoreAuthEndpointsTest::test_login_invalid_password -v --no-cov
+  pytest tests/accounts/test_core_auth.py::LoginEndpointTest::test_login_success_by_email_case_insensitive -v --no-cov
   ```
 
-#### E. API Kiểm tra Hạ tầng / Health Check (`/api/health/`)
+- **Test sai mật khẩu hoặc tài khoản bị khóa**:
+
+  ```bash
+  pytest tests/accounts/test_core_auth.py::LoginEndpointTest::test_auth_failures_return_uniform_401_msg_m02 -v --no-cov
+  ```
+
+### E. API Kiểm tra Hạ tầng / Health Check (`/api/health/`)
 
 File test: [`tests/test_health.py`](file:///E:/parking_management_backend/tests/test_health.py)
 
 - **Test health check thành công**:
+
   ```bash
   pytest tests/test_health.py::test_health_check_endpoint_success -v --no-cov
   ```
@@ -181,29 +208,33 @@ File test: [`tests/reports/test_dashboard_api.py`](file:///E:/parking_management
 
 ---
 
-### 4. Các tùy chọn chạy linh hoạt khác
+## 4. Các tùy chọn chạy linh hoạt khác
 
 1. **Chạy qua môi trường Docker Container** (đảm bảo môi trường giống 100% server):
 
    ```bash
    docker compose exec web pytest tests/parking/test_check_in_api.py::test_check_in_visitor_success -v --no-cov
    ```
+
 2. **Chạy bằng bộ lọc từ khóa (`-k`)**:
    Tìm và chạy tất cả các test method có tên chứa chữ `check_in`:
 
    ```bash
    pytest -k "check_in" -v --no-cov
    ```
+
 3. **Chạy toàn bộ test trong một file**:
 
    ```bash
    pytest tests/parking/test_check_in_api.py -v --no-cov
    ```
+
 4. **In log ra màn hình khi test (`-s`)**:
 
    ```bash
    pytest tests/parking/test_check_in_api.py::test_check_in_visitor_success -s -v --no-cov
    ```
+
 5. **Chạy toàn bộ test suite để nghiệm thu DoD (Kèm kiểm tra Coverage $\ge 80\%$)**:
 
    ```bash
@@ -213,7 +244,7 @@ File test: [`tests/reports/test_dashboard_api.py`](file:///E:/parking_management
 
 ---
 
-### 5. Cấu trúc chuẩn của 1 test method API trong dự án
+## 5. Cấu trúc chuẩn của 1 test method API trong dự án
 
 Khi bạn viết thêm test method mới cho API theo quy chuẩn của dự án ([`05-django-feature-implementation`](file:///E:/parking_management_backend/.claude/skills/05-django-feature-implementation/SKILL.md) & [`08-testing-and-definition-of-done.md`](file:///E:/parking_management_backend/.claude/rules/08-testing-and-definition-of-done.md)):
 
@@ -225,17 +256,18 @@ from rest_framework.test import APIClient
 # 1. Bật database cho test
 pytestmark = pytest.mark.django_db
 
+
 def test_api_endpoint_sample(auth_employee):
     # 2. Khởi tạo DRF test client
     client = APIClient()
-  
+
     # 3. Giả lập đăng nhập bằng user/role tương ứng
     client.force_authenticate(user=auth_employee)
-  
+
     # 4. Gửi request đến API
     payload = {"license_plate": "51A-123.45"}
     response = client.post("/api/v1/parking/sessions/check-in/", payload, format="json")
-  
+
     # 5. Khẳng định mã HTTP Status và cấu trúc JSON trả về
     assert response.status_code == status.HTTP_201_CREATED
     assert "session_code" in response.data

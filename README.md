@@ -6,17 +6,26 @@ Intelligent Parking Lot Management System (`Bãi xe Smart Mobility`) — Backend
 [![Django 6.1.2](https://img.shields.io/badge/django-6.1.2-green.svg)](https://www.djangoproject.com/)
 [![PostgreSQL 18.6](https://img.shields.io/badge/postgresql-18.6-blue.svg)](https://www.postgresql.org/)
 [![DRF 3.18.3](https://img.shields.io/badge/drf-3.18.3-red.svg)](https://www.django-rest-framework.org/)
-[![License: All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey.svg)](#6-governance--license)
+[![License: All Rights Reserved](https://img.shields.io/badge/license-All%20Rights%20Reserved-lightgrey.svg)](LICENSE)
 
 ---
 
-## 1. Project Overview & Scope
+- [1. Project Overview & Scope](#1-project-overview--scope)
+- [2. Architecture & Data Safety](#2-architecture--data-safety)
+- [3. Quick Start (Development & Operations)](#3-quick-start-development--operations)
+- [4. CI/CD & Branch Protection Rules for Repository Owner](#4-cicd--branch-protection-rules-for-repository-owner)
+- [5. Documentation & AI Operating System](#5-documentation--ai-operating-system)
+- [6. Governance & License](#6-governance--license)
+
+<details id="1-project-overview--scope">
+<summary>1. Project Overview & Scope</summary>
 
 - **Scope**: Backend REST API exclusively (`parking_management_backend`). Client applications (Web SPA / Mobile) integrate via OpenAPI 3.0 contracts.
 - **Specification Hierarchy**: The Frontend UI design ([`docs/requirements/06-frontend-srs-db-alignment.md`](docs/requirements/06-frontend-srs-db-alignment.md), `TL-01`–`TL-51`) serves as the **primary** specification; the SRS v4.1 catalog ([`docs/requirements/00-srs-catalog.md`](docs/requirements/00-srs-catalog.md)) is **secondary** where frontend screens are silent.
 - **Fixed Tech Stack**: Python `3.14.7` (Python 3.15 is strictly forbidden), Django `6.1.2` (LTS roadmap to 6.2 in April 2027), DRF `3.18.3`, PostgreSQL `18.6` via Docker Compose (psycopg `3.3.6`). Detailed rationale in [ADR-0001](docs/adr/0001-fixed-tech-stack-and-lts-roadmap.md) and [ADR-0006](docs/adr/0006-django-skeleton-v2-schema-authority.md).
 - **Public Repo Security**: Zero secrets, zero production tokens, zero live credentials committed.
 
+<!-- markdownlint-disable-next-line MD001 -->
 ### 1.1. Note for PR #13 Contributor (`@Mercenarya`) and Team
 
 Thank you to `@Mercenarya` for establishing the initial Django project skeleton and domain app structure (`accounts`, `customers`, `employees`, `vehicles`, `tickets`, `parking`, `reports`) in Pull Request #13. That foundation defined the core package layout, settings split (`config/settings/`), and modular app boundaries (`views/`, `services/`, `selectors/`, `serializers/`) that Round 29 builds upon directly.
@@ -37,9 +46,12 @@ Per Team Lead decision **TL-48**, this branch provides only the skeleton foundat
 - Refer to [`.claude/skills/13-api-first-contract-and-mock-data/SKILL.md`](.claude/skills/13-api-first-contract-and-mock-data/SKILL.md) for API-first schema contract design.
 - Utilize the pre-configured 3-tier template package layouts in each domain app.
 
+</details>
+
 ---
 
-## 2. Architecture & Data Safety
+<details id="2-architecture--data-safety">
+<summary>2. Architecture & Data Safety</summary>
 
 ### 2.1. PostgreSQL Schema Authority & Unmanaged Models ([ADR-0006](docs/adr/0006-django-skeleton-v2-schema-authority.md))
 
@@ -66,11 +78,15 @@ Per Team Lead decision **TL-48**, this branch provides only the skeleton foundat
 - **`serializers/`**: DRF `ModelSerializer` with automatic field mapping, whitespace trimming, max-length validation, and standardized error envelopes.
 - **Standard Error Envelope**: Uniform JSON response `{"code": "...", "message": "...", "details": {...}}` translating PostgreSQL SQLSTATE codes (`23514`, `55000`, `23503`, `23505`, `22023`).
 
+</details>
+
 ---
 
-## 3. Quick Start (Development & Operations)
+<details id="3-quick-start-development--operations">
+<summary>3. Quick Start (Development & Operations)</summary>
 
-### Choose how to run the backend
+<details id="choose-how-to-run-the-backend">
+<summary>Choose how to run the backend</summary>
 
 The backend provides two independent startup options depending on developer workflow preference and workstation setup:
 
@@ -81,20 +97,34 @@ The backend provides two independent startup options depending on developer work
 | **Advantages** | Self-contained packaging, automatic network/volume provisioning, and automatic PostgreSQL extension loading. | Lower RAM/CPU consumption, direct local debugging, and visual data inspection via pgAdmin 4. |
 | **Disadvantages** | Requires host resources for container virtualization. | Requires manual PostgreSQL service installation, role provisioning, and Python virtual environment management. |
 
+</details>
+
 ---
 
-### Option 1: run with Docker
+<details id="option-1-run-with-docker">
+<summary>Option 1: run with Docker</summary>
 
-Launch the complete system consisting of a PostgreSQL 18.6 database and a Python 3.14.7 application server (Gunicorn & ONNX Runtime) via pre-configured container services.
+Launch the complete full-stack system consisting of a PostgreSQL 18.6 database (`db`), a Python 3.14.7 application server (`web` running Gunicorn & ONNX Runtime), and an Nginx-served SPA web application (`frontend`) via pre-configured container services.
 
-#### 1. Clone repository and create environment file
+#### 1. Repository Layout & Sibling Frontend Requirement
 
-Clone the repository to your local machine:
+The full-stack Docker Compose setup expects the frontend repository (`parking_management_frontend`) to reside as a sibling directory in the same parent folder as the backend repository:
+
+```text
+parent_directory/
+├── parking_management_backend/     # Backend Django REST API & Docker Compose
+└── parking_management_frontend/    # Frontend SPA web application
+```
+
+Clone both repositories into the same parent folder:
 
 ```bash
 git clone https://github.com/quan-ly-bai-dau-xe/parking_management_backend.git
+git clone https://github.com/quan-ly-bai-dau-xe/parking_management_frontend.git
 cd parking_management_backend
 ```
+
+#### 2. Create environment configuration
 
 Create the `.env` configuration file from `.env.example`:
 
@@ -112,7 +142,14 @@ Configure required environment variables in `.env`:
 DEBUG=True
 SECRET_KEY=your_secret_key_here
 POSTGRES_PASSWORD=your_password_here
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
+# Uncomment ONLY if the sibling parking_management_frontend repository is cloned (starts db, web and frontend):
+# COMPOSE_PROFILES=frontend
 ```
+
+`COMPOSE_PROFILES=frontend` makes `docker compose up --build` fail when the sibling `parking_management_frontend` directory is missing (Docker cannot find the build context). Leave it commented out if you do not have the frontend repository.
 
 `DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404.
 
@@ -122,27 +159,84 @@ Generate a secure random `SECRET_KEY`:
 python -c "import secrets; print(secrets.token_urlsafe(50))"
 ```
 
-#### Docker Compose Environment Note
+##### Docker Compose Environment & Frontend Controls
 
 The `.env` file is read by Docker Compose on the host machine to interpolate `${...}` variables and is NOT copied into the container image (`.dockerignore`). Any environment variable required by the application inside the container must be explicitly declared and forwarded under `services.web.environment` in `docker-compose.yml`. This requirement is verified by `tests/core/test_compose_env_forwarding.py`.
 
-Other configuration variables have built-in defaults in `docker-compose.yml`, so a minimal `.env` file containing only the required variables is sufficient.
+Key environment variables controlling the frontend and Docker Compose services:
 
-#### 2. Start all services
+| Variable | Default Value | Description |
+|---|---|---|
+| `COMPOSE_PROFILES` | `(unset)` | Controls which profile-gated services are started. Set to `frontend` for full-stack startup (`db`, `web`, and `frontend`), or leave commented out / unset (the default in `.env.example`) for standalone backend mode (`db` and `web` only). |
+| `FRONTEND_PORT` | `5173` | Host port mapped to the frontend container (`127.0.0.1:${FRONTEND_PORT:-5173}:5173`). Changing `FRONTEND_PORT` from `5173` requires updating `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` with matching `http://localhost:<FRONTEND_PORT>` and `http://127.0.0.1:<FRONTEND_PORT>` origins. |
+| `FRONTEND_CONTEXT` | `../parking_management_frontend` | Build context directory for the frontend Docker image. |
+| `WEB_PORT` | `8000` | Host port mapped to the backend container (`127.0.0.1:${WEB_PORT:-8000}:8000`). |
+| `POSTGRES_PORT` | `5432` | Host port mapped to PostgreSQL (`127.0.0.1:${POSTGRES_PORT:-5432}:5432`). |
 
-Build images and launch all services:
+##### Environment files
+
+Each repository maintains its own `.env` configuration file in its respective root folder:
+
+- **Backend environment** (`parking_management_backend/.env`): Configures Django, database credentials, security secrets, and Docker Compose settings (`COMPOSE_PROFILES`, `FRONTEND_PORT`, `FRONTEND_CONTEXT`).
+- **Frontend environment** (`parking_management_frontend/.env`): Configures client-side build flags (such as `VITE_USE_MOCK`).
+
+These environment files remain strictly separate and are never merged into one file. Docker Compose in the backend does not read or forward frontend variables (`VITE_*`).
+
+Key operational guidelines for `parking_management_frontend/.env`:
+
+- `VITE_USE_MOCK=false`: The frontend application connects to the real backend REST API without mock data fallback. This setting is required for full-stack operation.
+- `VITE_USE_MOCK=true`: The customer screens use local mock data. Note that frontend developers may default to `true` on their local machines.
+- **Image rebuild requirement**: The frontend multi-stage Docker build copies the frontend repository directory (`COPY . .`) and executes `npm run build`, baking `VITE_*` values directly into the static bundle served by Nginx. Consequently, after modifying `parking_management_frontend/.env`, you must rebuild the image using `docker compose up --build -d` (a plain `docker compose up -d` reuses the cached image and will not reflect `.env` changes).
+- **Local development (no Docker)**: Running `vite dev` in the frontend repository reads the exact same `.env` file.
+
+#### 3. Start services
+
+##### Standard Full-Stack Startup
+
+Build images and launch all three containers (`db`, `web`, and `frontend`):
 
 ```bash
-# Build images and start services in the foreground:
+# Build images and start all services in the foreground:
 docker compose up --build
 
-# Or build images and start in detached mode:
+# Or build images and start in detached (background) mode:
 docker compose up --build -d
 ```
 
-*Security note*: Host ports are bound exclusively to the loopback interface `127.0.0.1` (`127.0.0.1:${WEB_PORT:-8000}` and `127.0.0.1:${POSTGRES_PORT:-5432}`).
+*Security note*: All host ports are bound exclusively to the local loopback interface `127.0.0.1` (`127.0.0.1:${FRONTEND_PORT:-5173}`, `127.0.0.1:${WEB_PORT:-8000}`, and `127.0.0.1:${POSTGRES_PORT:-5432}`).
 
-#### 3. Seed sample data and set credentials
+##### Access URLs
+
+Once all containers are healthy and running, access the services via:
+
+| Service / Interface | URL | Note |
+|---|---|---|
+| **Frontend Web Application** | `http://localhost:5173` (or `http://127.0.0.1:5173`) | React SPA served by Nginx, proxying `/api/` to backend |
+| **Backend REST API** | `http://localhost:8000` (or `http://127.0.0.1:8000`) | Django / Gunicorn direct API root |
+| **Interactive Swagger UI** | `http://localhost:8000/api/v1/schema/swagger-ui/` | Interactive OpenAPI documentation and test client |
+| **ReDoc API Documentation** | `http://localhost:8000/api/v1/schema/redoc/` | Clean static OpenAPI reference documentation |
+
+##### Standalone Backend Mode (Without Frontend Repository)
+
+If you only need to work on the backend API or if the sibling `parking_management_frontend` repository is absent, use one of the following two methods to start `db` and `web` cleanly without build or missing-context errors:
+
+- **Method 1 (Specify target services via CLI)**:
+  Explicitly specify only the database and web services:
+
+  ```bash
+  docker compose up --build db web
+  ```
+
+- **Method 2 (Disable frontend profile in `.env`)**:
+  Leave `# COMPOSE_PROFILES=frontend` commented out in `.env` (the default in `.env.example`), or ensure `COMPOSE_PROFILES` is unset or empty. Then run the standard startup command:
+
+  ```bash
+  docker compose up --build
+  ```
+
+  Docker Compose skips the profile-gated `frontend` service and starts only `db` and `web`, exiting cleanly with code 0.
+
+#### 4. Seed sample data and set credentials
 
 By default, `LOAD_SAMPLE_DATA` is set to `0` to prevent overwriting existing data. To automatically seed sample data on container startup, set `LOAD_SAMPLE_DATA=1` in `.env` or start with:
 
@@ -160,9 +254,17 @@ Alternatively, seed sample data manually while containers are running:
 docker compose exec web python manage.py load_sample_data
 ```
 
-*Production note*: In production (`DEBUG=False`), `load_sample_data` is blocked to prevent accidental data contamination unless the `--force-production` flag is explicitly provided.
+*Production safety note*: In production (`DEBUG=False`), `load_sample_data` is blocked to prevent accidental data contamination unless the `--force-production` flag is explicitly provided. When run with `--force-production` in production mode, all sample account passwords are automatically reset to unusable hashes (`!`) to prevent the development password from existing in production.
 
-Sample accounts loaded from `db/02-seed.sql` do not contain usable passwords (password hashes use the unusable prefix `!`). Set account passwords using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
+For local development (`DEBUG=True`), all 20 sample accounts in `db/02-seed.sql` come pre-configured out of the box with the shared development password **`Parking@Dev2026`** (**WARNING: Dev-only password. Never use in production!**).
+
+On an already-seeded database, refresh sample account passwords to the seed password by running:
+
+```bash
+docker compose exec web python manage.py load_sample_data --refresh-passwords
+```
+
+Alternatively, individual account passwords can be set using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
 
 ```bash
 # Interactive password entry via prompt:
@@ -180,22 +282,29 @@ Sample test accounts extracted from `db/02-seed.sql`:
 | `EMPLOYEE` | `luong.mai.phuong@example.org` | `0385211625` |
 | `CUSTOMER` | `trinh.xuan.truong@example.com` | `0868851325` |
 
-#### 4. Stop and update configuration
+#### 5. Stop services and data preservation
 
-To stop services while preserving database volume data:
+To stop services safely while preserving all database records:
 
 ```bash
+# Stop running containers without removing them:
 docker compose stop
+
+# Or stop and remove containers and networks safely:
+docker compose down
 ```
 
-- **Data loss warning**: Running `docker compose down -v` permanently deletes the database volume `parking_postgres_data`. Use `docker compose down` (without the `-v` flag) to preserve persistent data.
+- **Critical Data Loss Warning**: Running `docker compose down -v` permanently deletes the named volume `parking_postgres_data` and all stored database records. Always use `docker compose down` (without the `-v` flag) to preserve persistent data.
 - **Password changes**: Modifying `POSTGRES_PASSWORD` in `.env` after the database volume has already been initialized does not update the password inside PostgreSQL (causing authentication failures). Retain the initial password or remove the development volume to reinitialize from scratch.
 - **Environment updates**: After editing `.env`, run `docker compose up -d` to apply updated environment settings without rebuilding images (`--build`).
 - **Forwarding new variables**: Any new environment variable required by the web container must be declared under `services.web.environment` in `docker-compose.yml`.
 
+</details>
+
 ---
 
-### Option 2: run with Python and a locally installed PostgreSQL (no Docker)
+<details id="option-2-run-with-python-and-a-locally-installed-postgresql-no-docker">
+<summary>Option 2: run with Python and a locally installed PostgreSQL (no Docker)</summary>
 
 <!-- cspell:ignore createdb -->
 <!-- cspell:ignore NOSUPERUSER -->
@@ -204,7 +313,7 @@ Run the application directly on a workstation with local Python and PostgreSQL i
 
 #### 1. Prerequisites
 
-- Python 3.14.7 (Python 3.15 is unsupported).
+- Python 3.14.7 (Python 3.15 is unsupported). Note: The codebase uses PEP 758 `except A, B:` syntax and therefore needs Python 3.14.7 (older interpreters fail with a SyntaxError).
 - PostgreSQL 18.x from postgresql.org (Windows installer includes pgAdmin 4 GUI and contrib extensions). *(not verified: Windows native MSI installer and pgAdmin 4 GUI)*
 
 #### 2. Provision database and user role via pgAdmin
@@ -273,11 +382,16 @@ POSTGRES_USER=parking_user
 POSTGRES_PASSWORD=your_password_here
 POSTGRES_HOST=127.0.0.1
 POSTGRES_PORT=5432
-CORS_ALLOWED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
-CSRF_TRUSTED_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
+CORS_ALLOWED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+CSRF_TRUSTED_ORIGINS=http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000
+CLOUDINARY_CLOUD_NAME=your_cloud_name
+CLOUDINARY_API_KEY=your_api_key
+CLOUDINARY_API_SECRET=your_api_secret
 ```
 
-`DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404. While the backend starts with minimal database and secret settings, a browser frontend accessing the API from another origin (such as `http://localhost:3000`) requires `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` to prevent HTTP 403 Forbidden CSRF rejection errors (`PROP-4.1-P06`).
+Cloudinary credentials (`CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`) are obtained from Cloudinary Console Dashboard -> Settings -> API Keys at `https://console.cloudinary.com/`. Note: Backend startup halts immediately with `django.core.exceptions.ImproperlyConfigured` if any of these three credentials are unset.
+
+`DEBUG=True` is required for development: when `DEBUG=False` (production only), `load_sample_data` is blocked and Swagger UI static CSS/JS assets return 404. While the backend starts with minimal database and secret settings, a browser frontend accessing the API from another origin (such as `http://localhost:5173` or `http://localhost:3000`) requires `CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS` in `.env` to prevent HTTP 403 Forbidden CSRF rejection errors (`PROP-4.1-P06`).
 
 Generate a secure random `SECRET_KEY`:
 
@@ -294,7 +408,17 @@ python manage.py migrate
 python manage.py load_sample_data
 ```
 
-Sample accounts from `db/02-seed.sql` do not contain usable passwords (password hashes use the unusable prefix `!`). Set account passwords using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
+*Production safety note*: In production (`DEBUG=False`), `load_sample_data` is blocked unless `--force-production` is passed, and all sample account passwords are automatically reset to unusable hashes (`!`) upon load.
+
+For local development (`DEBUG=True`), all 20 sample accounts in `db/02-seed.sql` come pre-configured out of the box with the shared development password **`Parking@Dev2026`** (**WARNING: Dev-only password. Never use in production!**).
+
+On an already-seeded database, refresh sample account passwords to the seed password by running:
+
+```bash
+python manage.py load_sample_data --refresh-passwords
+```
+
+Alternatively, individual account passwords can be set using `set_account_password` (passwords are read securely from an interactive prompt or from the `ACCOUNT_PASSWORD` environment variable, never passed via command-line arguments):
 
 ```bash
 # Interactive password entry via prompt:
@@ -330,6 +454,12 @@ Start the Django development server:
 python manage.py runserver
 ```
 
+Once running, access the local API endpoints and documentation via:
+
+- **Backend REST API**: `http://127.0.0.1:8000` (or `http://localhost:8000`)
+- **Interactive Swagger UI**: `http://127.0.0.1:8000/api/v1/schema/swagger-ui/`
+- **ReDoc API Documentation**: `http://127.0.0.1:8000/api/v1/schema/redoc/`
+
 Run the automated test suite to confirm end-to-end functionality:
 
 ```bash
@@ -342,11 +472,33 @@ pytest
 - License plate recognition automatically downloads ONNX weight files from the network to `~/.cache` on the first scan request if `PARKING_OCR_MODELS_DIR` does not contain pre-baked weights (refer to `apps/parking/services/ocr.py`), requiring internet connectivity during the initial scan.
 - Native Windows PostgreSQL installer, pgAdmin 4 GUI configuration screens, and Windows service (`services.msc`) management are marked as `(not verified)` in automated headless test pipelines.
 
+#### 8. Running the frontend application locally (optional)
+
+To run the frontend Single Page Application alongside the backend without container virtualization:
+
+1. Open a separate terminal and navigate to the sibling `parking_management_frontend` repository:
+
+   ```bash
+   cd ../parking_management_frontend
+   ```
+
+2. Install dependencies and start the Vite development server:
+
+   ```bash
+   npm ci
+   npm run dev
+   ```
+
+3. Access the web interface at `http://localhost:5173`. The Vite development server (`vite.config.js`) automatically proxies all `/api` requests to the local backend at `http://127.0.0.1:8000`.
+
 If you prefer running the backend with Docker, see [Option 1: run with Docker](#option-1-run-with-docker). <!-- closing-docker-pointer -->
+
+</details>
 
 ---
 
-### Verify the backend and try a login (both options)
+<details id="verify-the-backend-and-try-a-login-both-options">
+<summary>Verify the backend and try a login (both options)</summary>
 
 After starting the backend using either option, verify operational status and test authentication:
 
@@ -397,16 +549,22 @@ Upon successful authentication, the server responds with HTTP `200 OK`, returnin
 - **Frontend Integration Guide**: For comprehensive integration patterns, see [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md).
 - **Security & Authentication Architecture**: See [Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"](#step-8-interactive-api-documentation-csrf--swagger-try-it-out) for detailed cookie security, Argon2 password hashing, and token rotation specifications.
 - **Same Host Requirement**: Run the frontend and backend on the same host name (`127.0.0.1` or `localhost`) during local development to avoid cross-site cookie restrictions in modern browsers.
-- **Trusted Origins**: Default CORS and CSRF configurations (`CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`) permit cross-origin requests from `http://localhost:3000` and `http://127.0.0.1:3000`.
+- **Trusted Origins**: Default CORS and CSRF configurations (`CORS_ALLOWED_ORIGINS` and `CSRF_TRUSTED_ORIGINS`) permit cross-origin requests from `http://localhost:5173`, `http://127.0.0.1:5173`, `http://localhost:3000`, and `http://127.0.0.1:3000`.
+
+</details>
 
 ---
 
-### Environment variables
+<details id="environment-variables">
+<summary>Environment variables</summary>
 
 Key environment variables:
 
 - `SECRET_KEY`: Django secret key (required).
 - `POSTGRES_PASSWORD`: PostgreSQL database password (required).
+- `CLOUDINARY_CLOUD_NAME`: Cloudinary cloud name for scan image storage (required; halts startup if unset).
+- `CLOUDINARY_API_KEY`: Cloudinary API key (required; halts startup if unset).
+- `CLOUDINARY_API_SECRET`: Cloudinary API secret (required; halts startup if unset).
 - `POSTGRES_DB`: PostgreSQL database name (default: `parking_db`).
 - `POSTGRES_USER`: PostgreSQL database user (default: `parking_user`).
 - `WEB_PORT`: Host port for Django backend (default: `8000`, bound exclusively to `127.0.0.1`).
@@ -434,9 +592,12 @@ Key environment variables:
 - `DB_POOL_ENABLE`: Enable psycopg database connection pooling (default: `False`, using `CONN_MAX_AGE=60` with `CONN_HEALTH_CHECKS=True`).
 - `DB_CONN_MAX_AGE`: Persistent database connection lifespan in seconds (default: `60`).
 
+</details>
+
 ---
 
-### Troubleshooting
+<details id="troubleshooting">
+<summary>Troubleshooting</summary>
 
 #### Table 1: Troubleshooting Option 1 (Docker)
 
@@ -445,7 +606,7 @@ Key environment variables:
 | `bind: address already in use` | Host port 8000 or 5432 is occupied by another local process. | Change `WEB_PORT` or `POSTGRES_PORT` to an available port in `.env` (e.g., `WEB_PORT=8015`, `POSTGRES_PORT=5445`). |
 | `FATAL: password authentication failed` | `POSTGRES_PASSWORD` was changed in `.env` after the database volume was already initialized. | Restore the original password in `.env`, update the password in PostgreSQL via `ALTER ROLE`, or recreate the volume in development. |
 | New variables in `.env` have no effect | The variable was not forwarded into the container. | Declare the variable under `services.web.environment` in `docker-compose.yml`. |
-| Missing required variables when running compose | `SECRET_KEY` or `POSTGRES_PASSWORD` is not set. | Provide values for both required variables in `.env`. |
+| Missing required variables when running compose | `SECRET_KEY`, `POSTGRES_PASSWORD`, `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, or `CLOUDINARY_API_SECRET` is not set. | Provide values for all required variables in `.env`. |
 
 #### Table 2: Troubleshooting Option 2 (Local Python & PostgreSQL)
 
@@ -455,35 +616,14 @@ Key environment variables:
 | `permission denied to create database` during `pytest` | Role `parking_user` lacks the `CREATEDB` attribute. | Connect via pgAdmin as `postgres` and execute `ALTER ROLE parking_user CREATEDB;`. |
 | Swagger UI missing CSS/JS styling | Development server started with `DEBUG=False`. | Set `DEBUG=True` in `.env` so Django serves static assets in development. |
 | First license plate scan is slow or fails | OCR engine is downloading ONNX weights to `~/.cache`. | Ensure active internet connectivity during the first plate scan request. |
+| `ImproperlyConfigured: Missing required Cloudinary environment variables` | `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, or `CLOUDINARY_API_SECRET` is unset in `.env`. | Configure Cloudinary credentials in `.env`. |
+
+</details>
 
 ---
 
-### Step 5.1: Purge Orphan Scan Images (`purge_orphan_scans`)
-
-To reclaim disk space by purging unreferenced scan images under `MEDIA_ROOT/parking_scans` that are not tied to any parking session log (`VehicleEntryExitLog.entry_image_url` or `exit_image_url`), use the dedicated management command:
-
-```bash
-# 1. Dry-run simulation (default, safe inspection without deleting files):
-python manage.py purge_orphan_scans
-
-# Or inside Docker web container:
-docker compose exec web python manage.py purge_orphan_scans
-
-# 2. Execute actual deletion (purges unreferenced files older than 24 hours):
-python manage.py purge_orphan_scans --no-dry-run --older-than-hours 24
-
-# Or inside Docker web container:
-docker compose exec web python manage.py purge_orphan_scans --no-dry-run --older-than-hours 24
-```
-
-**Command Parameters**:
-
-- `--dry-run` / `--no-dry-run`: Defaults to `--dry-run` for safety. Pass `--no-dry-run` to permanently remove orphan files.
-- `--older-than-hours <N>`: Only considers files modified earlier than $N$ hours ago (default: `24.0`). Prevents deleting scan images from active uploads or ongoing check-in sessions.
-- Preserves 100% of referenced image files and never mutates or drops database log rows.
-- Automatically cleans up empty `YYYY/MM/DD` date subdirectories.
-
-### Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"
+<details id="step-8-interactive-api-documentation-csrf--swagger-try-it-out">
+<summary>Step 8: Interactive API Documentation, CSRF & Swagger "Try it out"</summary>
 
 Access the interactive API documentation and health endpoints:
 
@@ -572,7 +712,10 @@ Then in your browser developer tools (or via browser automation), add the cookie
 
 And ensure your requests send the header `X-CSRFToken` matching your browser's `csrftoken` cookie.
 
-### Step 9: Run Automated Test Suite
+</details>
+
+<details id="step-9-run-automated-test-suite">
+<summary>Step 9: Run Automated Test Suite</summary>
 
 Execute the full automated test suite with coverage against live PostgreSQL 18.6:
 
@@ -582,7 +725,10 @@ pytest -v --cov=apps
 
 *Threshold*: All tests must pass with line coverage enforced at `>= 80%` (default deterministic suite: `992` passed, `7` skipped; opt-in relative performance benchmarks marked `@pytest.mark.perf` run when `RUN_PERF_TESTS=1`).
 
-### Step 10: Performance Testing & High-Concurrency Soak Runbook (H1, H3, H4, H5, H9a, K2, K7)
+</details>
+
+<details id="step-10-performance-testing--high-concurrency-soak-runbook-h1-h3-h4-h5-h9a-k2-k7">
+<summary>Step 10: Performance Testing & High-Concurrency Soak Runbook (H1, H3, H4, H5, H9a, K2, K7)</summary>
 
 The repository provides a standalone, high-performance load testing tool (`tests/perf/load_test.py`) that uses native standard libraries (`urllib`, `http.client`, `threading`) and Pillow for synthetic runtime image generation.
 
@@ -590,24 +736,21 @@ The repository provides a standalone, high-performance load testing tool (`tests
 
 - **Runtime Synthetic Images (H9a, K2)**: Pre-generates realistic Vietnamese license plates before worker threads start across multiple resolutions (`640x480`, `1920x1080`, and `4000x3000` 12 MP) using Pillow. Zero dependency on external sample files.
 - **Cold vs. Warm Burst Profiling (K2)**: Supports `--warmup` and `--warmup-duration` (default `3.0` seconds) to report separate `COLD RUN METRICS` and `WARM RUN METRICS` tables.
-- **Throwaway Media Hygiene (K7)**: Provides `tests/perf/docker-compose.tmpfs.yml` (mounting `/app/media` on RAM `tmpfs`) and `--purge-scans` (invoking `purge_orphan_scans` automatically after local runs) so benchmarks never pollute the repository `media/` directory.
+- **Cloudinary Storage Hygiene (K7, ADR-0010)**: Parking scans are stored exclusively in Cloudinary with zero local disk writes, ensuring load tests and benchmarks never accumulate media files on local storage.
 - **Fail-Fast Error Accounting (H8c)**: Fatal errors (`500 Internal Server Error`, connection drops, or unexpected status codes outside `--allow-status`) are counted and reported. The process exits with code `1` upon any unexpected failure.
 - **Circuit Breaker Validation**: Tests backend under heavy concurrency (`32` to `64` concurrent workers) while verifying semaphore admission (`503 Service Unavailable` with `Retry-After`) under saturation.
 
 #### Running Soak & Concurrency Tests
 
 ```bash
-# 0. Recommended: Start stack with RAM tmpfs over /app/media so zero scan files persist on host disk:
-docker compose -f docker-compose.yml -f tests/perf/docker-compose.tmpfs.yml up -d
-
-# 1. Full benchmark suite across all scenarios at concurrency 32 and 64 (with automatic orphan scan cleanup):
-python tests/perf/load_test.py --duration 10 --purge-scans
+# 1. Full benchmark suite across all scenarios at concurrency 32 and 64:
+python tests/perf/load_test.py --duration 10
 
 # 2. High-concurrency 180-second soak test (64 clients for 180 seconds):
 python tests/perf/load_test.py --concurrency 64 --duration 180 --scenario lookup
 
 # 3. Targeted 12 MP cold-start vs. warm-state burst test (K2):
-python tests/perf/load_test.py --concurrency 32,64 --duration 10 --scenario scan_12mp --warmup --purge-scans
+python tests/perf/load_test.py --concurrency 32,64 --duration 10 --scenario scan_12mp --warmup
 ```
 
 #### Query Ceiling Budgets & Database Safeguards (H5)
@@ -621,7 +764,10 @@ Automated tests (`tests/parking/test_query_budgets.py`) enforce hard SQL query c
 - Check-out (`POST /api/v1/parking/sessions/{id}/check-out/`): `7 <= 9` queries
 - Sessions List (`GET /api/v1/parking/sessions/`): `267.1 RPS` (`p95 = 196.9 ms <= 277 ms`, `4.26x` Round 33 throughput at `c = 32`)
 
-### Step 11: Production Operations Runbook & Incident Playbooks (J7.d, Standard 6)
+</details>
+
+<details id="step-11-production-operations-runbook--incident-playbooks-j7d-standard-6">
+<summary>Step 11: Production Operations Runbook & Incident Playbooks (J7.d, Standard 6)</summary>
 
 This runbook provides authoritative operational procedures, parameter safety envelopes, structured log specifications, and incident response playbooks for on-call engineers managing the Smart Mobility parking backend stack.
 
@@ -651,9 +797,6 @@ docker compose exec web python manage.py migrate --noinput
 
 # Load sample seed data (Development only; production is protected by default):
 docker compose exec web python manage.py load_sample_data
-
-# Purge unreferenced scan images older than 24 hours:
-docker compose exec web python manage.py purge_orphan_scans --no-dry-run --older-than-hours 24
 
 # ------------------------------------------------------------------------------
 # 3. GRACEFUL SHUTDOWN
@@ -735,7 +878,7 @@ Every critical API request (`/api/v1/parking/plate-scans/`, check-in, check-out)
   - `ocr1`: Model 1 CCT character recognition inference ($\sim 4.3\text{ ms}$).
   - `ocr2`: Model 2 Mobile-ViT-v2 fallback OCR ($0.00\text{ ms}$ when adaptive skip succeeds; $\sim 4.3\text{ ms}$ otherwise).
   - `db`: Database lookups (vehicle indexing, active ticket, open session queries).
-  - `write`: File storage write to `parking_scans/YYYY/MM/DD/`.
+  - `write`: Image upload to Cloudinary folder `parking_scans/YYYY/MM/DD/`.
 - **`review_status`**: Policy verdict (`AUTO` for automated barrier opening; `NEEDS_REVIEW` for manual operator inspection).
 - **`review_reasons`**: Specific trigger codes requiring review (`LOW_CHAR_CONFIDENCE`, `POSITION_CORRECTED`, `MODEL_DISAGREEMENT`, `UNKNOWN_PLATE_PATTERN`, etc.).
 - **`plate`**: Privacy-masked license plate string (`51F***81`). Full raw plates are persisted exclusively in encrypted/audited database tables.
@@ -796,9 +939,6 @@ docker stats --no-stream parking_management_backend-web-1
 
 # 2. Check for memory-triggered worker restarts:
 docker compose logs web | grep -E "Graceful memory exit|worker was killed|Booting worker"
-
-# 3. Check disk space in scan upload directory:
-docker compose exec web du -sh /app/media/parking_scans
 ```
 
 **Remediation**:
@@ -877,9 +1017,14 @@ docker compose exec web python manage.py showmigrations
 docker compose exec web python manage.py migrate core <target_migration>
 ```
 
+</details>
+
+</details>
+
 ---
 
-## 4. CI/CD & Branch Protection Rules for Repository Owner
+<details id="4-cicd--branch-protection-rules-for-repository-owner">
+<summary>4. CI/CD & Branch Protection Rules for Repository Owner</summary>
 
 To maintain production stability and prevent untested code merges, the **Repository Owner** must configure GitHub Branch Protection Rules on branches `main` and `dev`:
 
@@ -896,9 +1041,12 @@ To maintain production stability and prevent untested code merges, the **Reposit
 3. **Require Linear History / No Direct Push**: Direct commits to `main` and `dev` are strictly blocked.
 4. **Preserved Schema Check**: Keep `.github/workflows/01-db-schema-check.yml` active to protect frozen `db/` schema files.
 
+</details>
+
 ---
 
-## 5. Documentation & AI Operating System
+<details id="5-documentation--ai-operating-system">
+<summary>5. Documentation & AI Operating System</summary>
 
 - **Developer & Integration Guides**:
   - [`docs/guides/01-frontend-api-guide.md`](docs/guides/01-frontend-api-guide.md) — Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
@@ -925,11 +1073,20 @@ To maintain production stability and prevent untested code merges, the **Reposit
   - [`.claude/skills/`](.claude/skills/) — Numbered specialized skills (`01`–`13`).
   - [`CLAUDE.md`](CLAUDE.md) — Project context for AI coding assistants.
 
+</details>
+
 ---
 
-## 6. Governance & License
+<details id="6-governance--license">
+<summary>6. Governance & License</summary>
 
-- **License**: All Rights Reserved. (No open-source license granted).
+- **License**: [All Rights Reserved](LICENSE). (Proprietary software; no open-source license granted).
+- **Community**:
+  - [Contributing Guidelines](CONTRIBUTING.md)
+  - [Code of Conduct](CODE_OF_CONDUCT.md)
+  - [Security Policy](SECURITY.md)
+  - [Accessibility Statement](ACCESSIBILITY.md)
+  - [License](LICENSE)
 - **Vulnerability Reporting**: Strictly via GitHub Private Vulnerability Reporting. See [SECURITY.md](SECURITY.md).
 
 ### 6.1 Third-Party Dataset Attribution (CC-BY-4.0)
@@ -940,3 +1097,5 @@ This project utilizes the 322-plate Vietnamese license plate benchmark dataset f
 - **Author**: Sonnetechnology
 - **Source Link**: [Hugging Face Dataset: sonnetechnology/license-plate-text-recognition-full](https://huggingface.co/datasets/sonnetechnology/license-plate-text-recognition-full)
 - **License**: [Creative Commons Attribution 4.0 International (CC-BY-4.0)](https://creativecommons.org/licenses/by/4.0/)
+
+</details>

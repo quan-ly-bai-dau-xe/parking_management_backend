@@ -55,6 +55,9 @@ services:
       GUNICORN_MAX_REQUESTS_JITTER: ${GUNICORN_MAX_REQUESTS_JITTER:-100}
       GUNICORN_TIMEOUT: ${GUNICORN_TIMEOUT:-30}
       GUNICORN_MEMORY_LIMIT_MB: ${GUNICORN_MEMORY_LIMIT_MB:-1536}
+      CLOUDINARY_CLOUD_NAME: "${CLOUDINARY_CLOUD_NAME:?Error: CLOUDINARY_CLOUD_NAME is required}"
+      CLOUDINARY_API_KEY: "${CLOUDINARY_API_KEY:?Error: CLOUDINARY_API_KEY is required}"
+      CLOUDINARY_API_SECRET: "${CLOUDINARY_API_SECRET:?Error: CLOUDINARY_API_SECRET is required}"
       PARKING_OCR_ENGINE: ${PARKING_OCR_ENGINE:-fast_alpr}
       PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD: ${PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD:-90.0}
       PARKING_OCR_ADAPTIVE_ENSEMBLE: ${PARKING_OCR_ADAPTIVE_ENSEMBLE:-1}
@@ -77,8 +80,8 @@ services:
       OCR_MODELS_DIR: ${OCR_MODELS_DIR:-/app/models/ocr}
       PARKING_LOG_PRIVACY_MODE: ${PARKING_LOG_PRIVACY_MODE:-1}
       PARKING_LOG_MASK_PLATES: ${PARKING_LOG_MASK_PLATES:-1}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000}
       SESSION_COOKIE_AGE: ${SESSION_COOKIE_AGE:-43200}
       REMEMBER_ROTATION_GRACE_SECONDS: ${REMEMBER_ROTATION_GRACE_SECONDS:-30}
       REMEMBER_TOKEN_LIFETIME_DAYS: ${REMEMBER_TOKEN_LIFETIME_DAYS:-30}
@@ -89,16 +92,27 @@ services:
       AUTH_THROTTLE_WINDOW_SECONDS: ${AUTH_THROTTLE_WINDOW_SECONDS:-900}
       NUM_PROXIES: ${NUM_PROXIES:-0}
       DB_SSLMODE: ${DB_SSLMODE:-prefer}
-    # Linux Host Permission Note:
-    # If deploying on native Linux, ensure host directory ./media is writable by container UID 10001:
-    #   mkdir -p media && sudo chown -R 10001:10001 media
-    # Alternatively, specify matching host user:
-    #   user: "${CURRENT_UID:-10001}:${CURRENT_GID:-10001}"
-    volumes:
-      # Bind mount directly to host media directory (STRICT: no named volume for media)
-      - ./media:/app/media
     depends_on:
       db:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          # Network alias 'backend' allows frontend Nginx container to proxy to http://backend:8000
+          - backend
+
+  frontend:
+    profiles: ["frontend"]
+    build:
+      context: ${FRONTEND_CONTEXT:-../parking_management_frontend}
+      dockerfile: Dockerfile
+      target: runtime
+    restart: unless-stopped
+    ports:
+      # Security boundary: bind exclusively to local loopback interface 127.0.0.1
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      web:
         condition: service_healthy
 
 volumes:

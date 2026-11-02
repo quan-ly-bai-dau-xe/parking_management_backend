@@ -42,5 +42,25 @@ Physical PostgreSQL 18.6 schema definitions, seed catalog, and execution guides:
 
 Integration and development guides for client applications:
 
-- [`01-frontend-api-guide.md`](guides/01-frontend-api-guide.md): Comprehensive Frontend API Integration Guide (Authentication, Session/CSRF, OCR Plate Scan, Check-in/Check-out, Error Envelopes, and TypeScript Type Generation).
+- [`01-frontend-api-guide.md`](guides/01-frontend-api-guide.md): Comprehensive Frontend API Integration Guide (Index & Recommended Reading Order).
+  - [`01-getting-started.md`](guides/frontend-api/01-getting-started.md): Backend URLs, 1-minute dev setup, seed data, sample test accounts.
+  - [`02-authentication-flow.md`](guides/frontend-api/02-authentication-flow.md): CSRF bootstrap, login scenarios, cookie specifications, silent session recovery, logout.
+  - [`03-client-code-cors-cookies.md`](guides/frontend-api/03-client-code-cors-cookies.md): Copy-paste `fetch` & `axios` snippets, CORS & cookie scoping, Vite/Next.js/Webpack dev proxies.
+  - [`04-conventions.md`](guides/frontend-api/04-conventions.md): Standard error envelope, 27 error codes lookup table, pagination, rate limiting.
+  - [`05-parking-endpoints.md`](guides/frontend-api/05-parking-endpoints.md): Gates, plate scan OCR, vehicle lookup/search, check-in, check-out, sessions.
+  - [`06-vehicle-endpoints.md`](guides/frontend-api/06-vehicle-endpoints.md): Vehicle CRUD, summary KPI cards, OCC concurrency, soft-delete DEL-03 guards, streaming CSV export, vehicle types.
+  - [`07-customer-endpoints.md`](guides/frontend-api/07-customer-endpoints.md): Customer CRUD, summary KPI cards, OCC concurrency, soft-delete DEL-02 guards, vehicle creation alias.
+  - [`08-employee-endpoints.md`](guides/frontend-api/08-employee-endpoints.md): Employee CRUD, positions catalog, summary KPI cards, atomic account creation, OCC concurrency, soft-delete DEL-01 guards.
+  - [`09-reference-data-and-tooling.md`](guides/frontend-api/09-reference-data-and-tooling.md): Administrative unit cascading hierarchy, TypeScript types generation, Postman import.
+  - [`10-troubleshooting-and-cloudinary.md`](guides/frontend-api/10-troubleshooting-and-cloudinary.md): 9 common troubleshooting scenarios, unimplemented feature caveats, Cloudinary HTTPS image URLs & null-guard handling.
 - [`api-endpoints.md`](api-endpoints.md): Compact index of currently registered routes; use the integration guide for detailed examples and workflows.
+
+## 5. Community & Governance Standards
+
+Repository health, code of conduct, contributing standards, and accessibility statements:
+
+- [`LICENSE`](../LICENSE): Proprietary license and copyright statement.
+- [`CODE_OF_CONDUCT.md`](../CODE_OF_CONDUCT.md): Contributor Covenant v2.1 code of conduct, enforcement reporting, and security redirect.
+- [`CONTRIBUTING.md`](../CONTRIBUTING.md): Collaboration standards, Git branching workflow (`ADR-0002`), Safe Delete policy (`ADR-0003`), code ownership, and automated quality gates.
+- [`SECURITY.md`](../SECURITY.md): Vulnerability reporting policy via GitHub Private Vulnerability Reporting.
+- [`ACCESSIBILITY.md`](../ACCESSIBILITY.md): Backend REST API accessibility features, machine-readable error codes, and barrier reporting.

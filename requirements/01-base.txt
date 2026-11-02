@@ -10,3 +10,4 @@ argon2-cffi==25.1.0
 fast-alpr[onnx]==0.4.0
 Pillow==12.3.0
 gunicorn==23.0.0
+cloudinary==1.46.3

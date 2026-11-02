@@ -49,7 +49,10 @@ def make_payload(
     plate_final: str,
     candidates: list[dict],
     best_cand: dict | None,
-    image_url: str = "/media/parking_scans/2026/10/20/sample_scan.jpg",
+    image_url: str = (
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+        "v1730178490/parking_scans/2026/10/20/12345678901234567890123456789012.jpg"
+    ),
     vehicle_lookup: dict | None = None,
     is_blacklisted: bool = False,
     open_session: dict | None = None,

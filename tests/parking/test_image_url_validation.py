@@ -64,17 +64,12 @@ def out_gate():
 
 
 @pytest.fixture
-def valid_entry_scan_file(tmp_path, settings):
-    """Tạo một file ảnh scan hợp lệ trên đĩa trong thư mục MEDIA_ROOT."""
-    settings.MEDIA_ROOT = str(tmp_path)
-    sub_dir = tmp_path / "parking_scans" / "2026" / "10" / "18"
-    sub_dir.mkdir(parents=True, exist_ok=True)
-    img_name = "f3e1a8b2c4d5e6f7a1b2c3d4e5f6a7b8.jpg"
-    img_file = sub_dir / img_name
-    img_file.write_bytes(
-        b"\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00"
+def valid_entry_scan_file():
+    """Trả về một URL ảnh Cloudinary HTTPS hợp lệ theo quy định ADR-0010."""
+    return (
+        "https://res.cloudinary.com/test-cloud/image/upload/"
+        "v1730178490/parking_scans/2026/10/18/f3e1a8b2c4d5e6f7a1b2c3d4e5f6a7b8.jpg"
     )
-    return f"/media/parking_scans/2026/10/18/{img_name}"
 
 
 MALICIOUS_PAYLOADS = [

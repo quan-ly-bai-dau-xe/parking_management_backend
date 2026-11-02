@@ -12,6 +12,7 @@ Architectural Mandate:
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
 
@@ -318,13 +319,13 @@ class ReferenceContractValidator:
             raise ContractSchemaError(
                 f"image_url must be a non-empty string, got '{image_url}'"
             )
-        if not (
-            image_url.startswith("/")
-            or image_url.startswith("http://")
-            or image_url.startswith("https://")
-        ):
+        pattern = (
+            r"^https://res\.cloudinary\.com/[a-zA-Z0-9_-]+/image/upload/"
+            r"(?:v\d+/)?parking_scans/\d{4}/\d{2}/\d{2}/[0-9a-f]{32}\.(?:jpg|png|webp)$"
+        )
+        if not re.match(pattern, image_url):
             raise ContractInvariantError(
-                f"image_url must be an absolute or root-relative URL path, got '{image_url}'"
+                f"image_url must be a valid Cloudinary HTTPS URL matching contract, got '{image_url}'"
             )
 
 

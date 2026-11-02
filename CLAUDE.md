@@ -32,7 +32,7 @@ Project guidance and architectural pointers for AI assistants in `parking_manage
 
 - **Requirements (`docs/requirements/`)**: `06-frontend-srs-db-alignment.md` (primary FE-first decision record), `07-fe-srs-traceability.md` (FE + SRS traceability matrix & `TL-28` SQL queries), `00-srs-catalog.md` (secondary SRS catalog), `01-decision-log.md`, `02-scope-additions-from-plan.md`, `03-delete-rules-catalog.md`, `04-dod-and-quality-check.md`, `05-proposed-messages.md`.
 - **Database (`db/`)**: `00-README.md`, `01-schema.sql`, `02-seed.sql`, `03-erd.asta`, and `04`–`09` ERD PNGs.
-- **ADRs (`docs/adr/`)**: `0001-fixed-tech-stack-and-lts-roadmap.md`, `0002-git-branching-and-collaboration-workflow.md`, `0003-data-deletion-soft-delete-protect-and-audit.md`, `0004-authentication-session-and-remember-token.md`, `0005-local-docker-compose-for-postgresql.md`, `0006-django-skeleton-v2-schema-authority.md`.
+- **ADRs (`docs/adr/`)**: `0001-fixed-tech-stack-and-lts-roadmap.md`, `0002-git-branching-and-collaboration-workflow.md`, `0003-data-deletion-soft-delete-protect-and-audit.md`, `0004-authentication-session-and-remember-token.md`, `0005-local-docker-compose-for-postgresql.md`, `0006-django-skeleton-v2-schema-authority.md`, `0007-backend-service-in-docker-compose-and-plate-ocr-engine.md`, `0009-dual-image-storage-backend-and-media-serving.md` (superseded), `0010-cloudinary-only-image-storage.md`.
 - **AI Rules (`.claude/rules/`)**: `01` to `10` (Numbered, imperative, testable; includes `10-team-collaboration-and-code-ownership.md`).
 - **AI Skills (`.claude/skills/`)**: `01` to `13` (Domain procedures; includes `12-trash-restore-and-purge-lifecycle` and `13-api-first-contract-and-mock-data`).
 
