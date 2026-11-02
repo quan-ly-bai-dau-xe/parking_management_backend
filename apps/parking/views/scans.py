@@ -29,7 +29,10 @@ from apps.parking.serializers.scans import (
     PlateScanResponseSerializer,
 )
 from apps.parking.services.ocr import get_plate_recognizer
-from apps.parking.services.plate_scan import execute_plate_scan
+from apps.parking.services.plate_scan import (
+    PlateScanExecutionResult,
+    execute_plate_scan,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,7 @@ def init_observability_context(request: Any) -> None:
     request._obs_review_status = None
     request._obs_review_reasons = []
     request._obs_plate = None
+    request._obs_gate_id = None
 
 
 def set_observability_metadata(
@@ -74,14 +78,23 @@ def set_observability_metadata(
     review_status: str | None = None,
     review_reasons: list[str] | None = None,
     plate: str | None = None,
+    gate_id: int | None = None,
+    result: Any = None,
 ) -> None:
     """Record observability attributes on the request object."""
+    if result is not None:
+        review_status = getattr(result, "review_status", review_status)
+        review_reasons = getattr(result, "review_reasons", review_reasons)
+        plate = getattr(result, "plate_normalized", plate)
+        gate_id = getattr(result, "gate_id", gate_id)
     if review_status is not None:
         request._obs_review_status = review_status
     if review_reasons is not None:
         request._obs_review_reasons = review_reasons
     if plate is not None:
         request._obs_plate = plate
+    if gate_id is not None:
+        request._obs_gate_id = gate_id
 
 
 def finalize_observability_response(
@@ -121,6 +134,7 @@ def finalize_observability_response(
         "review_status": getattr(request, "_obs_review_status", None),
         "review_reasons": getattr(request, "_obs_review_reasons", []),
         "plate": format_plate_for_log(getattr(request, "_obs_plate", None)),
+        "gate_id": getattr(request, "_obs_gate_id", None),
     }
     logger.info(json.dumps(record, ensure_ascii=False))
     return response
@@ -148,6 +162,49 @@ def parse_preview_flag(raw_value: Any) -> bool:
         message=msg,
         status_code=status.HTTP_400_BAD_REQUEST,
         details={"preview": [msg]},
+    )
+
+
+def parse_gate_id(raw_value: Any) -> int | None:
+    """
+    Parse and validate optional gate_id integer parameter.
+    Accepts None/empty (returns None), integer, or digit string (> 0).
+    Rejects any non-numeric or non-positive value with HTTP 400 Bad Request and PROP-GEN-P01.
+    """
+    if raw_value is None or raw_value == "":
+        return None
+    try:
+        if isinstance(raw_value, bool):
+            raise TypeError("Boolean value is not accepted for gate_id")
+        if isinstance(raw_value, float):
+            raise TypeError("Float value is not accepted for gate_id")
+        val = int(raw_value)
+        if val <= 0:
+            raise ValueError
+        return val
+    except (ValueError, TypeError):  # fmt: skip
+        msg = ALL_MESSAGES["PROP-GEN-P01"]
+        raise BusinessAPIException(
+            code="PROP-GEN-P01",
+            message=msg,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details={"gate_id": [msg]},
+        ) from None
+
+
+def _execute_scan_for_request(
+    request: Request,
+    image_file: Any,
+    stages: dict[str, float],
+) -> PlateScanExecutionResult:
+    """Delegate to execute_plate_scan with parsed request parameters."""
+    return execute_plate_scan(
+        image_file=image_file,
+        stages=stages,
+        recognizer=get_plate_recognizer(),
+        lookup_func=vehicle_lookup_func,
+        preview=parse_preview_flag(request.data.get("preview")),  # type: ignore[union-attr]
+        gate_id=parse_gate_id(request.data.get("gate_id")),  # type: ignore[union-attr]
     )
 
 
@@ -571,19 +628,8 @@ class PlateScanView(APIView):
             )
 
         stages: dict[str, float] = getattr(request, "_obs_stages", {})
-        result = execute_plate_scan(
-            image_file=image_file,
-            stages=stages,
-            recognizer=get_plate_recognizer(),
-            lookup_func=vehicle_lookup_func,
-            preview=parse_preview_flag(request.data.get("preview")),  # type: ignore[union-attr]
-        )
-
-        set_observability_metadata(
-            request,
-            review_status=result.review_status,
-            review_reasons=result.review_reasons,
-            plate=result.plate_normalized,
-        )
-
+        result = _execute_scan_for_request(
+            request, image_file, stages
+        )  # execute_plate_scan
+        set_observability_metadata(request, result=result)
         return Response(result.payload, status=status.HTTP_200_OK)

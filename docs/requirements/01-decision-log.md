@@ -157,3 +157,11 @@ Canonical decision log for `parking_management_backend` (`TL-01`–`TL-51`). All
   3. Cấu hình `image_url = serializers.CharField(allow_null=True, required=True)` trong serializer phản hồi và schema OpenAPI (`drf-spectacular`), bảo đảm lệnh `python manage.py spectacular --validate --fail-on-warn` vượt qua mà không phát sinh cảnh báo.
   4. Cơ chế parse boolean nghiêm ngặt: chấp nhận chuỗi `"true"` / `"false"` từ FormData; từ chối mọi giá trị sai lệch khác bằng mã lỗi HTTP 400 và phong bì chuẩn `PROP-GEN-P01`.
   5. Khi `preview=false` hoặc không truyền: hành vi tương thích 100% từng byte với phiên bản trước (lưu ảnh lên Cloudinary và trả về URL ảnh hợp lệ).
+
+## 7. Plate Scan Gate ID Forwarding (`TL-56`)
+
+- **TL-56 — Barrier Gate ID Forwarding and Request Parameter Validation** (`[PROPOSAL]` | `apps/parking/views/scans.py`, `apps/parking/services/plate_scan.py`, `docs/guides/frontend-api/05-parking-endpoints.md`):
+  1. Phân tích và chuyển tiếp tham số tùy chọn `gate_id` từ `request.data` trong endpoint `POST /api/v1/parking/plate-scans/` vào `execute_plate_scan(..., gate_id=gate_id)`.
+  2. Xác thực giá trị `gate_id`: Chấp nhận số nguyên dương (`> 0`) hoặc để trống (`None`/`""`); từ chối các giá trị sai lệch (chuỗi không phải số, số nguyên <= 0, số thực) với mã lỗi HTTP 400 Bad Request và phong bì chuẩn `PROP-GEN-P01`.
+  3. Ghi nhận `_obs_gate_id` vào observability metadata (`PlateScanExecutionResult.gate_id`) và log có cấu trúc `parking_api_request` phục vụ giám sát vận hành bãi xe.
+  4. Bảo toàn nguyên tắc thin controller của `PlateScanView.post` (duy trì kiểm định AST số dòng lệnh logic: đúng 6 câu lệnh logic và <= 20 dòng AST nodes).
