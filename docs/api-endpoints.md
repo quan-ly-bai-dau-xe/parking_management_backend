@@ -226,6 +226,191 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
   - `404 Not Found`: Target customer not found or already deleted (`PROP-4.4.4-P02` / `PROP-4.4.5-P01`).
   - `409 Conflict`: OCC version mismatch (`MSG-4.3.1-M03`), unique conflict on code, CCCD, phone, or email (`MSG-4.3.1-M05`), or DEL-02 delete guards (`PROP-4.4.5-P02`, `PROP-4.4.5-P03`, `PROP-DEL-02-ACTIVE-VEH`).
 
+## Dashboard / Trang chủ (`/api/v1/dashboard/`)
+
+> **Access**: Requires authentication (`IsAuthenticated`) + staff role (`IsEmployeeOrManager`). `CUSTOMER` role returns `403 Forbidden` (`MSG-4.2-M01`). Anonymous calls return `401 Unauthorized` (`MSG-4.1-M02`). Revenue KPI data is strictly restricted to `MANAGER` only (financial statistics masked as `null` for `EMPLOYEE` per Rule 01 § 2).
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/dashboard/` | `EMPLOYEE`, `MANAGER` | Full dashboard overview — returns all five data groups (`kpis`, `floors`, `traffic_chart`, `alerts`, `recent_activities`) in a single call. |
+| `GET` | `/api/v1/dashboard/kpis/` | `EMPLOYEE`, `MANAGER` | Four KPI groups: slot occupancy, traffic (entries/exits/active), revenue (MANAGER only), and AI recognition rate. |
+| `GET` | `/api/v1/dashboard/floors/` | `EMPLOYEE`, `MANAGER` | Occupancy percentage bars per floor (B1, B2, B3) per TL-28.6. Formula: `ROUND(100 × (occupied + reserved + charging) / operational, 1)`. |
+| `GET` | `/api/v1/dashboard/traffic/` | `EMPLOYEE`, `MANAGER` | Hourly vehicle entry/exit counts for the last 24 hours (ascending order). Feeds the 24-hour line chart on the dashboard. |
+| `GET` | `/api/v1/dashboard/alerts/` | `EMPLOYEE`, `MANAGER` | Up to 10 system alerts — unresolved alerts first (TL-13). Accepts optional `limit` query param (default 10, max 50). |
+| `GET` | `/api/v1/dashboard/activities/` | `EMPLOYEE`, `MANAGER` | Up to 10 most recent vehicle entry/exit log events for the live activity feed. Accepts optional `limit` query param (default 10, max 50). |
+
+### Dashboard Integration Notes
+
+- **Authentication & CSRF**: All 6 dashboard endpoints are read-only (`GET`). Authentication relies on Django session cookies (`sessionid`). No CSRF token is required for `GET` requests.
+- **Role-Based Revenue Masking (Rule 01 § 2)**:
+  - When invoked by `MANAGER`, `revenue` contains: `revenue_date`, `total_revenue`, `cash_revenue`, `vietqr_revenue`, `cash_pct`, `vietqr_pct`.
+  - When invoked by `EMPLOYEE`, `revenue` is strictly `null`. Frontend should conditionally hide financial cards or display "Chỉ dành cho Quản lý".
+- **Floor Occupancy Bars (TL-28.6)**:
+  - Formatted label: `fe_display_label` (e.g., `"Tầng B1 · 92% (184/200 chỗ)"`) for direct display in progress bar headers without client calculation.
+  - Badge: `status_badge` is `"Sắp đầy"` when `occupancy_percentage >= 90.0`, otherwise `"Còn chỗ"`.
+- **System Alerts (TL-13)**:
+  - Unresolved alerts (`resolved_at IS NULL`) are prioritized at the top, ordered by severity (`CRITICAL` > `WARNING` > `INFO`) then descending timestamp.
+- **Data Sources**: Read-only aggregation from PostgreSQL views (`v_slot_occupancy_by_floor`, `v_revenue_today_by_method`, `v_traffic_by_hour`, `v_ai_recognition_stats`) and live tables (`system_alert`, `vehicle_entry_exit_log`).
+
+### Dashboard Response Examples
+
+#### 1. Full Dashboard Overview (`GET /api/v1/dashboard/`)
+
+```json
+{
+  "kpis": {
+    "slots": {
+      "total_slots": 300,
+      "operational_slots": 285,
+      "available_slots": 120,
+      "occupied_slots": 150,
+      "used_slots": 165,
+      "occupancy_rate_pct": 57.9,
+      "status_text": "Còn chỗ"
+    },
+    "traffic": {
+      "today_entries": 245,
+      "today_exits": 198,
+      "active_parking": 47
+    },
+    "revenue": {
+      "revenue_date": "2026-11-01",
+      "total_revenue": "18500000.00",
+      "cash_revenue": "6500000.00",
+      "vietqr_revenue": "12000000.00",
+      "cash_pct": "35.14",
+      "vietqr_pct": "64.86"
+    },
+    "ai_recognition": {
+      "total_sessions": 245,
+      "ai_sessions": 231,
+      "manual_sessions": 14,
+      "ai_recognition_rate_pct": "94.29",
+      "manual_rate_pct": "5.71",
+      "avg_ai_confidence": "94.50",
+      "active_auto_scan_gates": 3
+    }
+  },
+  "floors": [
+    {
+      "floor_id": 1,
+      "floor_code": "B1",
+      "floor_name": "Tầng B1 - Xe ô tô & EV",
+      "total_slots": 100,
+      "operational_slots": 95,
+      "used_slots": 88,
+      "available_slots": 7,
+      "occupancy_percentage": 92.6,
+      "status_badge": "Sắp đầy",
+      "fe_display_label": "Tầng B1 - Xe ô tô & EV · 93% (88/95 chỗ)"
+    },
+    {
+      "floor_id": 2,
+      "floor_code": "B2",
+      "floor_name": "Tầng B2 - Ô tô vãng lai",
+      "total_slots": 100,
+      "operational_slots": 100,
+      "used_slots": 45,
+      "available_slots": 55,
+      "occupancy_percentage": 45.0,
+      "status_badge": "Còn chỗ",
+      "fe_display_label": "Tầng B2 - Ô tô vãng lai · 45% (45/100 chỗ)"
+    },
+    {
+      "floor_id": 3,
+      "floor_code": "B3",
+      "floor_name": "Tầng B3 - Ô tô tháng & dài hạn",
+      "total_slots": 100,
+      "operational_slots": 90,
+      "used_slots": 32,
+      "available_slots": 58,
+      "occupancy_percentage": 35.6,
+      "status_badge": "Còn chỗ",
+      "fe_display_label": "Tầng B3 - Ô tô tháng & dài hạn · 36% (32/90 chỗ)"
+    }
+  ],
+  "traffic_chart": [
+    {
+      "traffic_hour": "2026-11-01T00:00:00Z",
+      "entry_count": 5,
+      "exit_count": 2,
+      "total_movements": 7
+    },
+    {
+      "traffic_hour": "2026-11-01T01:00:00Z",
+      "entry_count": 3,
+      "exit_count": 1,
+      "total_movements": 4
+    }
+  ],
+  "alerts": [
+    {
+      "id": 14,
+      "alert_type": "BLACKLIST_PLATE",
+      "severity": "CRITICAL",
+      "message": "Phát hiện xe thuộc danh sách đen cố gắng check-in: 51K-999.99",
+      "entity_type": "VEHICLE",
+      "entity_id": 102,
+      "occurred_at": "2026-11-01T08:30:00Z",
+      "resolved_at": null
+    },
+    {
+      "id": 12,
+      "alert_type": "OVERSTAY",
+      "severity": "WARNING",
+      "message": "Xe đỗ quá 72 giờ chưa check-out: 30E-123.45",
+      "entity_type": "PARKING_SESSION",
+      "entity_id": 554,
+      "occurred_at": "2026-11-01T07:15:00Z",
+      "resolved_at": null
+    }
+  ],
+  "recent_activities": [
+    {
+      "id": 1205,
+      "session_code": "#PK-20261101-0089",
+      "license_plate": "51A-888.88",
+      "direction": "IN",
+      "timestamp": "2026-11-01T08:45:12Z",
+      "fee_amount": "0.00",
+      "recognition_source": "AI"
+    },
+    {
+      "id": 1204,
+      "session_code": "#PK-20261101-0042",
+      "license_plate": "43A-567.89",
+      "direction": "OUT",
+      "timestamp": "2026-11-01T08:43:05Z",
+      "fee_amount": "35000.00",
+      "recognition_source": "AI"
+    }
+  ]
+}
+```
+
+*(Note: When logged in as `EMPLOYEE`, `kpis.revenue` is `null`).*
+
+#### 2. Floor Occupancy List (`GET /api/v1/dashboard/floors/`)
+
+Returns the array of floor occupancy bars shown in `floors` above.
+
+#### 3. Traffic 24h Chart (`GET /api/v1/dashboard/traffic/`)
+
+Returns an array of 24 hourly data points ordered ascending by hour.
+
+#### 4. System Alerts (`GET /api/v1/dashboard/alerts/?limit=10`)
+
+Returns the array of alert objects (default 10, max 50).
+
+#### 5. Recent Activity Feed (`GET /api/v1/dashboard/activities/?limit=10`)
+
+Returns the array of recent entry/exit events (default 10, max 50).
+
+- **HTTP Status Codes**:
+  - `200 OK`: Successful data retrieval.
+  - `401 Unauthorized`: Session missing or expired (`MSG-4.1-M02`).
+  - `403 Forbidden`: Insufficient role — `CUSTOMER` access denied (`MSG-4.2-M01`).
+
 ## API documentation routes
 
 | Method | Endpoint | Purpose |
@@ -234,4 +419,4 @@ For login, first call `GET /api/v1/auth/csrf/`, retain the `csrftoken` cookie, t
 | `GET` | `/api/docs/` | Open Swagger UI. |
 | `GET` | `/api/redoc/` | Open ReDoc. |
 
-Django Admin is available at `/admin/` and is not part of the REST API. Other application modules (`tickets`, `employees`, and `reports`) define database models and schema relationships but have no standalone CRUD management routes exposed; do not treat planned or SRS-listed operations as implemented routes until they appear in the live schema.
+Django Admin is available at `/admin/` and is not part of the REST API. Other application modules (`tickets` and `employees`) define database models and schema relationships but have no standalone CRUD management routes exposed; do not treat planned or SRS-listed operations as implemented routes until they appear in the live schema.
