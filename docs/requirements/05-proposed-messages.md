@@ -27,7 +27,12 @@ All messages in this document **MANDATORILY carry the [PROPOSAL] tag** and are d
 | **PROP-4.1-P01** | 4.1 Login (`POST /api/v1/auth/login/`) | Brute-force throttling exceeded on identifier or IP | SRS does not define brute-force throttling | `Quá nhiều lần đăng nhập không thành công, vui lòng thử lại sau.` | 429 Too Many Requests | **TL-52**, **OQ-87** |
 | **PROP-4.1-P02** | 4.1 Auth Bootstrap (`GET /api/v1/auth/csrf/`) | Bootstrap CSRF cookie for SPA handshake | SRS does not define CSRF handshake | `Khởi tạo cookie CSRF thành công.` | 200 OK | **TL-52** |
 | **PROP-4.1-P03** | 4.1 Logout (`POST /api/v1/auth/logout/`) | User session destroyed, remember token revoked and cookies cleared | SRS does not define logout response | `Đăng xuất thành công.` | 200 OK | **TL-52** |
+| **PROP-4.1-P04** | 4.1 Forgot Password (`POST /api/v1/auth/forgot-password/`) | Password reset instructions dispatched / Anti-enumeration | SRS does not define forgot password response | `Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi.` | 200 OK | **TL-36**, **OQ-84** |
+| **PROP-4.1-P05** | 4.1 Reset Password (`POST /api/v1/auth/reset-password/`) | Password reset completed successfully | SRS does not define password reset completion message | `Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.` | 200 OK | **TL-36**, **OQ-84** |
 | **PROP-4.1-P06** | 4.1 Login / Logout (`POST /api/v1/auth/login/`, `POST /api/v1/auth/logout/`) | Missing or invalid CSRF token in request header / cookie | SRS does not define CSRF validation | `Mã CSRF không hợp lệ hoặc bị thiếu.` | 403 Forbidden | **TL-53**, **Q1** |
+| **PROP-4.1-P07** | 4.1 Forgot Password (`POST /api/v1/auth/forgot-password/`) | Password reset request rate limit exceeded (3/hr email, 10/hr IP) | SRS does not define password reset throttling | `Quá nhiều yêu cầu đặt lại mật khẩu, vui lòng thử lại sau.` | 429 Too Many Requests | **TL-36**, **OQ-84** |
+| **PROP-4.1-P08** | 4.1 Reset Password (`POST /api/v1/auth/reset-password/`) | Password reset token is invalid, used, or expired | SRS does not define reset token verification error | `Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.` | 400 Bad Request | **TL-36**, **OQ-84** |
+| **PROP-4.1-P09** | 4.1 Reset Password (`POST /api/v1/auth/reset-password/`) | Password confirmation does not match new password | SRS does not define password confirmation mismatch message | `Mật khẩu xác nhận không khớp.` | 400 Bad Request | **TL-36**, **OQ-84** |
 
 ---
 

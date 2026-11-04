@@ -517,5 +517,22 @@ AUTH_THROTTLE_IDENTIFIER_LIMIT = env.int("AUTH_THROTTLE_IDENTIFIER_LIMIT", defau
 AUTH_THROTTLE_IP_LIMIT = env.int("AUTH_THROTTLE_IP_LIMIT", default=30)
 AUTH_THROTTLE_WINDOW_SECONDS = env.int("AUTH_THROTTLE_WINDOW_SECONDS", default=900)
 
+# ==============================================================================
+# Password Reset Token & Throttling Settings (OQ-84, TL-36, REQ-4.1-F04)
+# ==============================================================================
+PASSWORD_RESET_TOKEN_LIFETIME_MINUTES = env.int(
+    "PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", default=15
+)
+PASSWORD_RESET_EMAIL_THROTTLE_LIMIT = env.int(
+    "PASSWORD_RESET_EMAIL_THROTTLE_LIMIT", default=3
+)
+PASSWORD_RESET_IP_THROTTLE_LIMIT = env.int(
+    "PASSWORD_RESET_IP_THROTTLE_LIMIT", default=10
+)
+PASSWORD_RESET_THROTTLE_WINDOW_SECONDS = env.int(
+    "PASSWORD_RESET_THROTTLE_WINDOW_SECONDS", default=3600
+)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@parking.com")
+
 # DRF Proxy Configuration
 NUM_PROXIES = env.int("NUM_PROXIES", default=0)

@@ -155,3 +155,62 @@ class LoginAttemptLimiter:
             self.cache.delete(self.get_identifier_key(norm_id))
             if client_ip:
                 self.cache.delete(self.get_pair_key(norm_id, client_ip))
+
+
+class PasswordResetLimiter:
+    """
+    Rate limiter for password reset requests per OQ-84 and TL-19:
+    - Max 3 requests/hour per normalized email.
+    - Max 10 requests/hour per requested_ip.
+    """
+
+    def __init__(self, cache_backend: Any = None) -> None:
+        self.cache = cache_backend or cache
+
+    def _atomic_incr(self, key: str, timeout: int) -> int:
+        """Atomically increments integer counter at key with TTL timeout."""
+        self.cache.add(key, 0, timeout)
+        try:
+            return int(self.cache.incr(key))
+        except ValueError:
+            if self.cache.add(key, 1, timeout):
+                return 1
+            return int(self.cache.incr(key))
+
+    def get_email_key(self, norm_email: str) -> str:
+        ident_hash = hashlib.sha256(norm_email.encode("utf-8")).hexdigest()
+        return f"throttle:pwd_reset:email:{ident_hash}"
+
+    def get_ip_key(self, client_ip: str) -> str:
+        return f"throttle:pwd_reset:ip:{client_ip}"
+
+    def check_and_increment(self, request: HttpRequest, email: str) -> None:
+        """
+        Validates rate limits for password reset requests.
+        Enforces 3 requests/hour per email and 10 requests/hour per IP per OQ-84.
+        """
+        norm_email = email.strip().lower()
+        client_ip = get_client_ip(request) or "127.0.0.1"
+
+        email_limit = getattr(settings, "PASSWORD_RESET_EMAIL_THROTTLE_LIMIT", 3)
+        ip_limit = getattr(settings, "PASSWORD_RESET_IP_THROTTLE_LIMIT", 10)
+        window = getattr(settings, "PASSWORD_RESET_THROTTLE_WINDOW_SECONDS", 3600)
+
+        email_key = self.get_email_key(norm_email)
+        ip_key = self.get_ip_key(client_ip)
+
+        email_count = self._atomic_incr(email_key, window)
+        ip_count = self._atomic_incr(ip_key, window)
+
+        if email_count > email_limit or ip_count > ip_limit:
+            raise BusinessAPIException(
+                code="PROP-4.1-P07",
+                message=get_prop_message(
+                    "PROP-4.1-P07",
+                    "Quá nhiều yêu cầu đặt lại mật khẩu, vui lòng thử lại sau.",
+                ),
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                details={},
+                wait=window,
+                headers={"Retry-After": str(window)},
+            )

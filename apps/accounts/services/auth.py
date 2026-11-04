@@ -11,15 +11,17 @@ from django.conf import settings
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.hashers import check_password, get_hasher
+from django.core.mail import send_mail
+from django.db import transaction
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
 from rest_framework import status
 
-from apps.accounts.models import Account, PersistentLoginToken
+from apps.accounts.models import Account, PasswordResetToken, PersistentLoginToken
 from apps.accounts.selectors.auth import get_active_account_by_identifier
-from apps.accounts.services.throttling import get_client_ip
+from apps.accounts.services.throttling import PasswordResetLimiter, get_client_ip
 from apps.core.exceptions import BusinessAPIException
-from apps.core.messages import get_srs_message
+from apps.core.messages import get_prop_message, get_srs_message
 
 # cspell:disable
 # High-entropy pre-computed dummy hashes for anti-timing protection (OWASP CWE-208 / TL-52)
@@ -212,3 +214,137 @@ def logout_account(
     if response is not None:
         response.delete_cookie(settings.SESSION_COOKIE_NAME)
         clear_remember_cookie(response)
+
+
+def request_password_reset(request: HttpRequest, email: str) -> str | None:
+    """
+    Xử lý yêu cầu đặt lại mật khẩu per REQ-4.1-F04, OQ-84, TL-36:
+    1. Kiểm tra rate limit (OQ-84: 3 req/giờ per email, 10 req/giờ per IP).
+    2. Tìm tài khoản theo email (anti-enumeration: nếu không tìm thấy, vẫn trả về None mà không báo lỗi).
+    3. Hủy bỏ (xóa plain DELETE per TL-36) các token chưa dùng trước đó của tài khoản.
+    4. Sinh token ngẫu nhiên bảo mật (raw_token), tính mã băm SHA-256.
+    5. Lưu PasswordResetToken với thời hạn (mặc định 15 phút).
+    6. Gửi email hướng dẫn đặt lại mật khẩu kèm mã token.
+    7. Trả về raw_token (phục vụ audit/testing).
+    """
+    limiter = PasswordResetLimiter()
+    limiter.check_and_increment(request, email)
+
+    norm_email = email.strip().lower()
+    account = Account.objects.filter(
+        email__iexact=norm_email, is_active=True, deleted_at__isnull=True
+    ).first()
+
+    if account is None or not account.email:
+        # Anti-enumeration protection (OWASP): do not reveal whether the email exists
+        return None
+
+    # Revoke previous unused reset tokens for this account (TL-36 plain DELETE permitted)
+    PasswordResetToken.objects.filter(account=account, used_at__isnull=True).delete()
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hashlib.sha256(raw_token.encode("utf-8")).hexdigest()
+
+    lifetime_minutes = getattr(settings, "PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", 15)
+    now = timezone.now()
+    expires_at = now + timedelta(minutes=lifetime_minutes)
+    client_ip = (get_client_ip(request) or "")[:45]
+
+    PasswordResetToken.objects.create(
+        account=account,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        requested_ip=client_ip,
+        created_at=now,
+    )
+
+    subject = "[Hệ thống Bãi đỗ xe] Yêu cầu đặt lại mật khẩu"
+    body = (
+        f"Xin chào,\n\n"
+        f"Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản {account.email}.\n\n"
+        f"Mã xác thực đặt lại mật khẩu của bạn là:\n"
+        f"{raw_token}\n\n"
+        f"Mã này có hiệu lực trong vòng {lifetime_minutes} phút.\n"
+        f"Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email và mật khẩu của bạn sẽ được giữ nguyên.\n\n"
+        f"Trân trọng,\n"
+        f"Ban Quản lý Bãi đỗ xe"
+    )
+    from_email = getattr(settings, "DEFAULT_FROM_EMAIL", "no-reply@parking.com")
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=from_email,
+        recipient_list=[account.email],
+        fail_silently=True,
+    )
+
+    return raw_token
+
+
+def confirm_password_reset(token: str, new_password: str) -> Account:
+    """
+    Xác nhận đặt lại mật khẩu bằng token một lần per REQ-4.1-F04, TL-36:
+    1. Tính hash SHA-256 của token.
+    2. Tìm PasswordResetToken còn hiệu lực (used_at IS NULL, expires_at > now).
+    3. Nếu không tìm thấy hoặc hết hạn -> ném BusinessAPIException(PROP-4.1-P08, 400).
+    4. Cập nhật mật khẩu mới của tài khoản qua Argon2 (set_password).
+    5. Đánh dấu token đã sử dụng (used_at) và thu hồi toàn bộ remember-me tokens per OWASP.
+    """
+    clean_token = token.strip()
+    if not clean_token:
+        raise BusinessAPIException(
+            code="PROP-4.1-P08",
+            message=get_prop_message(
+                "PROP-4.1-P08",
+                "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    token_hash = hashlib.sha256(clean_token.encode("utf-8")).hexdigest()
+    now = timezone.now()
+
+    reset_token = (
+        PasswordResetToken.objects.filter(
+            token_hash=token_hash,
+            used_at__isnull=True,
+            expires_at__gt=now,
+        )
+        .select_related("account")
+        .first()
+    )
+
+    if reset_token is None or reset_token.account is None:
+        raise BusinessAPIException(
+            code="PROP-4.1-P08",
+            message=get_prop_message(
+                "PROP-4.1-P08",
+                "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    account = reset_token.account
+    if not account.is_active or account.deleted_at is not None:
+        raise BusinessAPIException(
+            code="PROP-4.1-P08",
+            message=get_prop_message(
+                "PROP-4.1-P08",
+                "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    with transaction.atomic():
+        account.set_password(new_password)
+        account.save()
+
+        # Mark token as consumed
+        reset_token.used_at = now
+        reset_token.save(update_fields=["used_at"])
+
+        # Revoke all persistent login tokens per OWASP credential rotation
+        revoke_all_account_tokens(account.id)
+
+    return account
