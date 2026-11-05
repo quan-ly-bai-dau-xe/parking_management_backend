@@ -222,4 +222,3 @@ class DashboardActivityFeedView(APIView):
         activities = get_recent_activity_feed(limit=10)
         serializer = RecentActivitySerializer(activities, many=True)
         return Response(serializer.data, status=status.HTTP_200_OK)
-

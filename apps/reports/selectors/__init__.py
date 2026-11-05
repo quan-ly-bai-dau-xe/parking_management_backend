@@ -17,4 +17,3 @@ __all__ = [
     "get_emergency_alerts",
     "get_recent_activity_feed",
 ]
-

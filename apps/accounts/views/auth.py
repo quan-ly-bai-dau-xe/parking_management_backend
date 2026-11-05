@@ -24,16 +24,25 @@ from apps.accounts.serializers.auth import (
     CSRFResponseSerializer,
     DetailResponseSerializer,
     ForgotPasswordSerializer,
+    ForgotPasswordSMSSerializer,
     LoginSerializer,
+    RegisterResponseSerializer,
+    RegisterSMSConfirmSerializer,
+    RegisterSMSRequestSerializer,
     ResetPasswordConfirmSerializer,
+    ResetPasswordSMSConfirmSerializer,
     UserResponseSerializer,
 )
 from apps.accounts.services.auth import (
     authenticate_account,
     confirm_password_reset,
+    confirm_password_reset_sms,
+    confirm_register_sms,
     login_account,
     logout_account,
     request_password_reset,
+    request_password_reset_sms,
+    request_register_otp,
 )
 from apps.accounts.services.throttling import LoginAttemptLimiter
 from apps.core.exceptions import BusinessAPIException
@@ -377,4 +386,232 @@ class ResetPasswordConfirmView(APIView):
                 )
             },
             status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class ForgotPasswordSMSView(APIView):
+    """
+    Endpoint yêu cầu đặt lại mật khẩu qua mã OTP gửi bằng SMS per REQ-4.1-F04, TL-01.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Yêu cầu đặt lại mật khẩu qua SMS",
+        description="Gửi mã OTP 6 chữ số qua tin nhắn SMS tới số điện thoại của tài khoản. "
+        "Áp dụng cơ chế anti-enumeration, giới hạn tần suất 3 lần/giờ theo SĐT, "
+        "10 lần/giờ theo IP và thời gian chờ tối thiểu 60 giây giữa các lần gửi lại.",
+        request=ForgotPasswordSMSSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Yêu cầu gửi OTP đã được tiếp nhận thành công",
+            ),
+            400: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Số điện thoại không hợp lệ hoặc để trống",
+            ),
+            429: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Vượt quá tần suất hoặc chưa hết thời gian chờ 60 giây",
+            ),
+        },
+        auth=[],
+        tags=["Authentication"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ForgotPasswordSMSSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        phone = serializer.validated_data["phone"]
+        request_password_reset_sms(request, phone)
+
+        return Response(
+            {
+                "detail": get_prop_message(
+                    "PROP-4.1-P10",
+                    "Mã OTP xác thực đã được gửi tới số điện thoại của bạn qua tin nhắn SMS.",
+                )
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_protect, name="dispatch")
+@method_decorator(
+    sensitive_post_parameters("new_password", "confirm_password"), name="dispatch"
+)
+class ResetPasswordSMSConfirmView(APIView):
+    """
+    Endpoint xác nhận đặt lại mật khẩu bằng mã OTP nhận qua SMS per REQ-4.1-F04, TL-01.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Xác nhận đặt lại mật khẩu qua SMS OTP",
+        description="Xác thực mã OTP 6 chữ số và cập nhật mật khẩu mới cho tài khoản. "
+        "Bảo vệ chống brute force (khóa mã OTP sau 5 lần nhập sai liên tiếp).",
+        request=ResetPasswordSMSConfirmSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Mật khẩu đã được đặt lại thành công",
+            ),
+            400: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Mã OTP sai, hết hạn hoặc mật khẩu không đúng chính sách độ phức tạp",
+            ),
+        },
+        auth=[],
+        tags=["Authentication"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = ResetPasswordSMSConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        phone = serializer.validated_data["phone"]
+        otp = serializer.validated_data["otp"]
+        new_password = serializer.validated_data["new_password"]
+
+        confirm_password_reset_sms(phone, otp, new_password)
+
+        return Response(
+            {
+                "detail": get_prop_message(
+                    "PROP-4.1-P05",
+                    "Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới.",
+                )
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class RegisterSMSRequestView(APIView):
+    """
+    Endpoint yêu cầu mã OTP qua SMS để đăng ký tài khoản mới per OQ-03, TL-01.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Yêu cầu OTP đăng ký tài khoản",
+        description="Gửi mã OTP 6 chữ số qua SMS để xác thực số điện thoại đăng ký tài khoản mới. "
+        "Kiểm tra số điện thoại chưa tồn tại trong hệ thống, giới hạn tần suất 3 lần/giờ và cooldown 60s.",
+        request=RegisterSMSRequestSerializer,
+        responses={
+            200: OpenApiResponse(
+                response=DetailResponseSerializer,
+                description="Mã OTP đã được gửi thành công",
+            ),
+            400: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Số điện thoại không đúng định dạng",
+            ),
+            409: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Số điện thoại đã tồn tại trong hệ thống",
+            ),
+            429: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Vượt quá giới hạn tần suất gửi OTP",
+            ),
+        },
+        auth=[],
+        tags=["Authentication"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = RegisterSMSRequestSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        phone = serializer.validated_data["phone"]
+        request_register_otp(request, phone)
+
+        return Response(
+            {
+                "detail": get_prop_message(
+                    "PROP-4.1-P10",
+                    "Mã OTP xác thực đã được gửi tới số điện thoại của bạn qua tin nhắn SMS.",
+                )
+            },
+            status=status.HTTP_200_OK,
+        )
+
+
+@method_decorator(csrf_protect, name="dispatch")
+@method_decorator(
+    sensitive_post_parameters("password", "confirm_password"), name="dispatch"
+)
+class RegisterSMSConfirmView(APIView):
+    """
+    Endpoint xác thực OTP và hoàn tất đăng ký tài khoản Khách hàng per OQ-03, TL-01.
+    """
+
+    permission_classes = [AllowAny]
+
+    @extend_schema(
+        summary="Xác thực OTP và đăng ký tài khoản",
+        description="Kiểm tra mã OTP 6 chữ số, tạo tài khoản Account (role CUSTOMER) "
+        "và hồ sơ Customer liên kết với mã tự sinh KH%04d.",
+        request=RegisterSMSConfirmSerializer,
+        responses={
+            201: OpenApiResponse(
+                response=RegisterResponseSerializer,
+                description="Tài khoản khách hàng đã được đăng ký thành công",
+            ),
+            400: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="OTP không đúng, hết hạn, hoặc dữ liệu không hợp lệ",
+            ),
+            409: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Số điện thoại, email hoặc CCCD bị trùng lặp",
+            ),
+        },
+        auth=[],
+        tags=["Authentication"],
+    )
+    def post(self, request: Request) -> Response:
+        serializer = RegisterSMSConfirmSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        phone = serializer.validated_data["phone"]
+        otp = serializer.validated_data["otp"]
+        password = serializer.validated_data["password"]
+        full_name = serializer.validated_data["full_name"]
+        identity_card_number = serializer.validated_data.get("identity_card_number")
+        email = serializer.validated_data.get("email")
+
+        account, customer = confirm_register_sms(
+            phone=phone,
+            otp=otp,
+            password=password,
+            full_name=full_name,
+            identity_card_number=identity_card_number,
+            email=email,
+        )
+
+        return Response(
+            {
+                "detail": get_prop_message(
+                    "PROP-4.1-P14", "Đăng ký tài khoản thành công."
+                ),
+                "account": {
+                    "id": account.id,
+                    "email": account.email,
+                    "phone": account.phone,
+                    "role": account.role,
+                    "is_active": account.is_active,
+                    "last_login": account.last_login,
+                },
+                "customer": {
+                    "id": customer.id,
+                    "code": customer.code,
+                    "full_name": customer.full_name,
+                    "phone": customer.phone,
+                },
+            },
+            status=status.HTTP_201_CREATED,
         )

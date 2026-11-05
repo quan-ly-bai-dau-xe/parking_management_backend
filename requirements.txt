@@ -1,0 +1,38 @@
+# ==============================================================================
+# Parking Management Backend - Core & Production Dependencies
+# Tech Stack per ADR-0001 (Python 3.14.7, Django 6.1.2, PostgreSQL 18.6)
+# ==============================================================================
+
+# Core Framework & REST API
+Django==6.1.2
+djangorestframework==3.18.3
+django-cors-headers==4.9.0
+django-filter==26.2
+django-environ==0.14.0
+
+# Database Adapter & Connection Pooling (PostgreSQL 18.6)
+psycopg[binary,pool]==3.3.6
+
+# Password Hashing & Cryptography (Argon2id / OWASP TL-52)
+argon2-cffi==25.1.0
+
+# API Documentation & Schema (OpenAPI 3.0 / Swagger UI & Redoc)
+drf-spectacular==0.30.0
+drf-spectacular-sidecar==2026.10.1
+
+# Plate Recognition & Computer Vision (ADR-0007)
+fast-alpr[onnx]==0.4.0
+Pillow==12.3.0
+
+# Image Cloud Storage Backend (Cloudinary ADR-0010)
+cloudinary==1.46.3
+
+# WSGI Production HTTP Server
+gunicorn==23.0.0
+
+# ------------------------------------------------------------------------------
+# Development, Testing & Quality Gate Dependencies (Optional):
+# To install development and test dependencies (pytest, ruff, mypy, coverage):
+#   pip install -r requirements/02-dev.txt
+# ------------------------------------------------------------------------------
+

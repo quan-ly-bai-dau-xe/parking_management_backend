@@ -192,9 +192,9 @@ class PasswordResetLimiter:
         norm_email = email.strip().lower()
         client_ip = get_client_ip(request) or "127.0.0.1"
 
-        email_limit = getattr(settings, "PASSWORD_RESET_EMAIL_THROTTLE_LIMIT", 3)
-        ip_limit = getattr(settings, "PASSWORD_RESET_IP_THROTTLE_LIMIT", 10)
-        window = getattr(settings, "PASSWORD_RESET_THROTTLE_WINDOW_SECONDS", 3600)
+        email_limit = settings.PASSWORD_RESET_EMAIL_THROTTLE_LIMIT
+        ip_limit = settings.PASSWORD_RESET_IP_THROTTLE_LIMIT
+        window = settings.PASSWORD_RESET_THROTTLE_WINDOW_SECONDS
 
         email_key = self.get_email_key(norm_email)
         ip_key = self.get_ip_key(client_ip)
@@ -214,3 +214,89 @@ class PasswordResetLimiter:
                 wait=window,
                 headers={"Retry-After": str(window)},
             )
+
+
+class SMSOTPLimiter:
+    """
+    Rate limiter for SMS OTP requests (Password Reset & Registration):
+    - Max 3 requests/hour per normalized phone number.
+    - Max 10 requests/hour per client IP.
+    - Cooldown period of 60 seconds per phone number between resends.
+    """
+
+    def __init__(self, cache_backend: Any = None) -> None:
+        self.cache = cache_backend or cache
+
+    def _atomic_incr(self, key: str, timeout: int) -> int:
+        """Atomically increments integer counter at key with TTL timeout."""
+        self.cache.add(key, 0, timeout)
+        try:
+            return int(self.cache.incr(key))
+        except ValueError:
+            if self.cache.add(key, 1, timeout):
+                return 1
+            return int(self.cache.incr(key))
+
+    def get_phone_key(self, norm_phone: str, action: str) -> str:
+        ident_hash = hashlib.sha256(f"{action}:{norm_phone}".encode()).hexdigest()
+        return f"throttle:sms_otp:phone:{ident_hash}"
+
+    def get_cooldown_key(self, norm_phone: str, action: str) -> str:
+        ident_hash = hashlib.sha256(f"{action}:{norm_phone}".encode()).hexdigest()
+        return f"throttle:sms_otp:cooldown:{ident_hash}"
+
+    def get_ip_key(self, client_ip: str) -> str:
+        return f"throttle:sms_otp:ip:{client_ip}"
+
+    def check_and_increment(
+        self, request: HttpRequest, phone: str, action: str = "general"
+    ) -> None:
+        """
+        Validates rate limits and cooldown for SMS OTP requests.
+        Enforces 60-second cooldown, 3 req/hr per phone, and 10 req/hr per IP.
+        """
+        import re
+
+        client_ip = get_client_ip(request) or "127.0.0.1"
+        norm_phone = re.sub(r"[\s.\-()+]+", "", phone.strip())
+
+        cooldown_seconds = settings.SMS_OTP_COOLDOWN_SECONDS
+        cooldown_key = self.get_cooldown_key(norm_phone, action)
+        if self.cache.get(cooldown_key):
+            raise BusinessAPIException(
+                code="PROP-4.1-P17",
+                message=get_prop_message(
+                    "PROP-4.1-P17",
+                    "Vui lòng chờ ít nhất 60 giây trước khi yêu cầu gửi lại mã OTP.",
+                ),
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                details={},
+                wait=cooldown_seconds,
+                headers={"Retry-After": str(cooldown_seconds)},
+            )
+
+        phone_limit = settings.SMS_OTP_PHONE_THROTTLE_LIMIT
+        ip_limit = settings.SMS_OTP_IP_THROTTLE_LIMIT
+        window = settings.SMS_OTP_THROTTLE_WINDOW_SECONDS
+
+        phone_key = self.get_phone_key(norm_phone, action)
+        ip_key = self.get_ip_key(client_ip)
+
+        phone_count = self._atomic_incr(phone_key, window)
+        ip_count = self._atomic_incr(ip_key, window)
+
+        if phone_count > phone_limit or ip_count > ip_limit:
+            raise BusinessAPIException(
+                code="PROP-4.1-P12",
+                message=get_prop_message(
+                    "PROP-4.1-P12",
+                    "Quá nhiều yêu cầu gửi mã OTP, vui lòng thử lại sau.",
+                ),
+                status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+                details={},
+                wait=window,
+                headers={"Retry-After": str(window)},
+            )
+
+        # Set 60-second cooldown
+        self.cache.set(cooldown_key, 1, timeout=cooldown_seconds)

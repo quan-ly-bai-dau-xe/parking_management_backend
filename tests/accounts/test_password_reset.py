@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 
 from django.core import mail
 from django.core.cache import cache
-from django.test import RequestFactory, SimpleTestCase, TestCase
+from django.test import RequestFactory, TestCase
 from django.urls import reverse
 from django.utils import timezone
 from rest_framework import status
@@ -27,7 +27,7 @@ from apps.core.exceptions import BusinessAPIException
 from apps.core.messages import PROPOSAL_MESSAGES
 
 
-class ForgotPasswordSerializerTest(SimpleTestCase):
+class ForgotPasswordSerializerTest(TestCase):
     """Kiểm tra validation của ForgotPasswordSerializer per TL-52."""
 
     def test_valid_email_passes(self):
@@ -46,7 +46,7 @@ class ForgotPasswordSerializerTest(SimpleTestCase):
         self.assertIn("email", serializer.errors)
 
 
-class ResetPasswordConfirmSerializerTest(SimpleTestCase):
+class ResetPasswordConfirmSerializerTest(TestCase):
     """Kiểm tra validation của ResetPasswordConfirmSerializer per SRS 4.3.3 và Rule 07."""
 
     def test_valid_payload_passes(self):
@@ -118,7 +118,7 @@ class ResetPasswordConfirmSerializerTest(SimpleTestCase):
         self.assertIn("new_password", serializer.errors)
 
 
-class PasswordResetLimiterTest(SimpleTestCase):
+class PasswordResetLimiterTest(TestCase):
     """Kiểm tra rate limit 3 req/giờ per email và 10 req/giờ per IP per OQ-84."""
 
     def setUp(self):
@@ -165,7 +165,7 @@ class PasswordResetLimiterTest(SimpleTestCase):
         self.assertEqual(ctx.exception.code, "PROP-4.1-P07")
 
 
-class PasswordResetServiceMockTest(SimpleTestCase):
+class PasswordResetServiceMockTest(TestCase):
     """Kiểm tra logic nghiệp vụ Password Reset độc lập qua mock per TL-52."""
 
     def setUp(self):
@@ -254,7 +254,7 @@ class PasswordResetServiceMockTest(SimpleTestCase):
         self.assertEqual(ctx.exception.code, "PROP-4.1-P08")
 
 
-class PasswordResetViewMockTest(SimpleTestCase):
+class PasswordResetViewMockTest(TestCase):
     """Kiểm tra DRF Views cho ForgotPasswordView và ResetPasswordConfirmView."""
 
     def setUp(self):
@@ -415,8 +415,9 @@ class PasswordResetServiceTest(TestCase):
         """Token hết hạn sẽ bị từ chối với mã lỗi PROP-4.1-P08."""
         raw_token = request_password_reset(self.request, self.account.email)
         db_token = PasswordResetToken.objects.filter(account=self.account).first()
+        db_token.created_at = timezone.now() - timedelta(minutes=30)
         db_token.expires_at = timezone.now() - timedelta(minutes=1)
-        db_token.save(update_fields=["expires_at"])
+        db_token.save(update_fields=["created_at", "expires_at"])
 
         with self.assertRaises(BusinessAPIException) as ctx:
             confirm_password_reset(raw_token, "ValidPassword123!")

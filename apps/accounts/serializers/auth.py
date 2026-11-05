@@ -9,6 +9,10 @@ from drf_spectacular.utils import OpenApiExample, extend_schema_serializer
 from rest_framework import serializers, status
 from rest_framework.fields import empty
 
+from apps.accounts.services.sms import (
+    is_valid_phone_number,
+    normalize_vietnamese_phone,
+)
 from apps.core.exceptions import BusinessAPIException
 from apps.core.messages import get_prop_message, get_srs_message
 
@@ -284,3 +288,363 @@ class ResetPasswordConfirmSerializer(serializers.Serializer):
             )
 
         return attrs
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Forgot Password via SMS",
+            value={"phone": "0912345678"},
+            request_only=True,
+        )
+    ]
+)
+class ForgotPasswordSMSSerializer(serializers.Serializer):
+    """Payload yêu cầu đặt lại mật khẩu bằng mã OTP qua SMS."""
+
+    phone = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        help_text="Số điện thoại đã đăng ký của tài khoản cần đặt lại mật khẩu",
+    )
+
+    def validate_phone(self, value: str) -> str:
+        clean = normalize_vietnamese_phone(value)
+        if not clean or not is_valid_phone_number(clean):
+            raise BusinessAPIException(
+                code="PROP-4.1-P15",
+                message=get_prop_message(
+                    "PROP-4.1-P15", "Số điện thoại không đúng định dạng."
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return clean
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Reset Password Confirm via SMS",
+            value={
+                "phone": "0912345678",
+                "otp": "123456",
+                "new_password": "NewSecurePassword123!",
+                "confirm_password": "NewSecurePassword123!",
+            },
+            request_only=True,
+        )
+    ]
+)
+class ResetPasswordSMSConfirmSerializer(serializers.Serializer):
+    """Payload xác nhận đặt lại mật khẩu bằng mã OTP nhận qua tin nhắn SMS."""
+
+    phone = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        help_text="Số điện thoại của tài khoản",
+    )
+    otp = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        help_text="Mã OTP 6 chữ số nhận được qua SMS",
+    )
+    new_password = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        write_only=True,
+        min_length=8,
+        max_length=50,
+        style={"input_type": "password"},
+        help_text="Mật khẩu mới (8-50 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt)",
+    )
+    confirm_password = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        write_only=True,
+        min_length=8,
+        max_length=50,
+        style={"input_type": "password"},
+        help_text="Nhập lại mật khẩu mới để xác nhận",
+    )
+
+    def validate_phone(self, value: str) -> str:
+        clean = normalize_vietnamese_phone(value)
+        if not clean or not is_valid_phone_number(clean):
+            raise BusinessAPIException(
+                code="PROP-4.1-P15",
+                message=get_prop_message(
+                    "PROP-4.1-P15", "Số điện thoại không đúng định dạng."
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return clean
+
+    def validate_otp(self, value: str) -> str:
+        clean = value.strip()
+        if len(clean) != 6 or not clean.isdigit():
+            raise BusinessAPIException(
+                code="PROP-4.1-P11",
+                message=get_prop_message(
+                    "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return clean
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        new_pwd = attrs.get("new_password")
+        confirm_pwd = attrs.get("confirm_password")
+
+        errors: dict[str, list[str]] = {}
+
+        if new_pwd != confirm_pwd:
+            errors.setdefault("confirm_password", []).append(
+                get_prop_message("PROP-4.1-P09", "Mật khẩu xác nhận không khớp.")
+            )
+
+        if new_pwd:
+            special_characters = r"!@#$%^&*()_+-=[]{}|;:,.<>?"
+            if len(new_pwd) < 8 or len(new_pwd) > 50:
+                errors.setdefault("new_password", []).append(
+                    "Mật khẩu phải có độ dài từ 8 đến 50 ký tự."
+                )
+            if not re.search(r"[a-z]", new_pwd):
+                errors.setdefault("new_password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 chữ cái viết thường."
+                )
+            if not re.search(r"[A-Z]", new_pwd):
+                errors.setdefault("new_password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 chữ cái viết hoa."
+                )
+            if not re.search(r"[0-9]", new_pwd):
+                errors.setdefault("new_password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 chữ số."
+                )
+            if not any(ch in special_characters for ch in new_pwd):
+                errors.setdefault("new_password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt."
+                )
+
+        if errors:
+            raise BusinessAPIException(
+                code="PROP-GEN-P01",
+                message=get_prop_message(
+                    "PROP-GEN-P01", "Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu"
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+                details=errors,
+            )
+
+        return attrs
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Register Request OTP",
+            value={"phone": "0912345678"},
+            request_only=True,
+        )
+    ]
+)
+class RegisterSMSRequestSerializer(serializers.Serializer):
+    """Payload yêu cầu gửi mã OTP qua SMS để đăng ký tài khoản khách hàng mới."""
+
+    phone = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        help_text="Số điện thoại đăng ký tài khoản",
+    )
+
+    def validate_phone(self, value: str) -> str:
+        clean = normalize_vietnamese_phone(value)
+        if not clean or not is_valid_phone_number(clean):
+            raise BusinessAPIException(
+                code="PROP-4.1-P15",
+                message=get_prop_message(
+                    "PROP-4.1-P15", "Số điện thoại không đúng định dạng."
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return clean
+
+
+@extend_schema_serializer(
+    examples=[
+        OpenApiExample(
+            "Register Confirm via SMS",
+            value={
+                "phone": "0912345678",
+                "otp": "123456",
+                "password": "SecurePassword123!",
+                "confirm_password": "SecurePassword123!",
+                "full_name": "Nguyễn Văn A",
+                "identity_card_number": "012345678901",
+                "email": "vana@example.com",
+            },
+            request_only=True,
+        )
+    ]
+)
+class RegisterSMSConfirmSerializer(serializers.Serializer):
+    """Payload xác thực OTP và hoàn tất đăng ký tài khoản Khách hàng (CUSTOMER)."""
+
+    phone = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        help_text="Số điện thoại đăng ký",
+    )
+    otp = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        trim_whitespace=True,
+        help_text="Mã OTP 6 chữ số nhận được qua SMS",
+    )
+    password = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        write_only=True,
+        min_length=8,
+        max_length=50,
+        style={"input_type": "password"},
+        help_text="Mật khẩu (8-50 ký tự, gồm chữ hoa, chữ thường, số và ký tự đặc biệt)",
+    )
+    confirm_password = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        write_only=True,
+        min_length=8,
+        max_length=50,
+        style={"input_type": "password"},
+        help_text="Nhập lại mật khẩu để xác nhận",
+    )
+    full_name = serializers.CharField(
+        required=True,
+        allow_blank=False,
+        max_length=45,
+        trim_whitespace=True,
+        help_text="Họ và tên khách hàng",
+    )
+    identity_card_number = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        max_length=20,
+        trim_whitespace=True,
+        help_text="Số CCCD/CMND (tùy chọn, 9-20 chữ số)",
+    )
+    email = serializers.EmailField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        trim_whitespace=True,
+        help_text="Địa chỉ email liên hệ (tùy chọn)",
+    )
+
+    def validate_phone(self, value: str) -> str:
+        clean = normalize_vietnamese_phone(value)
+        if not clean or not is_valid_phone_number(clean):
+            raise BusinessAPIException(
+                code="PROP-4.1-P15",
+                message=get_prop_message(
+                    "PROP-4.1-P15", "Số điện thoại không đúng định dạng."
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return clean
+
+    def validate_otp(self, value: str) -> str:
+        clean = value.strip()
+        if len(clean) != 6 or not clean.isdigit():
+            raise BusinessAPIException(
+                code="PROP-4.1-P11",
+                message=get_prop_message(
+                    "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        return clean
+
+    def validate_full_name(self, value: str) -> str:
+        clean = value.strip()
+        if not clean:
+            raise serializers.ValidationError("Họ và tên không được để trống.")
+        if len(clean) > 45:
+            raise serializers.ValidationError("Họ và tên không được vượt quá 45 ký tự.")
+        return clean
+
+    def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
+        pwd = attrs.get("password")
+        confirm_pwd = attrs.get("confirm_password")
+
+        errors: dict[str, list[str]] = {}
+
+        if pwd != confirm_pwd:
+            errors.setdefault("confirm_password", []).append(
+                get_prop_message("PROP-4.1-P09", "Mật khẩu xác nhận không khớp.")
+            )
+
+        if pwd:
+            special_characters = r"!@#$%^&*()_+-=[]{}|;:,.<>?"
+            if len(pwd) < 8 or len(pwd) > 50:
+                errors.setdefault("password", []).append(
+                    "Mật khẩu phải có độ dài từ 8 đến 50 ký tự."
+                )
+            if not re.search(r"[a-z]", pwd):
+                errors.setdefault("password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 chữ cái viết thường."
+                )
+            if not re.search(r"[A-Z]", pwd):
+                errors.setdefault("password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 chữ cái viết hoa."
+                )
+            if not re.search(r"[0-9]", pwd):
+                errors.setdefault("password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 chữ số."
+                )
+            if not any(ch in special_characters for ch in pwd):
+                errors.setdefault("password", []).append(
+                    "Mật khẩu phải chứa ít nhất 1 ký tự đặc biệt."
+                )
+
+        id_card = attrs.get("identity_card_number")
+        if id_card and str(id_card).strip():
+            clean_id = str(id_card).strip()
+            if not re.match(r"^[0-9]{9,20}$", clean_id):
+                errors.setdefault("identity_card_number", []).append(
+                    "Số CCCD/CMND phải gồm từ 9 đến 20 chữ số."
+                )
+
+        if errors:
+            raise BusinessAPIException(
+                code="PROP-GEN-P01",
+                message=get_prop_message(
+                    "PROP-GEN-P01", "Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu"
+                ),
+                status_code=status.HTTP_400_BAD_REQUEST,
+                details=errors,
+            )
+
+        return attrs
+
+
+class RegisterCustomerSummarySerializer(serializers.Serializer):
+    """Tóm tắt thông tin hồ sơ khách hàng mới tạo."""
+
+    id = serializers.IntegerField()
+    code = serializers.CharField()
+    full_name = serializers.CharField()
+    phone = serializers.CharField()
+
+
+class RegisterResponseSerializer(serializers.Serializer):
+    """Payload phản hồi sau khi hoàn tất đăng ký tài khoản thành công."""
+
+    detail = serializers.CharField()
+    account = UserResponseSerializer()
+    customer = RegisterCustomerSummarySerializer()

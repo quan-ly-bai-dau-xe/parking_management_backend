@@ -806,11 +806,11 @@ class SelectorsAndServicesTest(TestCase):
         ]
         self.assertEqual(len(account_updates), 1)
 
-    def test_unused_prop_p04_not_in_message_catalog(self):
+    def test_prop_p04_in_message_catalog(self):
         """
-        PROP-4.1-P04 không được API sử dụng nên không tồn tại trong message catalog per TL-53.
+        PROP-4.1-P04 được API Quên mật khẩu sử dụng nên phải tồn tại trong message catalog per TL-53.
         """
-        self.assertNotIn("PROP-4.1-P04", PROPOSAL_MESSAGES)
+        self.assertIn("PROP-4.1-P04", PROPOSAL_MESSAGES)
 
     def test_all_registered_prop_4_1_messages_used_in_apps(self) -> None:
         """Khẳng định mọi mã PROP-4.1-P## đăng ký trong messages.py đều được sử dụng trong apps/ per TL-53."""

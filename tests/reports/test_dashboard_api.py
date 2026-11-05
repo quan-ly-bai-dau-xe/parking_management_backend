@@ -185,4 +185,3 @@ def test_dashboard_activities_endpoint(manager_account):
 
     assert response.status_code == status.HTTP_200_OK
     assert isinstance(response.json(), list)
-

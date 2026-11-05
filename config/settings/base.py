@@ -534,5 +534,23 @@ PASSWORD_RESET_THROTTLE_WINDOW_SECONDS = env.int(
 )
 DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@parking.com")
 
+# ==============================================================================
+# SMS & OTP Settings (TL-01, OQ-03)
+# ==============================================================================
+SMS_BACKEND = env("SMS_BACKEND", default="apps.accounts.services.sms.ConsoleSMSBackend")
+SMS_OTP_LIFETIME_SECONDS = env.int("SMS_OTP_LIFETIME_SECONDS", default=300)
+SMS_OTP_COOLDOWN_SECONDS = env.int("SMS_OTP_COOLDOWN_SECONDS", default=60)
+SMS_OTP_PHONE_THROTTLE_LIMIT = env.int("SMS_OTP_PHONE_THROTTLE_LIMIT", default=3)
+SMS_OTP_IP_THROTTLE_LIMIT = env.int("SMS_OTP_IP_THROTTLE_LIMIT", default=10)
+SMS_OTP_THROTTLE_WINDOW_SECONDS = env.int(
+    "SMS_OTP_THROTTLE_WINDOW_SECONDS", default=3600
+)
+SMS_OTP_MAX_ATTEMPTS = env.int("SMS_OTP_MAX_ATTEMPTS", default=5)
+
+# Vonage SMS Configuration
+VONAGE_API_KEY = env("VONAGE_API_KEY", default="")
+VONAGE_API_SECRET = env("VONAGE_API_SECRET", default="")
+VONAGE_FROM = env("VONAGE_FROM", default="Vonage APIs")
+
 # DRF Proxy Configuration
 NUM_PROXIES = env.int("NUM_PROXIES", default=0)
