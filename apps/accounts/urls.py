@@ -34,16 +34,6 @@ urlpatterns = [
         name="auth-reset-password",
     ),
     path(
-        "password-reset/request/",
-        ForgotPasswordView.as_view(),
-        name="auth-password-reset-request",
-    ),
-    path(
-        "password-reset/confirm/",
-        ResetPasswordConfirmView.as_view(),
-        name="auth-password-reset-confirm",
-    ),
-    path(
         "forgot-password/sms/",
         ForgotPasswordSMSView.as_view(),
         name="auth-forgot-password-sms",
@@ -54,16 +44,6 @@ urlpatterns = [
         name="auth-reset-password-sms",
     ),
     path(
-        "password-reset/sms/request/",
-        ForgotPasswordSMSView.as_view(),
-        name="auth-password-reset-sms-request",
-    ),
-    path(
-        "password-reset/sms/confirm/",
-        ResetPasswordSMSConfirmView.as_view(),
-        name="auth-password-reset-sms-confirm",
-    ),
-    path(
         "register/sms/request/",
         RegisterSMSRequestView.as_view(),
         name="auth-register-sms-request",
@@ -72,10 +52,5 @@ urlpatterns = [
         "register/sms/confirm/",
         RegisterSMSConfirmView.as_view(),
         name="auth-register-sms-confirm",
-    ),
-    path(
-        "register/",
-        RegisterSMSConfirmView.as_view(),
-        name="auth-register",
     ),
 ]

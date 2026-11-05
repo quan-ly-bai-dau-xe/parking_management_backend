@@ -143,6 +143,8 @@ PROPOSAL_MESSAGES = {
     "PROP-DEL-01-LAST-MGR": "Không thể xóa tài khoản Quản lý hoạt động cuối cùng trong hệ thống.",
     "PROP-DEL-01-LAST-MGR-EMP": "Không thể xóa nhân viên gắn với tài khoản Quản lý hoạt động cuối cùng.",
     "PROP-DEL-01-SELF": "Tài khoản đang đăng nhập không được phép tự xóa chính mình.",
+    "PROP-DEL-01-SELF-DEACT": "Nhân viên đang đăng nhập không được phép tự vô hiệu hóa tài khoản của chính mình.",
+    "PROP-DEL-01-SELF-DEMOTE": "Quản lý đang đăng nhập không được phép tự giáng chức chính mình.",
     "PROP-DEL-01-SELF-EMP": "Nhân viên đang đăng nhập không được phép tự xóa hồ sơ của chính mình.",
     "PROP-DEL-02-ACTIVE-VEH": "Khách hàng đang có phương tiện hoạt động trong hệ thống, không được phép xóa.",
     "PROP-DEL-03-ACTIVE-RSV": "Phương tiện đang có đặt trước vị trí đỗ xe còn hiệu lực, không được phép xóa.",
