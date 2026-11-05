@@ -1,93 +1,101 @@
-"""
-Script kiem thu tinh nang SMS OTP voi so dien thoai cu the.
+"""Script kiem thu tinh nang SMS OTP voi so dien thoai cu the.
+
 Ho tro kiem tra truc tiep tren moi truong dev/test (Console) hoac gui thuc te qua Vonage SMS API.
 """
+
+from __future__ import annotations
 
 import os
 import subprocess
 import sys
 
-if sys.stdout and hasattr(sys.stdout, "reconfigure"):
-    sys.stdout.reconfigure(encoding="utf-8")
-if sys.stderr and hasattr(sys.stderr, "reconfigure"):
-    sys.stderr.reconfigure(encoding="utf-8")
 
-# Tu dong su dung python trong .venv cua du an neu dang chay bang Python he thong
-project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-venv_python = os.path.join(project_root, ".venv", "Scripts", "python.exe")
-if os.path.exists(venv_python) and os.path.normcase(sys.executable) != os.path.normcase(
-    venv_python
-):
-    sys.exit(subprocess.call([venv_python] + sys.argv))
+def setup_test_environment() -> None:
+    """Khoi tao moi truong Django va database in-memory cho script kiem thu thu cong."""
+    if sys.stdout and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8")
+    if sys.stderr and hasattr(sys.stderr, "reconfigure"):
+        sys.stderr.reconfigure(encoding="utf-8")
 
-# Them thu muc goc vao sys.path
-sys.path.insert(0, project_root)
+    # Tu dong su dung python trong .venv cua du an neu dang chay bang Python he thong
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    venv_python = os.path.join(project_root, ".venv", "Scripts", "python.exe")
+    if os.path.exists(venv_python) and os.path.normcase(
+        sys.executable
+    ) != os.path.normcase(venv_python):
+        sys.exit(subprocess.call([venv_python] + sys.argv))
 
-# Thiet lap moi truong Django
-os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.test")
+    # Them thu muc goc vao sys.path
+    if project_root not in sys.path:
+        sys.path.insert(0, project_root)
 
-import django  # noqa: E402
-import environ  # noqa: E402
+    # Thiet lap moi truong Django
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.test")
 
-import config.settings.test as st  # noqa: E402
+    import django
+    import environ
 
-# Doc cac bien cau hinh tu file .env neu co
-env = environ.Env()
-env_file = os.path.join(project_root, ".env")
-if os.path.exists(env_file):
-    env.read_env(env_file)
+    import config.settings.test as st
 
-# Dung SQLite in-memory de test doc lap khong anh huong db that
-st.DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": ":memory:",
+    # Doc cac bien cau hinh tu file .env neu co
+    env = environ.Env()
+    env_file = os.path.join(project_root, ".env")
+    if os.path.exists(env_file):
+        env.read_env(env_file)
+
+    # Dung SQLite in-memory de test doc lap khong anh huong db that
+    st.DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": ":memory:",
+        }
     }
-}
 
-# Kiem tra xem co cau hinh Vonage hay khong
-vonage_key = env("VONAGE_API_KEY", default="")
-vonage_secret = env("VONAGE_API_SECRET", default="")
-vonage_from = env("VONAGE_FROM", default="Vonage APIs")
-use_vonage = ("--vonage" in sys.argv) or (
-    bool(vonage_key and vonage_secret) and "--console" not in sys.argv
-)
+    # Kiem tra xem co cau hinh Vonage hay khong
+    vonage_key = env("VONAGE_API_KEY", default="")
+    vonage_secret = env("VONAGE_API_SECRET", default="")
+    vonage_from = env("VONAGE_FROM", default="Vonage APIs")
+    use_vonage = ("--vonage" in sys.argv) or (
+        bool(vonage_key and vonage_secret) and "--console" not in sys.argv
+    )
 
-if use_vonage and vonage_key and vonage_secret:
-    st.SMS_BACKEND = "apps.accounts.services.sms.VonageSMSBackend"
-    st.VONAGE_API_KEY = vonage_key
-    st.VONAGE_API_SECRET = vonage_secret
-    st.VONAGE_FROM = vonage_from
-else:
-    st.SMS_BACKEND = "apps.accounts.services.sms.ConsoleSMSBackend"
+    if use_vonage and vonage_key and vonage_secret:
+        st.SMS_BACKEND = "apps.accounts.services.sms.VonageSMSBackend"
+        st.VONAGE_API_KEY = vonage_key
+        st.VONAGE_API_SECRET = vonage_secret
+        st.VONAGE_FROM = vonage_from
+    else:
+        st.SMS_BACKEND = "apps.accounts.services.sms.ConsoleSMSBackend"
 
-django.setup()
+    django.setup()
 
-# Khoi tao bang co so du lieu trong memory
-from django.core.management import call_command  # noqa: E402
+    # Khoi tao bang co so du lieu trong memory
+    from django.core.management import call_command
 
-call_command("migrate", "--run-syncdb", verbosity=0)
-
-from django.core.cache import cache  # noqa: E402
-from django.test import RequestFactory  # noqa: E402
-
-from apps.accounts.models import Account  # noqa: E402
-from apps.accounts.services.auth import (  # noqa: E402
-    confirm_password_reset_sms,
-    confirm_register_sms,
-    request_password_reset_sms,
-    request_register_otp,
-)
-from apps.accounts.services.sms import (  # noqa: E402
-    get_sms_backend,
-    is_valid_phone_number,
-    normalize_vietnamese_phone,
-    send_sms,
-)
-from apps.customers.models import Customer  # noqa: E402
+    call_command("migrate", "--run-syncdb", verbosity=0)
 
 
-def run_phone_sms_test(raw_phone: str):
+def run_phone_sms_test(raw_phone: str) -> None:
+    """Thuc hien kiem thu luong gui SMS va xac thuc OTP."""
+    from django.core.cache import cache
+    from django.test import RequestFactory
+
+    import config.settings.test as st
+    from apps.accounts.models import Account
+    from apps.accounts.services.auth import (
+        confirm_password_reset_sms,
+        confirm_register_sms,
+        request_password_reset_sms,
+        request_register_otp,
+    )
+    from apps.accounts.services.sms import (
+        get_sms_backend,
+        is_valid_phone_number,
+        normalize_vietnamese_phone,
+        send_sms,
+    )
+    from apps.customers.models import Customer
+
     # Xoa cache de reset throttle va cooldown
     cache.clear()
 
@@ -134,7 +142,7 @@ def run_phone_sms_test(raw_phone: str):
     print("\n[3] Kich ban 1: YEU CAU MA OTP DANG KY TAI KHOAN")
     try:
         otp_reg = request_register_otp(req, clean_phone)
-        print(f"    -> [SUCCESS] Da sinh va gui ma OTP dang ky: {otp_reg}")
+        print("    -> [SUCCESS] Da sinh va gui ma OTP dang ky thanh cong.")
 
         # Xac thuc OTP de hoan tat dang ky
         print("\n[4] Kich ban 1 (Tiep): XAC NHAN OTP DE HOAN TAT DANG KY")
@@ -160,7 +168,7 @@ def run_phone_sms_test(raw_phone: str):
     print("\n[5] Kich ban 2: QUEN MAT KHAU - GUI MA OTP")
     try:
         otp_forgot = request_password_reset_sms(req, clean_phone)
-        print(f"    -> [SUCCESS] Da sinh va gui ma OTP quen mat khau: {otp_forgot}")
+        print("    -> [SUCCESS] Da sinh va gui ma OTP quen mat khau thanh cong.")
 
         if otp_forgot:
             print("\n[6] Kich ban 2 (Tiep): XAC NHAN OTP VA DAT MAT KHAU MOI")
@@ -181,6 +189,7 @@ def run_phone_sms_test(raw_phone: str):
 
 
 if __name__ == "__main__":
+    setup_test_environment()
     filtered_args = [arg for arg in sys.argv[1:] if not arg.startswith("--")]
     phone_input = filtered_args[0].strip() if filtered_args else "0766709535"
     run_phone_sms_test(phone_input)
