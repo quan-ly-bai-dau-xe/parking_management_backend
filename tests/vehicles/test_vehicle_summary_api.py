@@ -3,7 +3,7 @@ Tests for Vehicle Summary KPI API (GET /api/v1/vehicles/summary/).
 
 Verifies:
 - 4 KPI counts on baseline seed data asserted against independent raw SQL:
-  - total_vehicles: 30
+  - total_vehicles: 31
   - active_vehicles: 15 (parked + active ticket)
   - expiring_soon_tickets: 0
   - expired_tickets: 12
@@ -103,10 +103,10 @@ def _get_independent_sql_kpis(extra_where=""):
 def test_vehicle_summary_matches_independent_sql_seed_baseline(employee_client):
     """
     GET /api/v1/vehicles/summary/ đối soát khớp tuyệt đối với kết quả SQL độc lập
-    trên dữ liệu seed: {total_vehicles: 30, active_vehicles: 15, expiring_soon_tickets: 0, expired_tickets: 12}.
+    trên dữ liệu seed: {total_vehicles: 31, active_vehicles: 15, expiring_soon_tickets: 0, expired_tickets: 12}.
     """
     expected = _get_independent_sql_kpis()
-    assert expected["total_vehicles"] == 30
+    assert expected["total_vehicles"] == 31
     assert expected["active_vehicles"] == 15
     assert expected["expiring_soon_tickets"] == 0
     assert expected["expired_tickets"] == 12

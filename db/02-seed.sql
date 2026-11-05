@@ -419,7 +419,7 @@ LEFT JOIN account acc ON lower(acc.email) = lower(e.acc_email) AND acc.deleted_a
 ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
--- 2.8. CUSTOMERS (20 CUSTOMERS: KH0001..KH0020, INCLUDING NULL OPTIONAL FIELDS — TL-08, TL-18, TL-21)
+-- 2.8. CUSTOMERS (21 CUSTOMERS: KH0001..KH0021, INCLUDING NULL OPTIONAL FIELDS — TL-08, TL-18, TL-21)
 -- ----------------------------------------------------------------------------
 INSERT INTO customer (
     code, full_name, date_of_birth, gender, identity_card_number,
@@ -462,7 +462,8 @@ FROM (
         ('KH0017', 'Quách Đình Phong', '1985-02-09', 'Nam', '048085942100', '0771732321', 'quach.dinh.phong@example.com', 'Số 173 Đường Lê Duẩn', '48', 'HC', 'TT', NULL, 'SUSPENDED', 'Tạm ngừng sử dụng dịch vụ theo yêu cầu chủ xe khi đi công tác dài ngày'),
         ('KH0018', 'Đàm Thị Yến Nhi', '2000-08-11', 'Nữ', '049300512910', '0388194634', 'dam.yen.nhi@example.org', 'Số 39 Đường Võ Như Hưng', '49', 'DB', 'DN', NULL, 'SUSPENDED', 'Tạm ngừng để cập nhật lại giấy chứng nhận đăng ký phương tiện'),
         ('KH0019', 'Lục Văn Khải', '1978-12-25', 'Nam', '048078749185', '0704893550', 'luc.van.khai@example.net', 'Số 45 Đường Đống Đa', '48', 'HC', 'TT', NULL, 'BLACKLISTED', 'Nợ cước phí đỗ xe quá hạn thanh toán hơn 60 ngày'),
-        ('KH0020', 'Sơn Thị Bích Hợp', '1993-04-03', 'Nữ', '049193984241', '0766606745', 'son.bich.hop@example.com', 'Số 121 Đường Trần Đại Nghĩa', '49', 'DB', 'DN', NULL, 'BLACKLISTED', 'Vi phạm quy định an toàn giao thông trong khuôn viên bãi đỗ xe')
+        ('KH0020', 'Sơn Thị Bích Hợp', '1993-04-03', 'Nữ', '049193984241', '0766606745', 'son.bich.hop@example.com', 'Số 121 Đường Trần Đại Nghĩa', '49', 'DB', 'DN', NULL, 'BLACKLISTED', 'Vi phạm quy định an toàn giao thông trong khuôn viên bãi đỗ xe'),
+        ('KH0021', 'Khách Hàng Demo', '1990-01-01', 'Nam', '048099999999', '0909897140', 'demo.khachhang@example.com', 'Số 02 Nguyễn Văn Linh', '48', 'HC', 'TT', NULL, 'ACTIVE', NULL)
 ) AS c(code, full_name, dob, gender, cccd, phone, email, address, p_code, d_code, w_code, acc_email, status, status_reason)
 LEFT JOIN administrative_province prov ON prov.code = c.p_code
 LEFT JOIN administrative_district dist ON dist.code = c.d_code
@@ -471,7 +472,7 @@ LEFT JOIN account acc ON c.acc_email IS NOT NULL AND lower(acc.email) = lower(c.
 ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
--- 2.9. VEHICLES (30 VEHICLES: XE0001..XE0030 OF TYPES CAR & EV — TL-09, TL-20)
+-- 2.9. VEHICLES (31 VEHICLES: XE0001..XE0031 OF TYPES CAR & EV — TL-09, TL-20)
 -- ----------------------------------------------------------------------------
 INSERT INTO vehicle (
     code, license_plate, model_name, brand, color,
@@ -518,7 +519,8 @@ FROM (
         ('XE0027', '92P-175.17', 'Creta 1.5', 'Hyundai', 'Trắng', NULL, NULL, 'CAR', 'KH0017'),
         ('XE0028', '43A-57382', 'Atto 3 Dynamic', 'BYD', 'Xanh dương', '/media/vehicles/xe0028.jpg', NULL, 'EV', 'KH0018'),
         ('XE0029', '92E-227.97', 'Veloz Cross', 'Toyota', 'Bạc', '/media/vehicles/xe0029.jpg', NULL, 'CAR', 'KH0019'),
-        ('XE0030', '75D-216.14', 'Wuling Mini EV', 'Wuling', 'Vàng', NULL, NULL, 'EV', 'KH0020')
+        ('XE0030', '75D-216.14', 'Wuling Mini EV', 'Wuling', 'Vàng', NULL, NULL, 'EV', 'KH0020'),
+        ('XE0031', '51A-897.14', 'Vios', 'Toyota', 'Bạc', NULL, 'Phương tiện demo nhận dạng camera', 'CAR', 'KH0021')
 ) AS v(code, license_plate, model_name, brand, color, image_url, notes, vtype_code, cust_code)
 JOIN vehicle_type vt ON vt.code = v.vtype_code AND vt.deleted_at IS NULL
 JOIN customer cust ON cust.code = v.cust_code AND cust.deleted_at IS NULL
