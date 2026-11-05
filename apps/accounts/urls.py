@@ -8,8 +8,14 @@ from django.urls import path
 from apps.accounts.views import (
     CSRFBootstrapView,
     CurrentUserView,
+    ForgotPasswordSMSView,
+    ForgotPasswordView,
     LoginView,
     LogoutView,
+    RegisterSMSConfirmView,
+    RegisterSMSRequestView,
+    ResetPasswordConfirmView,
+    ResetPasswordSMSConfirmView,
 )
 
 urlpatterns = [
@@ -17,4 +23,34 @@ urlpatterns = [
     path("login/", LoginView.as_view(), name="auth-login"),
     path("logout/", LogoutView.as_view(), name="auth-logout"),
     path("me/", CurrentUserView.as_view(), name="auth-me"),
+    path(
+        "forgot-password/",
+        ForgotPasswordView.as_view(),
+        name="auth-forgot-password",
+    ),
+    path(
+        "reset-password/",
+        ResetPasswordConfirmView.as_view(),
+        name="auth-reset-password",
+    ),
+    path(
+        "forgot-password/sms/",
+        ForgotPasswordSMSView.as_view(),
+        name="auth-forgot-password-sms",
+    ),
+    path(
+        "reset-password/sms/",
+        ResetPasswordSMSConfirmView.as_view(),
+        name="auth-reset-password-sms",
+    ),
+    path(
+        "register/sms/request/",
+        RegisterSMSRequestView.as_view(),
+        name="auth-register-sms-request",
+    ),
+    path(
+        "register/sms/confirm/",
+        RegisterSMSConfirmView.as_view(),
+        name="auth-register-sms-confirm",
+    ),
 ]

@@ -12,7 +12,7 @@ if not exist "%PYTEST_CMD%" (
 )
 
 REM Dinh nghia list cac file test endpoint (danh sach cach nhau boi dau cach)
-set "ENDPOINTS=tests\test_health.py tests\accounts\test_core_auth.py tests\parking\test_check_in_api.py tests\parking\test_check_out_api.py tests\parking\test_vehicle_lookup_api.py tests\parking\test_vehicle_search_api.py tests\parking\test_plate_scans_api.py tests\parking\test_gates_and_sessions_api.py"
+set "ENDPOINTS=tests\test_health.py tests\accounts\test_core_auth.py tests\accounts\test_sms_otp.py tests\parking\test_check_in_api.py tests\parking\test_check_out_api.py tests\parking\test_vehicle_lookup_api.py tests\parking\test_vehicle_search_api.py tests\parking\test_plate_scans_api.py tests\parking\test_gates_and_sessions_api.py tests\reports\test_dashboard_api.py"
 
 REM Neu co truyen tham so dong lenh (vi du: test_endpoints.bat 1 hoac test_endpoints.bat all)
 if not "%~1"=="" (
@@ -33,6 +33,8 @@ echo  [5] Vehicle Lookup (Bien so chuan)   : tests\parking\test_vehicle_lookup_a
 echo  [6] Vehicle Search (Da tieu chi)     : tests\parking\test_vehicle_search_api.py
 echo  [7] Plate Scan OCR                   : tests\parking\test_plate_scans_api.py
 echo  [8] Gates va Sessions History        : tests\parking\test_gates_and_sessions_api.py
+echo  [9] Dashboard / Trang chu (Bao cao)  : tests\reports\test_dashboard_api.py
+echo  [10] SMS OTP Auth (Quen MK & Dang ky): tests\accounts\test_sms_otp.py
 echo -------------------------------------------------------------------------------
 echo  [A] CHAY TOAN BO DANH SACH (Loop qua list bang vong lap FOR)
 echo  [C] CHAY FULL TEST SUITE VOI COVERAGE (DoD Check)
@@ -40,7 +42,7 @@ echo  [0] Thoat
 echo ===============================================================================
 echo.
 
-set /p choice="Nhap lua chon cua ban (0-8, A, C): "
+set /p choice="Nhap lua chon cua ban (0-9, A, C): "
 
 :PROCESS_CHOICE
 if /i "%choice%"=="1" goto TEST_HEALTH
@@ -51,6 +53,8 @@ if /i "%choice%"=="5" goto TEST_LOOKUP
 if /i "%choice%"=="6" goto TEST_SEARCH
 if /i "%choice%"=="7" goto TEST_PLATE
 if /i "%choice%"=="8" goto TEST_GATES
+if /i "%choice%"=="9" goto TEST_DASHBOARD
+if /i "%choice%"=="10" goto TEST_SMS_OTP
 if /i "%choice%"=="A" goto TEST_ALL_LIST
 if /i "%choice%"=="all" goto TEST_ALL_LIST
 if /i "%choice%"=="C" goto TEST_FULL_COVERAGE
@@ -109,6 +113,18 @@ goto PAUSE_AND_BACK
 echo.
 echo [RUNNING] Test Cong barrier va lich su phien...
 "%PYTEST_CMD%" tests\parking\test_gates_and_sessions_api.py -v --no-cov
+goto PAUSE_AND_BACK
+
+:TEST_DASHBOARD
+echo.
+echo [RUNNING] Test Dashboard / Trang chu (KPIs, Floors, Traffic, Alerts, Activities)...
+"%PYTEST_CMD%" tests\reports\test_dashboard_api.py -v --no-cov
+goto PAUSE_AND_BACK
+
+:TEST_SMS_OTP
+echo.
+echo [RUNNING] Test SMS OTP (Quen mat khau & Dang ky tai khoan)...
+"%PYTEST_CMD%" tests\accounts\test_sms_otp.py -v --no-cov
 goto PAUSE_AND_BACK
 
 :TEST_ALL_LIST

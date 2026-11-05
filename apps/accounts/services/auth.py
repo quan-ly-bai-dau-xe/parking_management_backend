@@ -3,6 +3,7 @@ Authentication services for accounts app per ADR-0004, Schema v2, and TL-01.
 """
 
 import hashlib
+import re
 import secrets
 from datetime import timedelta
 from typing import NoReturn
@@ -11,15 +12,29 @@ from django.conf import settings
 from django.contrib.auth import login as auth_login
 from django.contrib.auth import logout as auth_logout
 from django.contrib.auth.hashers import check_password, get_hasher
+from django.core.cache import cache
+from django.core.mail import send_mail
+from django.db import connection, transaction
 from django.http import HttpRequest, HttpResponse
 from django.utils import timezone
+from django.utils.crypto import salted_hmac
 from rest_framework import status
 
-from apps.accounts.models import Account, PersistentLoginToken
+from apps.accounts.models import Account, PasswordResetToken, PersistentLoginToken
 from apps.accounts.selectors.auth import get_active_account_by_identifier
-from apps.accounts.services.throttling import get_client_ip
+from apps.accounts.services.sms import (
+    is_valid_phone_number,
+    normalize_vietnamese_phone,
+    send_sms,
+)
+from apps.accounts.services.throttling import (
+    PasswordResetLimiter,
+    SMSOTPLimiter,
+    get_client_ip,
+)
 from apps.core.exceptions import BusinessAPIException
-from apps.core.messages import get_srs_message
+from apps.core.messages import get_prop_message, get_srs_message
+from apps.customers.models import Customer
 
 # cspell:disable
 # High-entropy pre-computed dummy hashes for anti-timing protection (OWASP CWE-208 / TL-52)
@@ -34,6 +49,16 @@ DUMMY_PBKDF2_HASH = (
     "7WahN7QjfBP80klAivKpmJKntm4BQrdFPIRBQS0ELps="
 )
 # cspell:enable
+
+
+def hash_token(token: str, key_salt: str = "accounts.password_reset_token") -> str:
+    """
+    Tạo mã băm bảo mật HMAC-SHA256 cho token đặt lại mật khẩu và mã OTP.
+    Sử dụng salted_hmac kết hợp SECRET_KEY theo khuyến nghị của Django & OWASP,
+    ngăn chặn tấn công rainbow table và giải quyết triệt để cảnh báo CodeQL
+    (Use of a broken or weak cryptographic hashing algorithm on sensitive data).
+    """
+    return salted_hmac(key_salt, token, algorithm="sha256").hexdigest()
 
 
 def get_dummy_password_hash() -> str:
@@ -212,3 +237,527 @@ def logout_account(
     if response is not None:
         response.delete_cookie(settings.SESSION_COOKIE_NAME)
         clear_remember_cookie(response)
+
+
+def request_password_reset(request: HttpRequest, email: str) -> str | None:
+    """
+    Xử lý yêu cầu đặt lại mật khẩu per REQ-4.1-F04, OQ-84, TL-36:
+    1. Kiểm tra rate limit (OQ-84: 3 req/giờ per email, 10 req/giờ per IP).
+    2. Tìm tài khoản theo email (anti-enumeration: nếu không tìm thấy, vẫn trả về None mà không báo lỗi).
+    3. Hủy bỏ (xóa plain DELETE per TL-36) các token chưa dùng trước đó của tài khoản.
+    4. Sinh token ngẫu nhiên bảo mật (raw_token), tính mã băm SHA-256.
+    5. Lưu PasswordResetToken với thời hạn (mặc định 15 phút).
+    6. Gửi email hướng dẫn đặt lại mật khẩu kèm mã token.
+    7. Trả về raw_token (phục vụ audit/testing).
+    """
+    limiter = PasswordResetLimiter()
+    limiter.check_and_increment(request, email)
+
+    norm_email = email.strip().lower()
+    account = Account.objects.filter(
+        email__iexact=norm_email, is_active=True, deleted_at__isnull=True
+    ).first()
+
+    if account is None or not account.email:
+        # Anti-enumeration protection (OWASP): do not reveal whether the email exists
+        return None
+
+    # Revoke previous unused reset tokens for this account (TL-36 plain DELETE permitted)
+    PasswordResetToken.objects.filter(account=account, used_at__isnull=True).delete()
+
+    raw_token = secrets.token_urlsafe(32)
+    token_hash = hash_token(raw_token)
+
+    lifetime_minutes = settings.PASSWORD_RESET_TOKEN_LIFETIME_MINUTES
+    now = timezone.now()
+    expires_at = now + timedelta(minutes=lifetime_minutes)
+    client_ip = (get_client_ip(request) or "")[:45]
+
+    PasswordResetToken.objects.create(
+        account=account,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        requested_ip=client_ip,
+        created_at=now,
+    )
+
+    subject = "[Hệ thống Bãi đỗ xe] Yêu cầu đặt lại mật khẩu"
+    body = (
+        f"Xin chào,\n\n"
+        f"Chúng tôi đã nhận được yêu cầu đặt lại mật khẩu cho tài khoản {account.email}.\n\n"
+        f"Mã xác thực đặt lại mật khẩu của bạn là:\n"
+        f"{raw_token}\n\n"
+        f"Mã này có hiệu lực trong vòng {lifetime_minutes} phút.\n"
+        f"Nếu bạn không thực hiện yêu cầu này, vui lòng bỏ qua email và mật khẩu của bạn sẽ được giữ nguyên.\n\n"
+        f"Trân trọng,\n"
+        f"Ban Quản lý Bãi đỗ xe"
+    )
+    from_email = settings.DEFAULT_FROM_EMAIL
+
+    send_mail(
+        subject=subject,
+        message=body,
+        from_email=from_email,
+        recipient_list=[account.email],
+        fail_silently=True,
+    )
+
+    return raw_token
+
+
+def confirm_password_reset(token: str, new_password: str) -> Account:
+    """
+    Xác nhận đặt lại mật khẩu bằng token một lần per REQ-4.1-F04, TL-36:
+    1. Tính hash SHA-256 của token.
+    2. Tìm PasswordResetToken còn hiệu lực (used_at IS NULL, expires_at > now).
+    3. Nếu không tìm thấy hoặc hết hạn -> ném BusinessAPIException(PROP-4.1-P08, 400).
+    4. Cập nhật mật khẩu mới của tài khoản qua Argon2 (set_password).
+    5. Đánh dấu token đã sử dụng (used_at) và thu hồi toàn bộ remember-me tokens per OWASP.
+    """
+    clean_token = token.strip()
+    if not clean_token:
+        raise BusinessAPIException(
+            code="PROP-4.1-P08",
+            message=get_prop_message(
+                "PROP-4.1-P08",
+                "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    token_hash = hash_token(clean_token)
+    now = timezone.now()
+
+    reset_token = (
+        PasswordResetToken.objects.filter(
+            token_hash=token_hash,
+            used_at__isnull=True,
+            expires_at__gt=now,
+        )
+        .select_related("account")
+        .first()
+    )
+
+    if reset_token is None or reset_token.account is None:
+        raise BusinessAPIException(
+            code="PROP-4.1-P08",
+            message=get_prop_message(
+                "PROP-4.1-P08",
+                "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    account = reset_token.account
+    if not account.is_active or account.deleted_at is not None:
+        raise BusinessAPIException(
+            code="PROP-4.1-P08",
+            message=get_prop_message(
+                "PROP-4.1-P08",
+                "Mã đặt lại mật khẩu không hợp lệ hoặc đã hết hạn.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    with transaction.atomic():
+        account.set_password(new_password)
+        account.save()
+
+        # Mark token as consumed
+        reset_token.used_at = now
+        reset_token.save(update_fields=["used_at"])
+
+        # Revoke all persistent login tokens per OWASP credential rotation
+        revoke_all_account_tokens(account.id)
+
+    return account
+
+
+def generate_numeric_otp(length: int = 6) -> str:
+    """Sinh mã OTP số ngẫu nhiên an toàn bằng thư viện secrets."""
+    low = 10 ** (length - 1)
+    high = 10**length
+    return f"{secrets.randbelow(high - low) + low:0{length}d}"
+
+
+def request_password_reset_sms(request: HttpRequest, phone: str) -> str | None:
+    """
+    Xử lý yêu cầu đặt lại mật khẩu qua SMS OTP per REQ-4.1-F04, TL-01, OQ-03:
+    1. Chuẩn hóa và kiểm tra số điện thoại hợp lệ.
+    2. Giới hạn tần suất và cooldown 60s qua SMSOTPLimiter.
+    3. Tìm tài khoản hoạt động theo số điện thoại (anti-enumeration).
+    4. Hủy token reset chưa dùng trước đó của tài khoản.
+    5. Sinh OTP 6 chữ số, lưu hash SHA-256 vào PasswordResetToken (hết hạn sau 5 phút).
+    6. Gửi SMS chứa OTP đến số điện thoại.
+    7. Trả về mã OTP (phục vụ audit/testing).
+    """
+    clean_phone = normalize_vietnamese_phone(phone)
+    if not is_valid_phone_number(clean_phone):
+        raise BusinessAPIException(
+            code="PROP-4.1-P15",
+            message=get_prop_message(
+                "PROP-4.1-P15", "Số điện thoại không đúng định dạng."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    limiter = SMSOTPLimiter()
+    limiter.check_and_increment(request, clean_phone, action="reset")
+
+    account = Account.objects.filter(
+        phone=clean_phone, is_active=True, deleted_at__isnull=True
+    ).first()
+
+    if account is None:
+        # Anti-enumeration: trả về None nhưng không tiết lộ số điện thoại có tồn tại hay không
+        return None
+
+    # Hủy các token reset chưa dùng của tài khoản
+    PasswordResetToken.objects.filter(account=account, used_at__isnull=True).delete()
+
+    otp = generate_numeric_otp(6)
+    token_hash = hash_token(otp)
+
+    lifetime_seconds = settings.SMS_OTP_LIFETIME_SECONDS
+    now = timezone.now()
+    expires_at = now + timedelta(seconds=lifetime_seconds)
+    client_ip = (get_client_ip(request) or "")[:45]
+
+    PasswordResetToken.objects.create(
+        account=account,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        requested_ip=client_ip,
+        created_at=now,
+    )
+
+    # Đặt lại bộ đếm số lần xác thực sai
+    attempt_key = f"otp_attempts:reset:{account.id}"
+    cache.set(attempt_key, 0, timeout=lifetime_seconds)
+
+    message = (
+        f"[Bãi đỗ xe] Mã OTP xác thực đặt lại mật khẩu của bạn là: {otp}. "
+        f"Mã có hiệu lực trong {lifetime_seconds // 60} phút. Vui lòng không chia sẻ mã này cho bất kỳ ai."
+    )
+    send_sms(clean_phone, message)
+
+    return otp
+
+
+def confirm_password_reset_sms(phone: str, otp: str, new_password: str) -> Account:
+    """
+    Xác nhận đặt lại mật khẩu bằng mã OTP nhận qua SMS:
+    1. Kiểm tra định dạng số điện thoại và OTP.
+    2. Chống brute-force: tối đa 5 lần nhập sai sẽ vô hiệu hóa mã OTP.
+    3. Kiểm tra tính hợp lệ của token trong PasswordResetToken.
+    4. Cập nhật mật khẩu mới bằng Argon2 và thu hồi remember tokens.
+    """
+    clean_phone = normalize_vietnamese_phone(phone)
+    clean_otp = otp.strip()
+
+    if (
+        not is_valid_phone_number(clean_phone)
+        or len(clean_otp) != 6
+        or not clean_otp.isdigit()
+    ):
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    account = Account.objects.filter(
+        phone=clean_phone, is_active=True, deleted_at__isnull=True
+    ).first()
+
+    if account is None:
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    attempt_key = f"otp_attempts:reset:{account.id}"
+    attempts = int(cache.get(attempt_key, 0) or 0)
+    max_attempts = settings.SMS_OTP_MAX_ATTEMPTS
+
+    if attempts >= max_attempts:
+        PasswordResetToken.objects.filter(
+            account=account, used_at__isnull=True
+        ).delete()
+        cache.delete(attempt_key)
+        raise BusinessAPIException(
+            code="PROP-4.1-P16",
+            message=get_prop_message(
+                "PROP-4.1-P16",
+                "Bạn đã nhập sai mã OTP quá 5 lần. Mã OTP này đã bị hủy, vui lòng yêu cầu mã mới.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    token_hash = hash_token(clean_otp)
+    now = timezone.now()
+
+    reset_token = PasswordResetToken.objects.filter(
+        account=account,
+        token_hash=token_hash,
+        used_at__isnull=True,
+        expires_at__gt=now,
+    ).first()
+
+    if reset_token is None:
+        cache.set(attempt_key, attempts + 1, timeout=300)
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    with transaction.atomic():
+        account.set_password(new_password)
+        account.save()
+
+        reset_token.used_at = now
+        reset_token.save(update_fields=["used_at"])
+
+        revoke_all_account_tokens(account.id)
+        cache.delete(attempt_key)
+
+    return account
+
+
+def request_register_otp(request: HttpRequest, phone: str) -> str:
+    """
+    Yêu cầu mã OTP qua SMS để đăng ký tài khoản khách hàng mới:
+    1. Chuẩn hóa số điện thoại, kiểm tra định dạng.
+    2. Kiểm tra số điện thoại chưa tồn tại trong tài khoản hoạt động.
+    3. Áp dụng giới hạn tần suất gửi OTP và cooldown 60s.
+    4. Sinh OTP 6 chữ số, lưu hash SHA-256 vào cache với thời hạn 5 phút.
+    5. Gửi SMS chứa OTP.
+    """
+    clean_phone = normalize_vietnamese_phone(phone)
+    if not is_valid_phone_number(clean_phone):
+        raise BusinessAPIException(
+            code="PROP-4.1-P15",
+            message=get_prop_message(
+                "PROP-4.1-P15", "Số điện thoại không đúng định dạng."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Kiểm tra số điện thoại đã tồn tại
+    if Account.objects.filter(
+        phone=clean_phone, is_active=True, deleted_at__isnull=True
+    ).exists():
+        raise BusinessAPIException(
+            code="PROP-4.1-P13",
+            message=get_prop_message(
+                "PROP-4.1-P13", "Số điện thoại đã tồn tại trong hệ thống."
+            ),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    limiter = SMSOTPLimiter()
+    limiter.check_and_increment(request, clean_phone, action="register")
+
+    otp = generate_numeric_otp(6)
+    token_hash = hash_token(otp)
+    lifetime_seconds = settings.SMS_OTP_LIFETIME_SECONDS
+
+    cache_key = f"otp:register:{clean_phone}"
+    cache.set(
+        cache_key,
+        {
+            "token_hash": token_hash,
+            "attempts": 0,
+        },
+        timeout=lifetime_seconds,
+    )
+
+    message = (
+        f"[Bãi đỗ xe] Mã OTP xác thực đăng ký tài khoản của bạn là: {otp}. "
+        f"Mã có hiệu lực trong {lifetime_seconds // 60} phút. Vui lòng không chia sẻ mã này cho bất kỳ ai."
+    )
+    send_sms(clean_phone, message)
+
+    return otp
+
+
+def confirm_register_sms(
+    phone: str,
+    otp: str,
+    password: str,
+    full_name: str,
+    identity_card_number: str | None = None,
+    email: str | None = None,
+) -> tuple[Account, Customer]:
+    """
+    Xác thực OTP và hoàn tất đăng ký tài khoản Khách hàng (CUSTOMER) per OQ-03, TL-01:
+    1. Kiểm tra mã OTP trong cache và bộ đếm chống brute-force.
+    2. Kiểm tra tính duy nhất của Phone, Email và CCCD.
+    3. Tạo Account (role=CUSTOMER) với mật khẩu băm Argon2.
+    4. Tạo Customer với mã KH%04d theo sequence advisory lock, liên kết với Account.
+    5. Xóa OTP trong cache và trả về (Account, Customer).
+    """
+    clean_phone = normalize_vietnamese_phone(phone)
+    clean_otp = otp.strip()
+
+    if (
+        not is_valid_phone_number(clean_phone)
+        or len(clean_otp) != 6
+        or not clean_otp.isdigit()
+    ):
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    cache_key = f"otp:register:{clean_phone}"
+    cache_data = cache.get(cache_key)
+
+    if not cache_data or not isinstance(cache_data, dict):
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    attempts = int(cache_data.get("attempts", 0) or 0)
+    max_attempts = settings.SMS_OTP_MAX_ATTEMPTS
+
+    if attempts >= max_attempts:
+        cache.delete(cache_key)
+        raise BusinessAPIException(
+            code="PROP-4.1-P16",
+            message=get_prop_message(
+                "PROP-4.1-P16",
+                "Bạn đã nhập sai mã OTP quá 5 lần. Mã OTP này đã bị hủy, vui lòng yêu cầu mã mới.",
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    token_hash = hash_token(clean_otp)
+    if token_hash != cache_data.get("token_hash"):
+        cache_data["attempts"] = attempts + 1
+        cache.set(cache_key, cache_data, timeout=300)
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    # Kiểm tra trùng lặp số điện thoại
+    if Account.objects.filter(phone=clean_phone, deleted_at__isnull=True).exists():
+        raise BusinessAPIException(
+            code="PROP-4.1-P13",
+            message=get_prop_message(
+                "PROP-4.1-P13", "Số điện thoại đã tồn tại trong hệ thống."
+            ),
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    clean_email = email.strip().lower() if email and email.strip() else None
+    if (
+        clean_email
+        and Account.objects.filter(
+            email__iexact=clean_email, deleted_at__isnull=True
+        ).exists()
+    ):
+        raise BusinessAPIException(
+            code="MSG-4.3.1-M05",
+            message="Dữ liệu email đã tồn tại trong hệ thống, không thể tạo trùng lặp.",
+            status_code=status.HTTP_409_CONFLICT,
+        )
+
+    # CCCD/CMND: kiểm tra hoặc tự tạo fallback hợp lệ đáp ứng ck_customer_idcard_digits (9-20 chữ số)
+    clean_id_card = (
+        identity_card_number.strip()
+        if identity_card_number and str(identity_card_number).strip()
+        else None
+    )
+    if clean_id_card:
+        if not re.match(r"^[0-9]{9,20}$", clean_id_card):
+            raise BusinessAPIException(
+                code="PROP-GEN-P01",
+                message="Số CCCD/CMND phải gồm từ 9 đến 20 chữ số.",
+                status_code=status.HTTP_400_BAD_REQUEST,
+            )
+        if Customer.objects.filter(
+            identity_card_number=clean_id_card,
+            deleted_at__isnull=True,
+            is_anonymized=False,
+        ).exists():
+            raise BusinessAPIException(
+                code="PROP-4.1-P18",
+                message=get_prop_message(
+                    "PROP-4.1-P18", "Số CCCD/CMND đã tồn tại trong hệ thống."
+                ),
+                status_code=status.HTTP_409_CONFLICT,
+            )
+    else:
+        # Tự tạo placeholder duy nhất gồm 12 chữ số theo số điện thoại: "99" + 10 số cuối
+        clean_id_card = f"99{clean_phone[-10:].zfill(10)}"
+        # Đảm bảo duy nhất nếu số này đã vô tình trùng
+        if Customer.objects.filter(
+            identity_card_number=clean_id_card,
+            deleted_at__isnull=True,
+            is_anonymized=False,
+        ).exists():
+            clean_id_card = f"88{clean_phone[-10:].zfill(10)}"
+
+    with transaction.atomic():
+        account = Account.objects.create_user(
+            email=clean_email,
+            phone=clean_phone,
+            password=password,
+            role="CUSTOMER",
+            is_active=True,
+        )
+
+        # Khóa advisory lock và sinh mã khách hàng KH%04d
+        with connection.cursor() as cursor:
+            cursor.execute(
+                "SELECT pg_advisory_xact_lock(hashtext('customer_code_sequence'));"
+            )
+            cursor.execute(
+                """
+                SELECT COALESCE(
+                    MAX(
+                        CASE
+                            WHEN code ~ '^KH[0-9]+$' THEN SUBSTRING(code FROM 3)::INTEGER
+                            ELSE 0
+                        END
+                    ), 0
+                )
+                FROM customer;
+                """
+            )
+            max_num = cursor.fetchone()[0]
+            customer_code = f"KH{max_num + 1:04d}"
+
+        customer = Customer.objects.create(
+            code=customer_code,
+            full_name=full_name.strip(),
+            identity_card_number=clean_id_card,
+            phone=clean_phone,
+            email=clean_email,
+            account=account,
+            status="ACTIVE",
+        )
+
+        cache.delete(cache_key)
+
+    return account, customer
