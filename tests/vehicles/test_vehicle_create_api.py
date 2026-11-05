@@ -2,7 +2,7 @@
 Tests for Vehicle Create API (POST /api/v1/vehicles/).
 
 Verifies:
-- Auto-generated sequential vehicle code (XE%04d, e.g. XE0031).
+- Auto-generated sequential vehicle code (XE%04d, e.g. XE0032).
 - Client-supplied custom vehicle code complying with ck_vehicle_code_format.
 - Duplicate active plate conflict -> 409 (MSG-4.3.1-M05).
 - Re-registration of a soft-deleted vehicle's plate is permitted (partial unique index uq_vehicle_license_plate_active).
@@ -29,7 +29,7 @@ ENDPOINT_URL = "/api/v1/vehicles/"
 
 
 def test_vehicle_create_auto_code_generation(manager_client, car_type, active_customer):
-    """Tạo xe mới không truyền 'code' -> hệ thống tự sinh mã tuần tự XE%04d (ví dụ: XE0031)."""
+    """Tạo xe mới không truyền 'code' -> hệ thống tự sinh mã tuần tự XE%04d (ví dụ: XE0032)."""
     payload = {
         "license_plate": "51K-999.01",
         "model_name": "VF8",
@@ -42,7 +42,7 @@ def test_vehicle_create_auto_code_generation(manager_client, car_type, active_cu
     assert response.status_code == status.HTTP_201_CREATED
 
     data = response.json()
-    assert data["code"] == "XE0031"
+    assert data["code"] == "XE0032"
     assert data["license_plate"] == "51K-999.01"
     assert data["license_plate_norm"] == "51K99901"
     assert data["row_version"] == 1
