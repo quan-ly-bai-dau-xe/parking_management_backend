@@ -165,3 +165,66 @@ Canonical decision log for `parking_management_backend` (`TL-01`–`TL-51`). All
   2. Xác thực giá trị `gate_id`: Chấp nhận số nguyên dương (`> 0`) hoặc để trống (`None`/`""`); từ chối các giá trị sai lệch (chuỗi không phải số, số nguyên <= 0, số thực) với mã lỗi HTTP 400 Bad Request và phong bì chuẩn `PROP-GEN-P01`.
   3. Ghi nhận `_obs_gate_id` vào observability metadata (`PlateScanExecutionResult.gate_id`) và log có cấu trúc `parking_api_request` phục vụ giám sát vận hành bãi xe.
   4. Bảo toàn nguyên tắc thin controller của `PlateScanView.post` (duy trì kiểm định AST số dòng lệnh logic: đúng 6 câu lệnh logic và <= 20 dòng AST nodes).
+
+## 8. Round 85 Technical Decisions (`TL-57` – `TL-61`)
+
+- **TL-57 — Real-Time Fee Preview Endpoint for Open Parking Sessions** (`[PROPOSAL]` | `apps/parking/views/sessions.py`, `apps/parking/serializers/sessions.py`, `apps/parking/urls.py`, `docs/guides/frontend-api/05-parking-endpoints.md`, Round 85 Milestone 1):
+  1. Bổ sung endpoint read-only `GET /api/v1/parking/sessions/fee-preview/?license_plate=...` (hoặc `session_code=...`) phục vụ màn hình Làn Ra (ExitLanePanel) xem trước cước phí trước khi bấm check-out.
+  2. Quyền truy cập: `[IsAuthenticated, IsEmployeeOrManager]`.
+  3. Tái sử dụng selector `get_open_session_by_identifier` và service tính cước `calculate_parking_fee(session, now)`.
+  4. Trả về payload cấu trúc `FeePreviewResponseSerializer` gồm 11 trường: `session_id`, `session_code`, `license_plate`, `entry_time`, `duration_minutes`, `duration_text`, `fee_amount`, `has_active_ticket`, `ticket_code`, `is_exempt`, `hourly_rate`.
+  5. Xử lý lỗi: HTTP 400 `PROP-4.5.1-P11` nếu thiếu cả 2 tham số; HTTP 404 `PROP-4.5.1-P06` nếu không tìm thấy phiên đỗ xe đang mở.
+  6. Zero DB schema changes: hoàn toàn không thay đổi schema CSDL PostgreSQL.
+
+- **TL-58 — Exit Fee Waiver Authorization & Workflow Rules** (`[PROPOSAL]` | `apps/parking/services/check_out.py`, `apps/parking/serializers/sessions.py`, Round 85 Milestone 1):
+  1. Mở rộng `CheckOutRequestSerializer` tiếp nhận 2 trường: `waive_fee` (boolean, default=False) và `waiver_reason` (string, optional/nullable).
+  2. Thẩm quyền miễn cước đặc cách: Ràng buộc an toàn tài chính nghiêm ngặt, chỉ tài khoản có vai trò `MANAGER` (`request.user.role == 'MANAGER'`) mới được phép gửi `waive_fee=True`. Nhân viên (`EMPLOYEE`) hoặc `CUSTOMER` gọi sẽ bị từ chối với HTTP 403 Forbidden và mã lỗi `PROP-4.5.1-P18` ("Chỉ Quản lý mới có quyền miễn cước phí đỗ xe.").
+  3. Bắt buộc lý do miễn cước: Khi `waive_fee=True`, trường `waiver_reason` không được để trống hoặc chỉ chứa khoảng trắng. Nếu rỗng, hệ thống từ chối với HTTP 400 Bad Request và mã lỗi `PROP-4.5.1-P19` ("Vui lòng cung cấp lý do miễn cước đặc cách.").
+  4. Cơ chế tính phí khi miễn cước: Gán `fee_amount = Decimal("0.00")`, bỏ qua yêu cầu `payment_method` và KHÔNG tạo bản ghi `Payment`.
+  5. Tương thích ngược 100%: Khi `waive_fee=False` hoặc không truyền, toàn bộ quy trình tính cước, yêu cầu `payment_method` và sinh hóa đơn `Payment` giữ nguyên như cũ.
+
+- **TL-59 — Audit Trail Mechanism for Fee Waiver Without Schema Mutation** (`[PROPOSAL]` | `apps/parking/services/check_out.py`, `apps/audit/models.py`, Round 85 Milestone 1):
+  1. Bảo toàn bất biến `db/01-schema.sql` (zero schema change).
+  2. Ghi chú kiểm toán vào trường `notes` của `VehicleEntryExitLog`: Tự động nối thêm nội dung `[MIỄN CƯỚC ĐẶC CÁCH]: {waiver_reason} (Người duyệt: {user.email})`.
+  3. Tự động liên kết `exit_handled_by` với bản ghi `Employee` của Quản lý phê duyệt check-out.
+  4. Ghi nhận sự kiện kiểm toán bất biến vào bảng `ActivityLog` với `action="SESSION_CHECK_OUT_WAIVED"`, `entity_type="vehicle_entry_exit_log"`, `entity_id=session.id`, và `message` chi tiết bao gồm mã phiên, biển số, lý do miễn cước và email người phê duyệt.
+
+- **TL-60 — Backend Tariff as Single Source of Truth & 15-Minute Rule Refutation** (`[PROPOSAL]` | `apps/parking/services/tariff.py`, `docs/requirements/01-decision-log.md`, Round 85 Milestone 1):
+  1. Xác nhận Backend là Single Source of Truth duy nhất cho mọi quy tắc tính cước phí đỗ xe. Frontend tuyệt đối không tự ý tính cước cục bộ ở client.
+  2. Bác bỏ quy tắc "Miễn phí dưới 15 phút": Quy tắc này hoàn toàn không tồn tại trong tài liệu SRS v4.1 (SRS 4.5.1) và không tồn tại trong backend `tariff.py`. Chuỗi giao diện "0đ (Miễn phí dưới 15 phút)" trên mockup frontend chỉ là text tĩnh mô phỏng.
+  3. Duy trì biểu phí chuẩn theo OQ-85 và TL-50: Tối thiểu 1 giờ (`PARKING_HOURLY_RATE_VND = 10.000 VNĐ`), làm tròn lên theo giờ (`ceil`), cước phí = 0 VNĐ chỉ khi xe được bảo đảm bởi vé tháng/định kỳ `ACTIVE` còn hiệu lực tại thời điểm ra.
+
+- **TL-61 — Barrier UI State Model & Resilient Cloud Storage Fallback** (`[PROPOSAL]` | `apps/parking/serializers/sessions.py`, `apps/parking/services/upload.py`, Round 85 Milestone 1):
+  1. Khẳng định hệ thống không tích hợp API phần cứng barrier vật lý. Trạng thái đóng/mở barrier là UI State máy trạng thái phía Frontend (`closed` -> `opening` -> `opened` -> tự động đóng sau độ trễ 3000ms).
+  2. Xử lý sự cố Cloudinary HTTP 502 (`PROP-4.5.1-P17`): Backend cho phép `entry_image_url` và `exit_image_url` là `null`. Khi upload Cloudinary thất bại trong môi trường dev/throwaway hoặc gián đoạn mạng, frontend fallback gửi `null`, hiển thị cảnh báo màu vàng cho nhân viên trực, và hoàn tất check-in / check-out bình thường mà không làm gián đoạn vận hành bãi xe.
+
+## 9. Round 86 Technical Decisions (`TL-62` – `TL-65`)
+
+- **TL-62 — Error Code Catalog Registration for Fee Waiver Security Guards** (`[PROPOSAL]` | `apps/core/messages.py`, `apps/parking/services/check_out.py`, Round 86 Milestone 1, Finding 1):
+  1. Đăng ký chính thức 2 mã lỗi nghiệp vụ `PROP-4.5.1-P18` ("Chỉ Quản lý mới có quyền miễn cước phí đỗ xe.") và `PROP-4.5.1-P19` ("Vui lòng cung cấp lý do miễn cước đặc cách.") vào từ điển `PROPOSAL_MESSAGES` và `ALL_MESSAGES` trong `apps/core/messages.py`.
+  2. Chuẩn hóa `apps/parking/services/check_out.py` gọi thông điệp lỗi thông qua `ALL_MESSAGES.get(...)` thay vì chuỗi hardcode cục bộ, loại bỏ hoàn toàn sự lệch pha giữa tài liệu đặc tả và mã nguồn thực thi.
+  3. Đảm bảo bài kiểm thử tự động `tests/docs/test_frontend_guide_matches_schema.py::test_all_documented_codes_exist_in_all_messages` vượt qua 100%.
+
+- **TL-63 — Thin FeePreviewView Controller & Centralized Tariff Service Architecture** (`[PROPOSAL]` | `apps/parking/services/tariff.py`, `apps/parking/views/sessions.py`, `tests/parking/test_fee_preview.py`, Round 86 Milestone 1, Finding 2):
+  1. Tách biệt kiến trúc Thin Controller: Rút gọn `FeePreviewView.get` trong `apps/parking/views/sessions.py` xuống dưới 10 dòng lệnh, đạt chuẩn kiểm định AST thin-controller (`<= 30` dòng), hoàn toàn ủy nhiệm xử lý nghiệp vụ cho service layer.
+  2. Trích xuất hàm `get_session_active_ticket` và dịch vụ `get_fee_preview` vào `apps/parking/services/tariff.py` làm Single Source of Truth cho logic đối chiếu vé tháng `Ticket` có hiệu lực (`effective_from <= at_time < effective_to`, `status="ACTIVE"`).
+  3. Đảm bảo tính nhất quán tuyệt đối (100% parity, zero-drift) giữa cước phí xem trước (`fee_amount` tại `FeePreviewView`) và cước phí thu thực tế khi kết thúc phiên đỗ (`fee_amount` tại `check_out_vehicle`).
+
+- **TL-64 — Fee Preview API Response Schema Contract Synchronization** (`[PROPOSAL]` | `docs/guides/frontend-api/05-parking-endpoints.md`, `apps/parking/serializers/sessions.py`, Round 86 Milestone 1, Finding 3):
+  1. Chuẩn hóa mẫu phản hồi của endpoint `GET /api/v1/parking/sessions/fee-preview/` trong toàn bộ tài liệu dự án hiển thị chính xác 11 trường dữ liệu thực tế từ `FeePreviewResponseSerializer`.
+  2. Khẳng định tên trường cước phí chuẩn là `fee_amount` (kiểu số thập phân), sửa đổi hoàn toàn lỗi nhầm lẫn `total_amount` và thiếu 6 trường trong báo cáo cũ.
+  3. Danh mục 11 trường chuẩn xác: `session_id`, `session_code`, `license_plate`, `entry_time`, `duration_minutes`, `duration_text`, `fee_amount`, `has_active_ticket`, `ticket_code`, `is_exempt`, `hourly_rate`.
+
+- **TL-65 — License Plate Format Preservation, Vehicle-Type Aware Disambiguation, and Display Normalization at Check-In** (`[PROPOSAL]` | `apps/parking/services/plate_format.py`, `apps/parking/services/check_in.py`, `tests/parking/test_plate_format.py`, Round 86 Milestone 1, Finding 4; Round 87 Finding 2):
+  1. Xác lập vị trí định dạng biển số bị mất và lỗi suy diễn hình thái: Xảy ra tại tầng ghi dữ liệu của `check_in_vehicle` khi lưu chuỗi thô, và tại hàm `format_display_license_plate` / `formatLicensePlateForDisplay` khi tự động đoán mò các chuỗi compact không dấu thành biển ô tô 5 số.
+  2. Ma trận các hình thái xung đột (Ambiguous Compact Shapes):
+     - Dạng 8 ký tự `^[0-9]{2}[A-Z][0-9]{5}$`: Xung đột giữa Ô tô 5 số (vd: `29H-112.34`, `51A-897.14`, `30A-612.35`) và Xe máy 4 số (vd: `29-H1 1234`, `51-A8 9714`, `30-A6 1235`).
+     - Dạng 9 ký tự `^[0-9]{2}[A-Z]{2}[0-9]{5}$`: Xung đột giữa Ô tô 2 chữ cái (vd: `29MD-123.45`, `29LD-123.45`) và Xe máy điện 5 số (vd: `29-MD 123.45`, `59-AA 123.45`).
+     - Dạng 8 ký tự `^[0-9]{2}[A-Z]{2}[0-9]{4}$`: Xung đột giữa Ô tô 4 số 2 chữ cái (vd: `29LD-1234`) và Xe máy điện 4 số (vd: `29-AA 1234`).
+  3. Quy tắc chuẩn hóa trung thực (Honest Normalization Rules):
+     - Khi biết `vehicle_type` (từ tham số caller, từ xe đăng ký `registered_vehicle.vehicle_type`, hoặc từ cấu hình ô đỗ `slot_allowed_vehicle_type`): Định dạng chuẩn xác theo loại xe tương ứng (`CAR`/`EV` vs `MOTORCYCLE`).
+     - Khi KHÔNG biết `vehicle_type` và dạng biển thuộc nhóm ambiguous: GIỮ NGUYÊN chuỗi compact đã làm sạch (không tự ý chèn dấu gạch hay dấu chấm đoán mò).
+     - Đối với các hình thái đơn nghĩa (unambiguous): Xe máy 5 số `^[0-9]{2}[A-Z][0-9][0-9]{5}$` (như `81-B3 343.03`, `59-T2 496.09`) hoặc Ô tô 4 số `^[0-9]{2}[A-Z][0-9]{4}$` (như `29A-1234`) tự động định dạng chuẩn ngay cả khi chưa rõ `vehicle_type`.
+     - Bảo toàn tuyệt đối các chuỗi biển số đã có dấu phân cách rõ ràng (`29-H1 1234`, `30A-612.35`, `81-B3 343.03`, `59-T2 496.09`, `51A-897.14`).
+  4. Đảm bảo tính nhất quán tuyệt đối (100% Parity, Zero Drift) giữa Backend (`plate_format.py`) và Frontend (`plateFormatter.js`).
+  5. Tính độc lập của cơ chế tra cứu (Lookups): Cột `license_plate_norm` tự động sinh từ hàm chuẩn hóa trong CSDL PostgreSQL, đảm bảo các API tìm kiếm phiên đỗ và phương tiện hoạt động hoàn hảo cả khi người dùng nhập chuỗi có dấu phân cách hoặc chuỗi không dấu.

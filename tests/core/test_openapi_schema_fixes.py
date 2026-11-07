@@ -214,6 +214,7 @@ EXPECTED_OPERATION_SECURITY: dict[tuple[str, str], list[Any]] = {
     ("GET", "/api/v1/employees/{id}/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/gates/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/sessions/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/parking/sessions/fee-preview/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/sessions/{id}/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/vehicle-lookup/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/vehicle-search/"): [{"cookieAuth": []}],

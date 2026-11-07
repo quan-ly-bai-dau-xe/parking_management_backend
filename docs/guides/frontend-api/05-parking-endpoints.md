@@ -746,12 +746,16 @@ When `review_status === "NEEDS_REVIEW"`:
 ### 8.6 Vehicle Check-Out (`POST /api/v1/parking/sessions/check-out/`)
 
 - **Purpose**: Conclude vehicle parking session at exit gate, automatically calculate parking fee (0 VND for `ACTIVE` monthly passes; otherwise calculated by hourly block: 10,000 VND/hour), and record payment record `payment`.
-- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Required Permission**: `EMPLOYEE` or `MANAGER` (fee waiver restricted to `MANAGER` only).
 - **Required Headers**: `X-CSRFToken`.
 - **Input Rules**:
   - Provide exactly **one of two criteria**: `session_code` OR `license_plate`.
   - Exit gate `exit_gate_id` must have attribute `direction="OUT"` (selecting an `IN` gate returns error `PROP-4.5.1-P12`).
-  - If transient parking fee is `> 0`, `payment_method` is mandatory (`CASH` or `VIETQR`).
+  - If transient parking fee is `> 0` and `waive_fee=false`, `payment_method` is mandatory (`CASH` or `VIETQR`).
+  - **Fee Waiver (`waive_fee=true`)** (TL-58, TL-59):
+    - Only `MANAGER` accounts are permitted. Calling as `EMPLOYEE` returns HTTP 403 `PROP-4.5.1-P18` (`"Chỉ Quản lý mới có quyền miễn cước phí đỗ xe."`).
+    - `waiver_reason` is mandatory and cannot be empty/whitespace. Empty reason returns HTTP 400 `PROP-4.5.1-P19` (`"Vui lòng cung cấp lý do miễn cước đặc cách."`).
+    - When waived: `fee_amount = 0.00`, `payment_method` is ignored, no `Payment` record is created. Audit note is appended to `session.notes` and immutable event is recorded in `ActivityLog` (`action="SESSION_CHECK_OUT_WAIVED"`).
 - **Live Stack Example (HTTP `200 OK`)**:
 
   ```http
@@ -808,6 +812,43 @@ When `review_status === "NEEDS_REVIEW"`:
       "paid_at": "2026-10-22T15:00:27.362731Z"
     },
     "vehicle_lookup": null
+  }
+  ```
+
+### 8.6b Vehicle Fee Preview (`GET /api/v1/parking/sessions/fee-preview/`)
+
+- **Purpose**: Real-time calculation of expected parking fee for an open session (`exit_time IS NULL`) before check-out confirmation (TL-57). Supports ExitLanePanel on both registered and unregistered vehicles.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Query Parameters**:
+  - `license_plate`: string (optional, e.g. `51A-897.14`).
+  - `session_code`: string (optional, e.g. `#PK-20261017-037`).
+  - *Rule*: At least one parameter must be supplied. Missing both returns HTTP 400 `PROP-4.5.1-P11`.
+- **Error Codes**:
+  - `400 Bad Request` (`PROP-4.5.1-P11`): Missing both session identification criteria (`session_code` and `license_plate`).
+  - `404 Not Found` (`PROP-4.5.1-P06`): Open parking session matching criteria not found.
+- **Live Example (HTTP `200 OK`)**:
+
+  ```http
+  GET /api/v1/parking/sessions/fee-preview/?license_plate=51A-897.14 HTTP/1.1
+  Host: 127.0.0.1:8000
+  Accept: application/json
+  Cookie: csrftoken=[MASKED]; sessionid=[MASKED]
+
+  HTTP/1.1 200 OK
+  Content-Type: application/json
+
+  {
+    "session_id": 123,
+    "session_code": "#PK-20261106-001",
+    "license_plate": "51A-897.14",
+    "entry_time": "2026-11-06T08:00:00Z",
+    "duration_minutes": 65,
+    "duration_text": "1 giờ 5 phút",
+    "fee_amount": 20000.0,
+    "has_active_ticket": false,
+    "ticket_code": null,
+    "is_exempt": false,
+    "hourly_rate": 10000.0
   }
   ```
 
