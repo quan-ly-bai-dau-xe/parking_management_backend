@@ -109,6 +109,8 @@ PROPOSAL_MESSAGES = {
     "PROP-4.5.1-P15": "Hệ thống nhận diện biển số xe đang quá tải, vui lòng thử lại sau.",
     "PROP-4.5.1-P16": "Biển số xe có định dạng chưa được định nghĩa trong danh mục quy chuẩn hoặc thuộc nhóm cần xác minh thủ công.",
     "PROP-4.5.1-P17": "Không thể lưu trữ hình ảnh tải lên dịch vụ đám mây, vui lòng thử lại sau.",
+    "PROP-4.5.1-P18": "Chỉ Quản lý mới có quyền miễn cước phí đỗ xe.",
+    "PROP-4.5.1-P19": "Vui lòng cung cấp lý do miễn cước đặc cách.",
     "PROP-4.5.2-P01": "Vị trí này đang bảo trì.",
     "PROP-4.5.2-P02": "Không thể chuyển trạng thái vị trí khi đang có xe đỗ trong ô.",
     "PROP-4.5.2-P03": "Không thể chuyển vị trí sang trạng thái đang có xe khi không có phiên đỗ xe đang mở.",

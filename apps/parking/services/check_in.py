@@ -27,6 +27,7 @@ from apps.parking.models import (
 )
 from apps.parking.selectors.vehicles import get_combined_vehicle_context
 from apps.parking.services.ocr import PlateRecognizer
+from apps.parking.services.plate_format import format_display_license_plate
 from apps.parking.services.session_code import generate_session_code
 from apps.parking.services.upload import validate_parking_image_path
 
@@ -43,6 +44,7 @@ def check_in_vehicle(
     override_blacklist: bool = False,
     user: Any = None,
     notes: str | None = None,
+    vehicle_type: str | None = None,
 ) -> tuple[VehicleEntryExitLog, dict[str, Any] | None]:
     """
     Thực hiện check-in phương tiện vào bãi đỗ:
@@ -216,6 +218,32 @@ def check_in_vehicle(
             account=user, deleted_at__isnull=True
         ).first()
 
+    # 6.5. Xác định loại phương tiện suy luận (Finding 2 / TL-65):
+    # Ưu tiên 1: Tham số vehicle_type truyền trực tiếp
+    # Ưu tiên 2: registered_vehicle.vehicle_type
+    # Ưu tiên 3: Từ slot_obj.allowed_vehicle_types nếu có gắn ô đỗ
+    inferred_vehicle_type: str | None = None
+    if vehicle_type and str(vehicle_type).strip():
+        inferred_vehicle_type = str(vehicle_type).strip().upper()
+    elif registered_vehicle and getattr(registered_vehicle, "vehicle_type", None):
+        inferred_vehicle_type = getattr(registered_vehicle.vehicle_type, "code", None)
+    elif slot_obj:
+        try:
+            allowed_codes = set(
+                slot_obj.allowed_vehicle_types.values_list(
+                    "vehicle_type__code", flat=True
+                )
+            )
+            if allowed_codes:
+                if allowed_codes.issubset({"CAR", "EV"}):
+                    inferred_vehicle_type = "CAR"
+                elif allowed_codes == {"MOTORCYCLE"}:
+                    inferred_vehicle_type = "MOTORCYCLE"
+                elif len(allowed_codes) == 1:
+                    inferred_vehicle_type = next(iter(allowed_codes))
+        except Exception:
+            inferred_vehicle_type = None
+
     # 7. Sinh mã phiên đỗ xe và thực hiện chèn bản ghi trong atomic transaction (có advisory lock theo ngày per F2)
     max_retries = 5
     session = None
@@ -237,6 +265,17 @@ def check_in_vehicle(
                 else:
                     session_code = generate_session_code(offset=attempt)
 
+                # Lưu biển số phiên đỗ theo chuẩn hiển thị (Finding 4 / TL-65 / Round 87 Finding 2):
+                # Xe đã đăng ký ưu tiên vehicle.license_plate; xe vãng lai format theo vehicle_type suy luận
+                if registered_vehicle and getattr(
+                    registered_vehicle, "license_plate", None
+                ):
+                    stored_plate = registered_vehicle.license_plate
+                else:
+                    stored_plate = format_display_license_plate(
+                        clean_plate, vehicle_type=inferred_vehicle_type
+                    )
+
                 # Chú ý: Không gán license_plate_norm vì là generated column
                 # Để trigger TL-17 tự động gán vehicle_id nếu vehicle_id là None
                 session = VehicleEntryExitLog.objects.create(
@@ -245,7 +284,7 @@ def check_in_vehicle(
                     slot_id=resolved_slot_id,
                     ticket_id=resolved_ticket_id,
                     entry_gate=entry_gate,
-                    license_plate=clean_plate,
+                    license_plate=stored_plate,
                     ai_confidence=conf_decimal,
                     recognition_source=source_val,
                     review_status=review_status,
