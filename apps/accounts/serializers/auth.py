@@ -242,6 +242,18 @@ class ResetPasswordConfirmSerializer(serializers.Serializer):
         style={"input_type": "password"},
         help_text="Nhập lại mật khẩu mới để xác nhận",
     )
+    session_info = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="SessionInfo từ Firebase Phone Auth (tùy chọn)",
+    )
+    firebase_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="ID Token từ Firebase Phone Auth (tùy chọn)",
+    )
 
     def validate(self, attrs: dict[str, Any]) -> dict[str, Any]:
         new_pwd = attrs.get("new_password")
@@ -308,6 +320,12 @@ class ForgotPasswordSMSSerializer(serializers.Serializer):
         trim_whitespace=True,
         help_text="Số điện thoại đã đăng ký của tài khoản cần đặt lại mật khẩu",
     )
+    recaptcha_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="Token reCAPTCHA cho Firebase Phone Auth (tùy chọn)",
+    )
 
     def validate_phone(self, value: str) -> str:
         clean = normalize_vietnamese_phone(value)
@@ -368,6 +386,18 @@ class ResetPasswordSMSConfirmSerializer(serializers.Serializer):
         max_length=50,
         style={"input_type": "password"},
         help_text="Nhập lại mật khẩu mới để xác nhận",
+    )
+    session_info = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="SessionInfo từ Firebase Phone Auth (tùy chọn)",
+    )
+    firebase_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="ID Token từ Firebase Phone Auth (tùy chọn)",
     )
 
     def validate_phone(self, value: str) -> str:
@@ -459,6 +489,12 @@ class RegisterSMSRequestSerializer(serializers.Serializer):
         trim_whitespace=True,
         help_text="Số điện thoại đăng ký tài khoản",
     )
+    recaptcha_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="Token reCAPTCHA cho Firebase Phone Auth (tùy chọn)",
+    )
 
     def validate_phone(self, value: str) -> str:
         clean = normalize_vietnamese_phone(value)
@@ -544,6 +580,18 @@ class RegisterSMSConfirmSerializer(serializers.Serializer):
         allow_null=True,
         trim_whitespace=True,
         help_text="Địa chỉ email liên hệ (tùy chọn)",
+    )
+    session_info = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="SessionInfo từ Firebase Phone Auth (tùy chọn)",
+    )
+    firebase_token = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="ID Token từ Firebase Phone Auth (tùy chọn)",
     )
 
     def validate_phone(self, value: str) -> str:

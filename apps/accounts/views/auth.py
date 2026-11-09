@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from django.middleware.csrf import get_token
 from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_protect
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from django.views.decorators.debug import sensitive_post_parameters
 from drf_spectacular.utils import (
     OpenApiExample,
@@ -50,6 +50,7 @@ from apps.core.messages import ALL_MESSAGES, get_prop_message
 from apps.core.serializers.envelope import ErrorEnvelopeSerializer
 
 
+@method_decorator(ensure_csrf_cookie, name="dispatch")
 class CSRFBootstrapView(APIView):
     """
     Public endpoint to ensure csrftoken cookie is issued and present.
@@ -72,15 +73,25 @@ class CSRFBootstrapView(APIView):
     )
     def get(self, request: Request) -> Response:
         # Enforce evaluation and setting of csrftoken cookie
-        get_token(request)
-        return Response(
+        csrf_token = get_token(request)
+        response = Response(
             {
                 "detail": get_prop_message(
                     "PROP-4.1-P02", "Khởi tạo cookie CSRF thành công."
-                )
+                ),
+                "csrfToken": csrf_token,
             },
             status=status.HTTP_200_OK,
         )
+        response.set_cookie(
+            "csrftoken",
+            csrf_token,
+            max_age=31449600,
+            httponly=False,
+            samesite="Lax",
+            secure=False,
+        )
+        return response
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -425,14 +436,17 @@ class ForgotPasswordSMSView(APIView):
         serializer.is_valid(raise_exception=True)
 
         phone = serializer.validated_data["phone"]
-        request_password_reset_sms(request, phone)
+        recaptcha_token = serializer.validated_data.get("recaptcha_token")
+        result = request_password_reset_sms(request, phone, recaptcha_token=recaptcha_token)
 
         return Response(
             {
                 "detail": get_prop_message(
                     "PROP-4.1-P10",
                     "Mã OTP xác thực đã được gửi tới số điện thoại của bạn qua tin nhắn SMS.",
-                )
+                ),
+                "session_info": result.get("session_info") if result else None,
+                "phone": phone,
             },
             status=status.HTTP_200_OK,
         )
@@ -474,8 +488,16 @@ class ResetPasswordSMSConfirmView(APIView):
         phone = serializer.validated_data["phone"]
         otp = serializer.validated_data["otp"]
         new_password = serializer.validated_data["new_password"]
+        session_info = serializer.validated_data.get("session_info")
+        firebase_token = serializer.validated_data.get("firebase_token")
 
-        confirm_password_reset_sms(phone, otp, new_password)
+        confirm_password_reset_sms(
+            phone=phone,
+            otp=otp,
+            new_password=new_password,
+            session_info=session_info,
+            firebase_token=firebase_token,
+        )
 
         return Response(
             {
@@ -527,14 +549,17 @@ class RegisterSMSRequestView(APIView):
         serializer.is_valid(raise_exception=True)
 
         phone = serializer.validated_data["phone"]
-        request_register_otp(request, phone)
+        recaptcha_token = serializer.validated_data.get("recaptcha_token")
+        result = request_register_otp(request, phone, recaptcha_token=recaptcha_token)
 
         return Response(
             {
                 "detail": get_prop_message(
                     "PROP-4.1-P10",
                     "Mã OTP xác thực đã được gửi tới số điện thoại của bạn qua tin nhắn SMS.",
-                )
+                ),
+                "session_info": result.get("session_info") if result else None,
+                "phone": phone,
             },
             status=status.HTTP_200_OK,
         )
@@ -583,6 +608,8 @@ class RegisterSMSConfirmView(APIView):
         full_name = serializer.validated_data["full_name"]
         identity_card_number = serializer.validated_data.get("identity_card_number")
         email = serializer.validated_data.get("email")
+        session_info = serializer.validated_data.get("session_info")
+        firebase_token = serializer.validated_data.get("firebase_token")
 
         account, customer = confirm_register_sms(
             phone=phone,
@@ -591,6 +618,8 @@ class RegisterSMSConfirmView(APIView):
             full_name=full_name,
             identity_card_number=identity_card_number,
             email=email,
+            session_info=session_info,
+            firebase_token=firebase_token,
         )
 
         return Response(
