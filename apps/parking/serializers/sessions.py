@@ -223,6 +223,66 @@ class CheckOutRequestSerializer(serializers.Serializer):
         allow_blank=True,
         help_text="Ghi chú thêm về phiên ra",
     )
+    waive_fee = serializers.BooleanField(
+        default=False,
+        required=False,
+        help_text="Cờ yêu cầu miễn cước phí đặc cách (chỉ Quản lý/MANAGER)",
+    )
+    waiver_reason = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        max_length=255,
+        help_text="Lý do miễn cước đặc cách (bắt buộc khi waive_fee=True)",
+    )
+
+
+class FeePreviewResponseSerializer(serializers.Serializer):
+    """Thông tin xem trước cước phí đỗ xe cho phiên đang mở."""
+
+    session_id = serializers.IntegerField(
+        help_text="ID định danh phiên đỗ xe",
+    )
+    session_code = serializers.CharField(
+        max_length=30,
+        help_text="Mã phiên đỗ xe (vd: #PK-20261106-001)",
+    )
+    license_plate = serializers.CharField(
+        max_length=20,
+        help_text="Biển số xe",
+    )
+    entry_time = serializers.DateTimeField(
+        help_text="Thời điểm xe vào bãi",
+    )
+    duration_minutes = serializers.IntegerField(
+        help_text="Thời lượng đỗ xe tính bằng phút",
+    )
+    duration_text = serializers.CharField(
+        help_text="Thời lượng đỗ xe hiển thị thân thiện (vd: '1 giờ 5 phút')",
+    )
+    fee_amount = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        coerce_to_string=False,
+        help_text="Số tiền cước phí dự kiến tính toán theo thời gian thực (VNĐ)",
+    )
+    has_active_ticket = serializers.BooleanField(
+        help_text="Trạng thái phương tiện có vé tháng/dài hạn hợp lệ phủ thời điểm hiện tại",
+    )
+    ticket_code = serializers.CharField(
+        required=False,
+        allow_null=True,
+        help_text="Mã vé tháng đang bảo đảm nếu có (vd: VT0001)",
+    )
+    is_exempt = serializers.BooleanField(
+        help_text="Trạng thái được miễn cước phí (do vé active hoặc chính sách)",
+    )
+    hourly_rate = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        coerce_to_string=False,
+        help_text="Đơn giá cước phí theo giờ của bãi xe (VNĐ)",
+    )
 
 
 class PaymentSummarySerializer(serializers.ModelSerializer):

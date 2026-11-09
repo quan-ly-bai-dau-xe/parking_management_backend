@@ -16,6 +16,7 @@ from apps.parking.views import (
     VehicleLookupView,
     VehicleSearchView,
 )
+from apps.parking.views.sessions import FeePreviewView
 
 app_name = "parking"
 
@@ -30,6 +31,10 @@ urlpatterns = [
     path("sessions/check-in/", CheckInView.as_view(), name="sessions-check-in"),
     # 5. Check-out xe rời bãi và thu phí
     path("sessions/check-out/", CheckOutView.as_view(), name="sessions-check-out"),
+    # 5b. Xem trước cước phí phiên đỗ đang mở (TL-57)
+    path(
+        "sessions/fee-preview/", FeePreviewView.as_view(), name="sessions-fee-preview"
+    ),
     # 6. Danh sách các cổng kiểm soát barrier
     path("gates/", GateListView.as_view(), name="gates"),
     # 7. Danh sách lịch sử và chi tiết phiên đỗ xe
