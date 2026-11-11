@@ -6,7 +6,7 @@ import hashlib
 import re
 import secrets
 from datetime import timedelta
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from django.conf import settings
 from django.contrib.auth import login as auth_login
@@ -22,6 +22,15 @@ from rest_framework import status
 
 from apps.accounts.models import Account, PasswordResetToken, PersistentLoginToken
 from apps.accounts.selectors.auth import get_active_account_by_identifier
+from apps.accounts.services.firebase_otp import (
+    is_firebase_configured,
+)
+from apps.accounts.services.firebase_otp import (
+    send_sms_otp as fb_send_sms_otp,
+)
+from apps.accounts.services.firebase_otp import (
+    verify_sms_otp as fb_verify_sms_otp,
+)
 from apps.accounts.services.sms import (
     is_valid_phone_number,
     normalize_vietnamese_phone,
@@ -49,6 +58,42 @@ DUMMY_PBKDF2_HASH = (
     "7WahN7QjfBP80klAivKpmJKntm4BQrdFPIRBQS0ELps="
 )
 # cspell:enable
+
+
+class OTPResult(str):
+    """
+    Chuỗi OTP tương thích kép:
+    - Kế thừa str nên len(result) == 6, str(result) == otp, result.isdigit() == True (tương thích tests).
+    - Cung cấp method get() và các thuộc tính session_info, is_mock, phone (tương thích views / FE).
+    """
+
+    session_info: str | None
+    is_mock: bool
+    phone: str
+
+    def __new__(
+        cls,
+        otp: str,
+        session_info: str | None = None,
+        is_mock: bool = True,
+        phone: str = "",
+    ) -> OTPResult:
+        instance = super().__new__(cls, otp)
+        instance.session_info = session_info
+        instance.is_mock = is_mock
+        instance.phone = phone
+        return instance
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key == "otp":
+            return str(self)
+        if key == "session_info":
+            return self.session_info
+        if key == "is_mock":
+            return self.is_mock
+        if key == "phone":
+            return self.phone
+        return default
 
 
 def hash_token(token: str, key_salt: str = "accounts.password_reset_token") -> str:
@@ -380,7 +425,9 @@ def generate_numeric_otp(length: int = 6) -> str:
     return f"{secrets.randbelow(high - low) + low:0{length}d}"
 
 
-def request_password_reset_sms(request: HttpRequest, phone: str) -> str | None:
+def request_password_reset_sms(
+    request: HttpRequest, phone: str, recaptcha_token: str | None = None
+) -> OTPResult | None:
     """
     Xử lý yêu cầu đặt lại mật khẩu qua SMS OTP per REQ-4.1-F04, TL-01, OQ-03:
     1. Chuẩn hóa và kiểm tra số điện thoại hợp lệ.
@@ -388,8 +435,8 @@ def request_password_reset_sms(request: HttpRequest, phone: str) -> str | None:
     3. Tìm tài khoản hoạt động theo số điện thoại (anti-enumeration).
     4. Hủy token reset chưa dùng trước đó của tài khoản.
     5. Sinh OTP 6 chữ số, lưu hash SHA-256 vào PasswordResetToken (hết hạn sau 5 phút).
-    6. Gửi SMS chứa OTP đến số điện thoại.
-    7. Trả về mã OTP (phục vụ audit/testing).
+    6. Gửi OTP qua Firebase Identity Toolkit REST API (hoặc SMS provider/console fallback).
+    7. Trả về OTPResult (kế thừa str, len 6, chứa session_info và otp).
     """
     clean_phone = normalize_vietnamese_phone(phone)
     if not is_valid_phone_number(clean_phone):
@@ -435,21 +482,49 @@ def request_password_reset_sms(request: HttpRequest, phone: str) -> str | None:
     attempt_key = f"otp_attempts:reset:{account.id}"
     cache.set(attempt_key, 0, timeout=lifetime_seconds)
 
+    # 1. Gửi qua Firebase Phone Auth REST API
+    session_info = None
+    is_mock = True
+    try:
+        fb_result = fb_send_sms_otp(clean_phone, recaptcha_token)
+        session_info = fb_result.get("sessionInfo")
+        is_mock = fb_result.get("isMock", False)
+        if session_info:
+            cache.set(
+                f"firebase_session:reset:{clean_phone}",
+                session_info,
+                timeout=lifetime_seconds,
+            )
+    except Exception:
+        # Ghi log nhưng không chặn luồng nếu SMS Console/Mock đang bật
+        pass
+
     message = (
         f"[Bãi đỗ xe] Mã OTP xác thực đặt lại mật khẩu của bạn là: {otp}. "
         f"Mã có hiệu lực trong {lifetime_seconds // 60} phút. Vui lòng không chia sẻ mã này cho bất kỳ ai."
     )
     send_sms(clean_phone, message)
 
-    return otp
+    return OTPResult(
+        otp,
+        session_info=session_info,
+        is_mock=is_mock,
+        phone=clean_phone,
+    )
 
 
-def confirm_password_reset_sms(phone: str, otp: str, new_password: str) -> Account:
+def confirm_password_reset_sms(
+    phone: str,
+    otp: str,
+    new_password: str,
+    session_info: str | None = None,
+    firebase_token: str | None = None,
+) -> Account:
     """
-    Xác nhận đặt lại mật khẩu bằng mã OTP nhận qua SMS:
+    Xác nhận đặt lại mật khẩu bằng mã OTP nhận qua SMS hoặc Firebase Phone Auth:
     1. Kiểm tra định dạng số điện thoại và OTP.
     2. Chống brute-force: tối đa 5 lần nhập sai sẽ vô hiệu hóa mã OTP.
-    3. Kiểm tra tính hợp lệ của token trong PasswordResetToken.
+    3. Xác minh qua Firebase Identity Toolkit REST API (nếu có session_info) hoặc PasswordResetToken.
     4. Cập nhật mật khẩu mới bằng Argon2 và thu hồi remember tokens.
     """
     clean_phone = normalize_vietnamese_phone(phone)
@@ -499,9 +574,22 @@ def confirm_password_reset_sms(phone: str, otp: str, new_password: str) -> Accou
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    token_hash = hash_token(clean_otp)
     now = timezone.now()
+    verified_by_firebase = False
 
+    # Thử xác minh qua Firebase nếu có session_info (truyền lên hoặc lưu trong cache)
+    active_session_info = session_info or cache.get(
+        f"firebase_session:reset:{clean_phone}"
+    )
+    if active_session_info and is_firebase_configured():
+        try:
+            fb_auth = fb_verify_sms_otp(active_session_info, clean_otp)
+            if fb_auth.get("status") == "success":
+                verified_by_firebase = True
+        except Exception:
+            pass
+
+    token_hash = hash_token(clean_otp)
     reset_token = PasswordResetToken.objects.filter(
         account=account,
         token_hash=token_hash,
@@ -509,7 +597,7 @@ def confirm_password_reset_sms(phone: str, otp: str, new_password: str) -> Accou
         expires_at__gt=now,
     ).first()
 
-    if reset_token is None:
+    if not verified_by_firebase and reset_token is None:
         cache.set(attempt_key, attempts + 1, timeout=300)
         raise BusinessAPIException(
             code="PROP-4.1-P11",
@@ -523,23 +611,28 @@ def confirm_password_reset_sms(phone: str, otp: str, new_password: str) -> Accou
         account.set_password(new_password)
         account.save()
 
-        reset_token.used_at = now
-        reset_token.save(update_fields=["used_at"])
+        if reset_token:
+            reset_token.used_at = now
+            reset_token.save(update_fields=["used_at"])
 
         revoke_all_account_tokens(account.id)
         cache.delete(attempt_key)
+        cache.delete(f"firebase_session:reset:{clean_phone}")
 
     return account
 
 
-def request_register_otp(request: HttpRequest, phone: str) -> str:
+def request_register_otp(
+    request: HttpRequest, phone: str, recaptcha_token: str | None = None
+) -> OTPResult:
     """
     Yêu cầu mã OTP qua SMS để đăng ký tài khoản khách hàng mới:
     1. Chuẩn hóa số điện thoại, kiểm tra định dạng.
     2. Kiểm tra số điện thoại chưa tồn tại trong tài khoản hoạt động.
     3. Áp dụng giới hạn tần suất gửi OTP và cooldown 60s.
     4. Sinh OTP 6 chữ số, lưu hash SHA-256 vào cache với thời hạn 5 phút.
-    5. Gửi SMS chứa OTP.
+    5. Gửi SMS chứa OTP qua Firebase Phone Auth REST API (hoặc SMS provider/console fallback).
+    6. Trả về OTPResult (kế thừa str, len 6, chứa session_info và otp).
     """
     clean_phone = normalize_vietnamese_phone(phone)
     if not is_valid_phone_number(clean_phone):
@@ -570,11 +663,28 @@ def request_register_otp(request: HttpRequest, phone: str) -> str:
     token_hash = hash_token(otp)
     lifetime_seconds = settings.SMS_OTP_LIFETIME_SECONDS
 
+    # 1. Gửi qua Firebase Phone Auth REST API
+    session_info = None
+    is_mock = True
+    try:
+        fb_result = fb_send_sms_otp(clean_phone, recaptcha_token)
+        session_info = fb_result.get("sessionInfo")
+        is_mock = fb_result.get("isMock", False)
+        if session_info:
+            cache.set(
+                f"firebase_session:register:{clean_phone}",
+                session_info,
+                timeout=lifetime_seconds,
+            )
+    except Exception:
+        pass
+
     cache_key = f"otp:register:{clean_phone}"
     cache.set(
         cache_key,
         {
             "token_hash": token_hash,
+            "session_info": session_info,
             "attempts": 0,
         },
         timeout=lifetime_seconds,
@@ -586,7 +696,12 @@ def request_register_otp(request: HttpRequest, phone: str) -> str:
     )
     send_sms(clean_phone, message)
 
-    return otp
+    return OTPResult(
+        otp,
+        session_info=session_info,
+        is_mock=is_mock,
+        phone=clean_phone,
+    )
 
 
 def confirm_register_sms(
@@ -596,14 +711,17 @@ def confirm_register_sms(
     full_name: str,
     identity_card_number: str | None = None,
     email: str | None = None,
+    session_info: str | None = None,
+    firebase_token: str | None = None,
 ) -> tuple[Account, Customer]:
     """
     Xác thực OTP và hoàn tất đăng ký tài khoản Khách hàng (CUSTOMER) per OQ-03, TL-01:
-    1. Kiểm tra mã OTP trong cache và bộ đếm chống brute-force.
-    2. Kiểm tra tính duy nhất của Phone, Email và CCCD.
-    3. Tạo Account (role=CUSTOMER) với mật khẩu băm Argon2.
-    4. Tạo Customer với mã KH%04d theo sequence advisory lock, liên kết với Account.
-    5. Xóa OTP trong cache và trả về (Account, Customer).
+    1. Kiểm tra mã OTP qua Firebase Phone Auth REST API (nếu có session_info) hoặc cache.
+    2. Chống brute-force: tối đa 5 lần nhập sai sẽ vô hiệu hóa mã OTP.
+    3. Kiểm tra tính duy nhất của Phone, Email và CCCD.
+    4. Tạo Account (role=CUSTOMER) với mật khẩu băm Argon2.
+    5. Tạo Customer với mã KH%04d theo sequence advisory lock, liên kết với Account.
+    6. Xóa OTP trong cache và trả về (Account, Customer).
     """
     clean_phone = normalize_vietnamese_phone(phone)
     clean_otp = otp.strip()
@@ -624,16 +742,9 @@ def confirm_register_sms(
     cache_key = f"otp:register:{clean_phone}"
     cache_data = cache.get(cache_key)
 
-    if not cache_data or not isinstance(cache_data, dict):
-        raise BusinessAPIException(
-            code="PROP-4.1-P11",
-            message=get_prop_message(
-                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
-            ),
-            status_code=status.HTTP_400_BAD_REQUEST,
-        )
-
-    attempts = int(cache_data.get("attempts", 0) or 0)
+    attempts = (
+        int(cache_data.get("attempts", 0) or 0) if isinstance(cache_data, dict) else 0
+    )
     max_attempts = settings.SMS_OTP_MAX_ATTEMPTS
 
     if attempts >= max_attempts:
@@ -647,10 +758,27 @@ def confirm_register_sms(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    verified_by_firebase = False
+    active_session_info = (
+        session_info
+        or (cache_data.get("session_info") if isinstance(cache_data, dict) else None)
+        or cache.get(f"firebase_session:register:{clean_phone}")
+    )
+    if active_session_info and is_firebase_configured():
+        try:
+            fb_auth = fb_verify_sms_otp(active_session_info, clean_otp)
+            if fb_auth.get("status") == "success":
+                verified_by_firebase = True
+        except Exception:
+            pass
+
     token_hash = hash_token(clean_otp)
-    if token_hash != cache_data.get("token_hash"):
-        cache_data["attempts"] = attempts + 1
-        cache.set(cache_key, cache_data, timeout=300)
+    cached_hash = cache_data.get("token_hash") if isinstance(cache_data, dict) else None
+
+    if not verified_by_firebase and (not cached_hash or token_hash != cached_hash):
+        if isinstance(cache_data, dict):
+            cache_data["attempts"] = attempts + 1
+            cache.set(cache_key, cache_data, timeout=300)
         raise BusinessAPIException(
             code="PROP-4.1-P11",
             message=get_prop_message(

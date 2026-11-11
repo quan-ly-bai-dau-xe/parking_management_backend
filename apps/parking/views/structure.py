@@ -1,0 +1,124 @@
+"""
+Parking Lot Structure View.
+Returns hierarchical parking layout: Floor -> Zones -> Slots.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers, status
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.request import Request
+from rest_framework.response import Response
+from rest_framework.views import APIView
+
+from apps.core.permissions import IsEmployeeOrManager
+from apps.parking.models import ParkingFloor
+
+
+class StructureSlotSerializer(serializers.Serializer):
+    """Serializer ô đỗ xe trong cấu trúc phân cấp."""
+
+    id = serializers.IntegerField(help_text="ID vị trí đỗ")
+    code = serializers.CharField(help_text="Mã vị trí đỗ")
+    slot_number = serializers.IntegerField(help_text="Số thứ tự ô đỗ")
+    status = serializers.CharField(help_text="Trạng thái ô đỗ")
+    status_display = serializers.CharField(help_text="Mô tả trạng thái hiển thị")
+    is_occupied = serializers.BooleanField(help_text="Có xe đỗ hay không")
+    row = serializers.CharField(help_text="Dãy đỗ (A, B, C...)")
+    label = serializers.CharField(help_text="Nhãn hiển thị")  # type: ignore[assignment]
+
+
+class StructureZoneSerializer(serializers.Serializer):
+    """Serializer khu vực đỗ xe trong cấu trúc phân cấp."""
+
+    id = serializers.IntegerField(help_text="ID khu vực")
+    code = serializers.CharField(help_text="Mã khu vực")
+    name = serializers.CharField(help_text="Tên khu vực")
+    total_slots = serializers.IntegerField(help_text="Tổng số ô đỗ trong khu")
+    slots = StructureSlotSerializer(many=True)
+
+
+class StructureFloorSerializer(serializers.Serializer):
+    """Serializer tầng đỗ xe trong cấu trúc phân cấp."""
+
+    id = serializers.IntegerField(help_text="ID tầng")
+    code = serializers.CharField(help_text="Mã tầng")
+    name = serializers.CharField(help_text="Tên tầng")
+    total_slots = serializers.IntegerField(help_text="Tổng số ô đỗ trong tầng")
+    zones = StructureZoneSerializer(many=True)
+
+
+class ParkingStructureView(APIView):
+    """
+    Lấy sơ đồ bãi đỗ xe phân cấp: Tầng -> Khu vực -> Ô đỗ.
+    """
+
+    permission_classes = [IsAuthenticated, IsEmployeeOrManager]
+
+    @extend_schema(
+        operation_id="parking_structure_list",
+        tags=["Parking"],
+        summary="Sơ đồ cấu trúc bãi đỗ xe",
+        description="Lấy sơ đồ bãi đỗ xe phân cấp 3 bậc: Tầng -> Khu vực -> Ô đỗ.",
+        responses={200: StructureFloorSerializer(many=True)},
+    )
+    def get(self, request: Request) -> Response:
+        floors = (
+            ParkingFloor.objects.filter(deleted_at__isnull=True)
+            .prefetch_related(
+                "zones",
+                "zones__slots",
+            )
+            .order_by("sort_order", "id")
+        )
+
+        data: list[dict[str, Any]] = []
+        for floor in floors:
+            floor_slot_count = 0
+            floor_dict: dict[str, Any] = {
+                "id": floor.id,
+                "code": floor.code,
+                "name": floor.name,
+                "total_slots": 0,
+                "zones": [],
+            }
+            for zone in floor.zones.filter(deleted_at__isnull=True).order_by("code"):
+                zone_slots = list(
+                    zone.slots.filter(deleted_at__isnull=True).order_by("code", "id")
+                )
+                zone_slot_count = len(zone_slots)
+                floor_slot_count += zone_slot_count
+
+                zone_dict: dict[str, Any] = {
+                    "id": zone.id,
+                    "code": zone.code,
+                    "name": zone.name,
+                    "total_slots": zone_slot_count,
+                    "slots": [],
+                }
+                for idx, slot in enumerate(zone_slots, start=1):
+                    digits = "".join(filter(str.isdigit, str(slot.code)))
+                    slot_num = int(digits) if digits else idx
+                    zone_dict["slots"].append(
+                        {
+                            "id": slot.id,
+                            "code": slot.code,
+                            "slot_number": slot_num,
+                            "status": slot.status,
+                            "status_display": slot.get_status_display()
+                            if hasattr(slot, "get_status_display")
+                            else slot.status,
+                            "is_occupied": slot.status == "OCCUPIED",
+                            "row": slot.code[0] if slot.code else "A",
+                            "label": f"{zone.code}-{slot.code}",
+                        }
+                    )
+                floor_dict["zones"].append(zone_dict)
+
+            floor_dict["total_slots"] = floor_slot_count
+            data.append(floor_dict)
+
+        return Response(data, status=status.HTTP_200_OK)

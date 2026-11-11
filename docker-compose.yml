@@ -107,6 +107,8 @@ services:
       VONAGE_API_KEY: ${VONAGE_API_KEY:-}
       VONAGE_API_SECRET: ${VONAGE_API_SECRET:-}
       VONAGE_FROM: ${VONAGE_FROM:-Vonage APIs}
+      FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
     depends_on:
       db:
         condition: service_healthy
