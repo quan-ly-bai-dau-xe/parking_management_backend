@@ -1,18 +1,19 @@
-import json
 import os
 import unittest
 from unittest.mock import patch
 
 os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings.local")
 import django
+
 django.setup()
 
-from apps.accounts.services.firebase_otp import (
+from apps.accounts.services.firebase_otp import (  # noqa: E402
     format_phone_number,
     mask_phone_number,
     send_sms_otp,
     verify_sms_otp,
 )
+
 
 class FirebaseOTPServiceTests(unittest.TestCase):
     def test_format_phone_number(self):
@@ -45,6 +46,7 @@ class FirebaseOTPServiceTests(unittest.TestCase):
         mock_session = "mock_session_test_0766709535"
         with self.assertRaises(RuntimeError):
             verify_sms_otp(mock_session, "999999")
+
 
 if __name__ == "__main__":
     unittest.main()

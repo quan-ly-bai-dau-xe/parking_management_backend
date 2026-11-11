@@ -5,15 +5,9 @@ Supports TicketType, Ticket listing, detail, creation, and renewal.
 
 from __future__ import annotations
 
-from typing import Any
-
-from django.utils import timezone
 from rest_framework import serializers
 
-from apps.customers.models import Customer
-from apps.parking.models import ParkingSlot
-from apps.tickets.models import Ticket, TicketRenewal, TicketType
-from apps.vehicles.models import Vehicle
+from apps.tickets.models import Ticket, TicketType
 
 
 class TicketTypeSerializer(serializers.ModelSerializer):
@@ -42,7 +36,9 @@ class TicketListSerializer(serializers.Serializer):
     customer_name = serializers.CharField(source="customer.full_name", default="—")
     customer_phone = serializers.CharField(source="customer.phone", default="—")
     license_plate = serializers.CharField(source="vehicle.license_plate", default="—")
-    vehicle_type = serializers.CharField(source="vehicle.vehicle_type.name", default="—")
+    vehicle_type = serializers.CharField(
+        source="vehicle.vehicle_type.name", default="—"
+    )
     slot_location = serializers.SerializerMethodField()
     price = serializers.DecimalField(max_digits=12, decimal_places=2)
     effective_from = serializers.DateTimeField()
@@ -53,7 +49,9 @@ class TicketListSerializer(serializers.Serializer):
 
     def get_slot_location(self, obj: Ticket) -> str:
         if obj.slot:
-            floor_name = getattr(obj.slot.zone.floor, "name", "") if obj.slot.zone else ""
+            floor_name = (
+                getattr(obj.slot.zone.floor, "name", "") if obj.slot.zone else ""
+            )
             zone_code = getattr(obj.slot.zone, "code", "") if obj.slot.zone else ""
             return f"{floor_name} - {zone_code}{obj.slot.slot_number}".strip(" -")
         return "Chưa có vị trí"
@@ -80,7 +78,9 @@ class TicketDetailSerializer(serializers.Serializer):
     customer_phone = serializers.CharField(source="customer.phone", default="—")
     vehicle_id = serializers.IntegerField(source="vehicle.id")
     license_plate = serializers.CharField(source="vehicle.license_plate", default="—")
-    vehicle_type = serializers.CharField(source="vehicle.vehicle_type.name", default="—")
+    vehicle_type = serializers.CharField(
+        source="vehicle.vehicle_type.name", default="—"
+    )
     slot_id = serializers.IntegerField(source="slot.id", allow_null=True)
     slot_location = serializers.SerializerMethodField()
     price = serializers.DecimalField(max_digits=12, decimal_places=2)
@@ -93,7 +93,9 @@ class TicketDetailSerializer(serializers.Serializer):
 
     def get_slot_location(self, obj: Ticket) -> str:
         if obj.slot:
-            floor_name = getattr(obj.slot.zone.floor, "name", "") if obj.slot.zone else ""
+            floor_name = (
+                getattr(obj.slot.zone.floor, "name", "") if obj.slot.zone else ""
+            )
             zone_code = getattr(obj.slot.zone, "code", "") if obj.slot.zone else ""
             return f"{floor_name} - {zone_code}{obj.slot.slot_number}".strip(" -")
         return "Chưa có vị trí"
@@ -128,7 +130,8 @@ class TicketRenewSerializer(serializers.Serializer):
 
     ticket_type_id = serializers.IntegerField(required=False, allow_null=True)
     new_slot_id = serializers.IntegerField(required=False, allow_null=True)
-    additional_price = serializers.DecimalField(max_digits=12, decimal_places=2, default=0)
+    additional_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, default=0
+    )
     extend_days = serializers.IntegerField(required=False, default=30)
     notes = serializers.CharField(required=False, allow_blank=True)
-

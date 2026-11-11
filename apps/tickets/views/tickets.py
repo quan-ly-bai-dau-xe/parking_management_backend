@@ -5,12 +5,11 @@ Provides TicketType list, Ticket list, create, detail, and renew endpoints.
 
 from __future__ import annotations
 
-from typing import Any
 from datetime import timedelta
 
 from django.db.models import Q
 from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -19,7 +18,6 @@ from rest_framework.views import APIView
 
 from apps.core.pagination import StandardResultsSetPagination
 from apps.core.permissions import IsEmployeeOrManager
-from apps.core.serializers import ErrorEnvelopeSerializer
 from apps.customers.models import Customer
 from apps.parking.models import ParkingSlot
 from apps.tickets.models import Ticket, TicketRenewal, TicketType
@@ -168,7 +166,9 @@ class TicketListCreateView(APIView):
         now = timezone.now()
         effective_from = data.get("effective_from") or now
         duration_days = ticket_type.duration_days or 30
-        effective_to = data.get("effective_to") or (effective_from + timedelta(days=duration_days))
+        effective_to = data.get("effective_to") or (
+            effective_from + timedelta(days=duration_days)
+        )
         price = data.get("price") or ticket_type.default_price or 0
 
         # Sinh mã vé VT%04d
@@ -257,7 +257,9 @@ class TicketRenewView(APIView):
 
         old_effective_to = ticket.effective_to
         extend_days = data.get("extend_days", 30)
-        new_effective_to = max(old_effective_to, timezone.now()) + timedelta(days=extend_days)
+        new_effective_to = max(old_effective_to, timezone.now()) + timedelta(
+            days=extend_days
+        )
 
         old_type = ticket.ticket_type
         new_type = old_type
@@ -302,4 +304,3 @@ class TicketRenewView(APIView):
 
         res_serializer = TicketDetailSerializer(ticket)
         return Response(res_serializer.data, status=status.HTTP_200_OK)
-

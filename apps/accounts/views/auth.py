@@ -437,7 +437,9 @@ class ForgotPasswordSMSView(APIView):
 
         phone = serializer.validated_data["phone"]
         recaptcha_token = serializer.validated_data.get("recaptcha_token")
-        result = request_password_reset_sms(request, phone, recaptcha_token=recaptcha_token)
+        result = request_password_reset_sms(
+            request, phone, recaptcha_token=recaptcha_token
+        )
 
         return Response(
             {

@@ -11,8 +11,8 @@ import logging
 import os
 from typing import Any
 
-from django.conf import settings
 import requests
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
@@ -33,16 +33,26 @@ def load_firebase_config() -> dict[str, Any]:
     for path in SEARCH_PATHS:
         if os.path.exists(path):
             try:
-                with open(path, "r", encoding="utf-8") as f:
+                with open(path, encoding="utf-8") as f:
                     config = json.load(f)
-                    if config.get("apiKey") and "YOUR_FIREBASE" not in config.get("apiKey", ""):
+                    if config.get("apiKey") and "YOUR_FIREBASE" not in config.get(
+                        "apiKey", ""
+                    ):
                         return config
             except Exception as e:
                 logger.warning("Không thể đọc file cấu hình %s: %s", path, e)
 
     # Fallback to Django settings or environment variables
-    api_key = getattr(settings, "FIREBASE_API_KEY", "") or os.environ.get("FIREBASE_API_KEY", "") or os.environ.get("VITE_FIREBASE_API_KEY", "")
-    project_id = getattr(settings, "FIREBASE_PROJECT_ID", "") or os.environ.get("FIREBASE_PROJECT_ID", "") or os.environ.get("VITE_FIREBASE_PROJECT_ID", "")
+    api_key = (
+        getattr(settings, "FIREBASE_API_KEY", "")
+        or os.environ.get("FIREBASE_API_KEY", "")
+        or os.environ.get("VITE_FIREBASE_API_KEY", "")
+    )
+    project_id = (
+        getattr(settings, "FIREBASE_PROJECT_ID", "")
+        or os.environ.get("FIREBASE_PROJECT_ID", "")
+        or os.environ.get("VITE_FIREBASE_PROJECT_ID", "")
+    )
 
     if api_key and "YOUR_FIREBASE" not in api_key:
         config["apiKey"] = api_key
@@ -65,7 +75,15 @@ def format_phone_number(phone: str) -> str:
     """
     if not phone:
         return ""
-    clean = str(phone).strip().replace(" ", "").replace("-", "").replace(".", "").replace("(", "").replace(")", "")
+    clean = (
+        str(phone)
+        .strip()
+        .replace(" ", "")
+        .replace("-", "")
+        .replace(".", "")
+        .replace("(", "")
+        .replace(")", "")
+    )
     if clean.startswith("+84"):
         return clean
     if clean.startswith("84"):
@@ -87,10 +105,12 @@ def mask_phone_number(phone: str) -> str:
     return f"{phone[:3]}***{phone[-2:]}"
 
 
-def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[str, Any]:
+def send_sms_otp(
+    phone_number: str, recaptcha_token: str | None = None
+) -> dict[str, Any]:
     """
     Gửi mã xác thực OTP qua Firebase Phone Authentication REST API.
-    
+
     :param phone_number: Số điện thoại người nhận (VD: '+84766709535' hoặc '0766709535')
     :param recaptcha_token: Token reCAPTCHA (tùy chọn)
     :return: dict chứa 'phoneNumber', 'sessionInfo', 'isMock', 'testOtp'
@@ -106,7 +126,9 @@ def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[
             "[Firebase OTP Dev Mode] Chưa cấu hình API Key. Tạo phiên OTP thử nghiệm cho %s",
             masked_phone,
         )
-        mock_session = f"mock_session_{phone_e164.replace('+', '')}_{os.urandom(8).hex()}"
+        mock_session = (
+            f"mock_session_{phone_e164.replace('+', '')}_{os.urandom(8).hex()}"
+        )
         print("\n==================== [FIREBASE OTP TEST] ====================")
         print(f"Số điện thoại: {masked_phone}")
         print("Mã OTP thử nghiệm: 123456")
@@ -143,7 +165,9 @@ def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[
         if "INVALID_PHONE_NUMBER" in err_msg:
             raise RuntimeError(f"Số điện thoại không hợp lệ: {masked_phone}")
         if "TOO_MANY_ATTEMPTS_TRY_LATER" in err_msg:
-            raise RuntimeError("Đã gửi quá nhiều yêu cầu trong thời gian ngắn. Vui lòng thử lại sau!")
+            raise RuntimeError(
+                "Đã gửi quá nhiều yêu cầu trong thời gian ngắn. Vui lòng thử lại sau!"
+            )
         raise RuntimeError(f"Lỗi Firebase ({resp.status_code}): {err_msg}")
 
     return {
@@ -156,7 +180,7 @@ def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[
 def verify_sms_otp(session_info: str, otp_code: str) -> dict[str, Any]:
     """
     Xác minh mã OTP mà người dùng nhập vào thông qua Firebase Identity Toolkit REST API.
-    
+
     :param session_info: Chuỗi sessionInfo nhận được từ send_sms_otp
     :param otp_code: Mã OTP 6 chữ số
     :return: dict thông tin người dùng xác thực (uid, phoneNumber, idToken, status)
@@ -166,12 +190,18 @@ def verify_sms_otp(session_info: str, otp_code: str) -> dict[str, Any]:
     api_key = config.get("apiKey")
 
     # Kiểm tra phiên test/mock
-    if not api_key or "YOUR_FIREBASE" in api_key or (session_info and session_info.startswith("mock_session_")):
+    if (
+        not api_key
+        or "YOUR_FIREBASE" in api_key
+        or (session_info and session_info.startswith("mock_session_"))
+    ):
         if clean_code in ("123456", "000000"):
             return {
                 "status": "success",
                 "uid": f"mock_uid_{os.urandom(6).hex()}",
-                "phoneNumber": session_info.split("_")[2] if "_" in session_info else "+84900000000",
+                "phoneNumber": session_info.split("_")[2]
+                if "_" in session_info
+                else "+84900000000",
                 "isMock": True,
             }
         raise RuntimeError("Mã OTP thử nghiệm không chính xác (mặc định: 123456).")
@@ -195,7 +225,9 @@ def verify_sms_otp(session_info: str, otp_code: str) -> dict[str, Any]:
         if "INVALID_CODE" in err_msg:
             raise RuntimeError("Mã OTP không chính xác. Vui lòng kiểm tra lại!")
         if "SESSION_EXPIRED" in err_msg:
-            raise RuntimeError("Mã OTP hoặc phiên làm việc đã hết hạn. Vui lòng gửi lại mã mới!")
+            raise RuntimeError(
+                "Mã OTP hoặc phiên làm việc đã hết hạn. Vui lòng gửi lại mã mới!"
+            )
         raise RuntimeError(f"Lỗi xác minh OTP ({resp.status_code}): {err_msg}")
 
     return {
@@ -206,4 +238,3 @@ def verify_sms_otp(session_info: str, otp_code: str) -> dict[str, Any]:
         "refreshToken": data.get("refreshToken"),
         "isMock": False,
     }
-

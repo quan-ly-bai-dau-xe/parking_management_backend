@@ -6,7 +6,7 @@ import hashlib
 import re
 import secrets
 from datetime import timedelta
-from typing import NoReturn
+from typing import Any, NoReturn
 
 from django.conf import settings
 from django.contrib.auth import login as auth_login
@@ -23,9 +23,12 @@ from rest_framework import status
 from apps.accounts.models import Account, PasswordResetToken, PersistentLoginToken
 from apps.accounts.selectors.auth import get_active_account_by_identifier
 from apps.accounts.services.firebase_otp import (
-    format_phone_number as fb_format_phone_number,
     is_firebase_configured,
+)
+from apps.accounts.services.firebase_otp import (
     send_sms_otp as fb_send_sms_otp,
+)
+from apps.accounts.services.firebase_otp import (
     verify_sms_otp as fb_verify_sms_otp,
 )
 from apps.accounts.services.sms import (
@@ -451,8 +454,12 @@ def request_password_reset_sms(
         session_info = fb_result.get("sessionInfo")
         is_mock = fb_result.get("isMock", False)
         if session_info:
-            cache.set(f"firebase_session:reset:{clean_phone}", session_info, timeout=lifetime_seconds)
-    except Exception as fb_exc:
+            cache.set(
+                f"firebase_session:reset:{clean_phone}",
+                session_info,
+                timeout=lifetime_seconds,
+            )
+    except Exception:
         # Ghi log nhưng không chặn luồng nếu SMS Console/Mock đang bật
         pass
 
@@ -535,7 +542,9 @@ def confirm_password_reset_sms(
     verified_by_firebase = False
 
     # Thử xác minh qua Firebase nếu có session_info (truyền lên hoặc lưu trong cache)
-    active_session_info = session_info or cache.get(f"firebase_session:reset:{clean_phone}")
+    active_session_info = session_info or cache.get(
+        f"firebase_session:reset:{clean_phone}"
+    )
     if active_session_info and is_firebase_configured():
         try:
             fb_auth = fb_verify_sms_otp(active_session_info, clean_otp)
@@ -626,8 +635,12 @@ def request_register_otp(
         session_info = fb_result.get("sessionInfo")
         is_mock = fb_result.get("isMock", False)
         if session_info:
-            cache.set(f"firebase_session:register:{clean_phone}", session_info, timeout=lifetime_seconds)
-    except Exception as fb_exc:
+            cache.set(
+                f"firebase_session:register:{clean_phone}",
+                session_info,
+                timeout=lifetime_seconds,
+            )
+    except Exception:
         pass
 
     cache_key = f"otp:register:{clean_phone}"
@@ -693,7 +706,9 @@ def confirm_register_sms(
     cache_key = f"otp:register:{clean_phone}"
     cache_data = cache.get(cache_key)
 
-    attempts = int(cache_data.get("attempts", 0) or 0) if isinstance(cache_data, dict) else 0
+    attempts = (
+        int(cache_data.get("attempts", 0) or 0) if isinstance(cache_data, dict) else 0
+    )
     max_attempts = settings.SMS_OTP_MAX_ATTEMPTS
 
     if attempts >= max_attempts:
@@ -708,7 +723,11 @@ def confirm_register_sms(
         )
 
     verified_by_firebase = False
-    active_session_info = session_info or (cache_data.get("session_info") if isinstance(cache_data, dict) else None) or cache.get(f"firebase_session:register:{clean_phone}")
+    active_session_info = (
+        session_info
+        or (cache_data.get("session_info") if isinstance(cache_data, dict) else None)
+        or cache.get(f"firebase_session:register:{clean_phone}")
+    )
     if active_session_info and is_firebase_configured():
         try:
             fb_auth = fb_verify_sms_otp(active_session_info, clean_otp)
