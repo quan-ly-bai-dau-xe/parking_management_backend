@@ -5,6 +5,8 @@ Returns hierarchical parking layout: Floor -> Zones -> Slots.
 
 from __future__ import annotations
 
+from typing import Any
+
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -29,44 +31,53 @@ class ParkingStructureView(APIView):
                 "zones",
                 "zones__slots",
             )
-            .order_by("display_order", "id")
+            .order_by("sort_order", "id")
         )
 
-        data = []
+        data: list[dict[str, Any]] = []
         for floor in floors:
-            floor_dict = {
+            floor_slot_count = 0
+            floor_dict: dict[str, Any] = {
                 "id": floor.id,
                 "code": floor.code,
                 "name": floor.name,
-                "total_slots": floor.total_slots,
+                "total_slots": 0,
                 "zones": [],
             }
             for zone in floor.zones.filter(deleted_at__isnull=True).order_by("code"):
-                zone_dict = {
+                zone_slots = list(
+                    zone.slots.filter(deleted_at__isnull=True).order_by("code", "id")
+                )
+                zone_slot_count = len(zone_slots)
+                floor_slot_count += zone_slot_count
+
+                zone_dict: dict[str, Any] = {
                     "id": zone.id,
                     "code": zone.code,
                     "name": zone.name,
-                    "total_slots": zone.total_slots,
+                    "total_slots": zone_slot_count,
                     "slots": [],
                 }
-                for slot in zone.slots.filter(deleted_at__isnull=True).order_by(
-                    "slot_number"
-                ):
+                for idx, slot in enumerate(zone_slots, start=1):
+                    digits = "".join(filter(str.isdigit, str(slot.code)))
+                    slot_num = int(digits) if digits else idx
                     zone_dict["slots"].append(
                         {
                             "id": slot.id,
                             "code": slot.code,
-                            "slot_number": slot.slot_number,
+                            "slot_number": slot_num,
                             "status": slot.status,
                             "status_display": slot.get_status_display()
                             if hasattr(slot, "get_status_display")
                             else slot.status,
-                            "is_occupied": slot.is_occupied,
+                            "is_occupied": slot.status == "OCCUPIED",
                             "row": slot.code[0] if slot.code else "A",
-                            "label": f"{zone.code}-{slot.slot_number:02d}",
+                            "label": f"{zone.code}-{slot.code}",
                         }
                     )
                 floor_dict["zones"].append(zone_dict)
+
+            floor_dict["total_slots"] = floor_slot_count
             data.append(floor_dict)
 
         return Response(data, status=status.HTTP_200_OK)

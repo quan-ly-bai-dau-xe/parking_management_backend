@@ -5,6 +5,8 @@ Supports TicketType, Ticket listing, detail, creation, and renewal.
 
 from __future__ import annotations
 
+from decimal import Decimal
+
 from rest_framework import serializers
 
 from apps.tickets.models import Ticket, TicketType
@@ -53,7 +55,7 @@ class TicketListSerializer(serializers.Serializer):
                 getattr(obj.slot.zone.floor, "name", "") if obj.slot.zone else ""
             )
             zone_code = getattr(obj.slot.zone, "code", "") if obj.slot.zone else ""
-            return f"{floor_name} - {zone_code}{obj.slot.slot_number}".strip(" -")
+            return f"{floor_name} - {zone_code}{obj.slot.code}".strip(" -")
         return "Chưa có vị trí"
 
     def get_status_display(self, obj: Ticket) -> str:
@@ -97,7 +99,7 @@ class TicketDetailSerializer(serializers.Serializer):
                 getattr(obj.slot.zone.floor, "name", "") if obj.slot.zone else ""
             )
             zone_code = getattr(obj.slot.zone, "code", "") if obj.slot.zone else ""
-            return f"{floor_name} - {zone_code}{obj.slot.slot_number}".strip(" -")
+            return f"{floor_name} - {zone_code}{obj.slot.code}".strip(" -")
         return "Chưa có vị trí"
 
     def get_status_display(self, obj: Ticket) -> str:
@@ -131,7 +133,7 @@ class TicketRenewSerializer(serializers.Serializer):
     ticket_type_id = serializers.IntegerField(required=False, allow_null=True)
     new_slot_id = serializers.IntegerField(required=False, allow_null=True)
     additional_price = serializers.DecimalField(
-        max_digits=12, decimal_places=2, default=0
+        max_digits=12, decimal_places=2, default=Decimal("0")
     )
     extend_days = serializers.IntegerField(required=False, default=30)
     notes = serializers.CharField(required=False, allow_blank=True)

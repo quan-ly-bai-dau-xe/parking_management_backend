@@ -163,6 +163,17 @@ class TicketListCreateView(APIView):
                 id=data["slot_id"], deleted_at__isnull=True
             ).first()
 
+        if slot is None:
+            slot = ParkingSlot.objects.filter(
+                status="AVAILABLE", deleted_at__isnull=True
+            ).first()
+
+        if slot is None:
+            return Response(
+                {"error": "Không tìm thấy vị trí đỗ xe khả dụng để đăng ký vé."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+
         now = timezone.now()
         effective_from = data.get("effective_from") or now
         duration_days = ticket_type.duration_days or 30
