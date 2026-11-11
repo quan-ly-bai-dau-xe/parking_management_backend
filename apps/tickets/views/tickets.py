@@ -9,7 +9,7 @@ from datetime import timedelta
 
 from django.db.models import Q
 from django.utils import timezone
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -212,6 +212,16 @@ class TicketDetailView(APIView):
 
     permission_classes = [IsAuthenticated, IsEmployeeOrManager]
 
+    @extend_schema(
+        operation_id="tickets_retrieve",
+        tags=["Tickets"],
+        summary="Chi tiết vé đỗ xe",
+        description="Lấy thông tin chi tiết của vé đỗ xe theo ID.",
+        responses={
+            200: TicketDetailSerializer,
+            404: OpenApiResponse(description="Không tìm thấy vé đỗ xe"),
+        },
+    )
     def get(self, request: Request, id: int) -> Response:
         ticket = (
             Ticket.objects.filter(id=id, deleted_at__isnull=True)
@@ -234,6 +244,16 @@ class TicketDetailView(APIView):
         serializer = TicketDetailSerializer(ticket)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
+    @extend_schema(
+        operation_id="tickets_destroy",
+        tags=["Tickets"],
+        summary="Hủy vé đỗ xe",
+        description="Chấm dứt hiệu lực và xóa mềm vé đỗ xe theo ID.",
+        responses={
+            200: OpenApiResponse(description="Đã hủy vé đỗ xe thành công"),
+            404: OpenApiResponse(description="Không tìm thấy vé đỗ xe"),
+        },
+    )
     def delete(self, request: Request, id: int) -> Response:
         ticket = Ticket.objects.filter(id=id, deleted_at__isnull=True).first()
         if not ticket:
@@ -254,6 +274,17 @@ class TicketRenewView(APIView):
 
     permission_classes = [IsAuthenticated, IsEmployeeOrManager]
 
+    @extend_schema(
+        operation_id="tickets_renew",
+        tags=["Tickets"],
+        summary="Gia hạn vé đỗ xe",
+        description="Gia hạn thời hạn vé đỗ xe, có thể đổi loại vé hoặc đổi vị trí đỗ.",
+        request=TicketRenewSerializer,
+        responses={
+            200: TicketDetailSerializer,
+            404: OpenApiResponse(description="Không tìm thấy vé đỗ xe để gia hạn"),
+        },
+    )
     def post(self, request: Request, id: int) -> Response:
         ticket = Ticket.objects.filter(id=id, deleted_at__isnull=True).first()
         if not ticket:

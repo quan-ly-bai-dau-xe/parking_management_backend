@@ -7,7 +7,8 @@ from __future__ import annotations
 
 from typing import Any
 
-from rest_framework import status
+from drf_spectacular.utils import extend_schema
+from rest_framework import serializers, status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
 from rest_framework.response import Response
@@ -17,6 +18,39 @@ from apps.core.permissions import IsEmployeeOrManager
 from apps.parking.models import ParkingFloor
 
 
+class StructureSlotSerializer(serializers.Serializer):
+    """Serializer ô đỗ xe trong cấu trúc phân cấp."""
+
+    id = serializers.IntegerField(help_text="ID vị trí đỗ")
+    code = serializers.CharField(help_text="Mã vị trí đỗ")
+    slot_number = serializers.IntegerField(help_text="Số thứ tự ô đỗ")
+    status = serializers.CharField(help_text="Trạng thái ô đỗ")
+    status_display = serializers.CharField(help_text="Mô tả trạng thái hiển thị")
+    is_occupied = serializers.BooleanField(help_text="Có xe đỗ hay không")
+    row = serializers.CharField(help_text="Dãy đỗ (A, B, C...)")
+    label = serializers.CharField(help_text="Nhãn hiển thị")  # type: ignore[assignment]
+
+
+class StructureZoneSerializer(serializers.Serializer):
+    """Serializer khu vực đỗ xe trong cấu trúc phân cấp."""
+
+    id = serializers.IntegerField(help_text="ID khu vực")
+    code = serializers.CharField(help_text="Mã khu vực")
+    name = serializers.CharField(help_text="Tên khu vực")
+    total_slots = serializers.IntegerField(help_text="Tổng số ô đỗ trong khu")
+    slots = StructureSlotSerializer(many=True)
+
+
+class StructureFloorSerializer(serializers.Serializer):
+    """Serializer tầng đỗ xe trong cấu trúc phân cấp."""
+
+    id = serializers.IntegerField(help_text="ID tầng")
+    code = serializers.CharField(help_text="Mã tầng")
+    name = serializers.CharField(help_text="Tên tầng")
+    total_slots = serializers.IntegerField(help_text="Tổng số ô đỗ trong tầng")
+    zones = StructureZoneSerializer(many=True)
+
+
 class ParkingStructureView(APIView):
     """
     Lấy sơ đồ bãi đỗ xe phân cấp: Tầng -> Khu vực -> Ô đỗ.
@@ -24,6 +58,13 @@ class ParkingStructureView(APIView):
 
     permission_classes = [IsAuthenticated, IsEmployeeOrManager]
 
+    @extend_schema(
+        operation_id="parking_structure_list",
+        tags=["Parking"],
+        summary="Sơ đồ cấu trúc bãi đỗ xe",
+        description="Lấy sơ đồ bãi đỗ xe phân cấp 3 bậc: Tầng -> Khu vực -> Ô đỗ.",
+        responses={200: StructureFloorSerializer(many=True)},
+    )
     def get(self, request: Request) -> Response:
         floors = (
             ParkingFloor.objects.filter(deleted_at__isnull=True)
