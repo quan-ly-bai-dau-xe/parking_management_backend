@@ -44,12 +44,12 @@ def load_firebase_config() -> dict[str, Any]:
 
     # Fallback to Django settings or environment variables
     api_key = (
-        getattr(settings, "FIREBASE_API_KEY", "")
+        settings.FIREBASE_API_KEY
         or os.environ.get("FIREBASE_API_KEY", "")
         or os.environ.get("VITE_FIREBASE_API_KEY", "")
     )
     project_id = (
-        getattr(settings, "FIREBASE_PROJECT_ID", "")
+        settings.FIREBASE_PROJECT_ID
         or os.environ.get("FIREBASE_PROJECT_ID", "")
         or os.environ.get("VITE_FIREBASE_PROJECT_ID", "")
     )

@@ -9,7 +9,6 @@ from apps.parking.views import (
     CheckInView,
     CheckOutView,
     GateListView,
-    ParkingStructureView,
     PlateScanView,
     SessionDetailView,
     SessionListView,
@@ -40,6 +39,4 @@ urlpatterns = [
     # 7. Danh sách lịch sử và chi tiết phiên đỗ xe
     path("sessions/", SessionListView.as_view(), name="sessions-list"),
     path("sessions/<int:pk>/", SessionDetailView.as_view(), name="sessions-detail"),
-    # 8. Sơ đồ cấu trúc bãi đỗ xe (Tầng -> Khu -> Ô đỗ)
-    path("structure/", ParkingStructureView.as_view(), name="parking-structure"),
 ]

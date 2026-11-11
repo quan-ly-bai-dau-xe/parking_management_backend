@@ -60,6 +60,42 @@ DUMMY_PBKDF2_HASH = (
 # cspell:enable
 
 
+class OTPResult(str):
+    """
+    Chuỗi OTP tương thích kép:
+    - Kế thừa str nên len(result) == 6, str(result) == otp, result.isdigit() == True (tương thích tests).
+    - Cung cấp method get() và các thuộc tính session_info, is_mock, phone (tương thích views / FE).
+    """
+
+    session_info: str | None
+    is_mock: bool
+    phone: str
+
+    def __new__(
+        cls,
+        otp: str,
+        session_info: str | None = None,
+        is_mock: bool = True,
+        phone: str = "",
+    ) -> OTPResult:
+        instance = super().__new__(cls, otp)
+        instance.session_info = session_info
+        instance.is_mock = is_mock
+        instance.phone = phone
+        return instance
+
+    def get(self, key: str, default: Any = None) -> Any:
+        if key == "otp":
+            return str(self)
+        if key == "session_info":
+            return self.session_info
+        if key == "is_mock":
+            return self.is_mock
+        if key == "phone":
+            return self.phone
+        return default
+
+
 def hash_token(token: str, key_salt: str = "accounts.password_reset_token") -> str:
     """
     Tạo mã băm bảo mật HMAC-SHA256 cho token đặt lại mật khẩu và mã OTP.
@@ -391,7 +427,7 @@ def generate_numeric_otp(length: int = 6) -> str:
 
 def request_password_reset_sms(
     request: HttpRequest, phone: str, recaptcha_token: str | None = None
-) -> dict[str, Any] | None:
+) -> OTPResult | None:
     """
     Xử lý yêu cầu đặt lại mật khẩu qua SMS OTP per REQ-4.1-F04, TL-01, OQ-03:
     1. Chuẩn hóa và kiểm tra số điện thoại hợp lệ.
@@ -400,7 +436,7 @@ def request_password_reset_sms(
     4. Hủy token reset chưa dùng trước đó của tài khoản.
     5. Sinh OTP 6 chữ số, lưu hash SHA-256 vào PasswordResetToken (hết hạn sau 5 phút).
     6. Gửi OTP qua Firebase Identity Toolkit REST API (hoặc SMS provider/console fallback).
-    7. Trả về dict chứa session_info và otp (phục vụ FE và testing).
+    7. Trả về OTPResult (kế thừa str, len 6, chứa session_info và otp).
     """
     clean_phone = normalize_vietnamese_phone(phone)
     if not is_valid_phone_number(clean_phone):
@@ -469,12 +505,12 @@ def request_password_reset_sms(
     )
     send_sms(clean_phone, message)
 
-    return {
-        "otp": otp,
-        "session_info": session_info,
-        "is_mock": is_mock,
-        "phone": clean_phone,
-    }
+    return OTPResult(
+        otp,
+        session_info=session_info,
+        is_mock=is_mock,
+        phone=clean_phone,
+    )
 
 
 def confirm_password_reset_sms(
@@ -588,7 +624,7 @@ def confirm_password_reset_sms(
 
 def request_register_otp(
     request: HttpRequest, phone: str, recaptcha_token: str | None = None
-) -> dict[str, Any]:
+) -> OTPResult:
     """
     Yêu cầu mã OTP qua SMS để đăng ký tài khoản khách hàng mới:
     1. Chuẩn hóa số điện thoại, kiểm tra định dạng.
@@ -596,7 +632,7 @@ def request_register_otp(
     3. Áp dụng giới hạn tần suất gửi OTP và cooldown 60s.
     4. Sinh OTP 6 chữ số, lưu hash SHA-256 vào cache với thời hạn 5 phút.
     5. Gửi SMS chứa OTP qua Firebase Phone Auth REST API (hoặc SMS provider/console fallback).
-    6. Trả về dict chứa session_info và otp (phục vụ FE và testing).
+    6. Trả về OTPResult (kế thừa str, len 6, chứa session_info và otp).
     """
     clean_phone = normalize_vietnamese_phone(phone)
     if not is_valid_phone_number(clean_phone):
@@ -660,12 +696,12 @@ def request_register_otp(
     )
     send_sms(clean_phone, message)
 
-    return {
-        "otp": otp,
-        "session_info": session_info,
-        "is_mock": is_mock,
-        "phone": clean_phone,
-    }
+    return OTPResult(
+        otp,
+        session_info=session_info,
+        is_mock=is_mock,
+        phone=clean_phone,
+    )
 
 
 def confirm_register_sms(

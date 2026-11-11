@@ -79,7 +79,6 @@ class CSRFBootstrapView(APIView):
                 "detail": get_prop_message(
                     "PROP-4.1-P02", "Khởi tạo cookie CSRF thành công."
                 ),
-                "csrfToken": csrf_token,
             },
             status=status.HTTP_200_OK,
         )

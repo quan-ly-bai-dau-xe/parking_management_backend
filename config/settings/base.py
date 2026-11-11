@@ -552,5 +552,9 @@ VONAGE_API_KEY = env("VONAGE_API_KEY", default="")
 VONAGE_API_SECRET = env("VONAGE_API_SECRET", default="")
 VONAGE_FROM = env("VONAGE_FROM", default="Vonage APIs")
 
+# Firebase Phone Authentication Configuration
+FIREBASE_API_KEY = env("FIREBASE_API_KEY", default="")
+FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="")
+
 # DRF Proxy Configuration
 NUM_PROXIES = env.int("NUM_PROXIES", default=0)
