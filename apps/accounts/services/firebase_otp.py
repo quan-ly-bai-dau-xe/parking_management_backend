@@ -77,6 +77,16 @@ def format_phone_number(phone: str) -> str:
     return clean
 
 
+def mask_phone_number(phone: str) -> str:
+    """
+    Che giấu số điện thoại để log hoặc thông báo an toàn theo chuẩn bảo mật PII / CodeQL.
+    VD: +84766709535 -> +84***35
+    """
+    if not phone or len(phone) <= 5:
+        return "***"
+    return f"{phone[:3]}***{phone[-2:]}"
+
+
 def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[str, Any]:
     """
     Gửi mã xác thực OTP qua Firebase Phone Authentication REST API.
@@ -86,6 +96,7 @@ def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[
     :return: dict chứa 'phoneNumber', 'sessionInfo', 'isMock', 'testOtp'
     """
     phone_e164 = format_phone_number(phone_number)
+    masked_phone = mask_phone_number(phone_e164)
     config = load_firebase_config()
     api_key = config.get("apiKey")
 
@@ -93,14 +104,14 @@ def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[
     if not api_key or "YOUR_FIREBASE" in api_key:
         logger.info(
             "[Firebase OTP Dev Mode] Chưa cấu hình API Key. Tạo phiên OTP thử nghiệm cho %s",
-            phone_e164,
+            masked_phone,
         )
         mock_session = f"mock_session_{phone_e164.replace('+', '')}_{os.urandom(8).hex()}"
-        print(f"\n==================== [FIREBASE OTP TEST] ====================")
-        print(f"Số điện thoại: {phone_e164}")
-        print(f"Mã OTP thử nghiệm: 123456")
-        print(f"Session Info:  {mock_session}")
-        print(f"=============================================================\n")
+        print("\n==================== [FIREBASE OTP TEST] ====================")
+        print(f"Số điện thoại: {masked_phone}")
+        print("Mã OTP thử nghiệm: 123456")
+        print("Session Info: [REDACTED]")
+        print("=============================================================\n")
         return {
             "phoneNumber": phone_e164,
             "sessionInfo": mock_session,
@@ -126,11 +137,11 @@ def send_sms_otp(phone_number: str, recaptcha_token: str | None = None) -> dict[
 
         if "MISSING_RECAPTCHA_TOKEN" in err_msg:
             raise RuntimeError(
-                f"Firebase yêu cầu xác thực reCAPTCHA cho số {phone_e164}.\n"
-                f"Gợi ý: Thêm số vào 'Phone numbers for testing' trên Firebase Console để test miễn phí."
+                f"Firebase yêu cầu xác thực reCAPTCHA cho số {masked_phone}.\n"
+                "Gợi ý: Thêm số vào 'Phone numbers for testing' trên Firebase Console để test miễn phí."
             )
         if "INVALID_PHONE_NUMBER" in err_msg:
-            raise RuntimeError(f"Số điện thoại không hợp lệ: {phone_e164}")
+            raise RuntimeError(f"Số điện thoại không hợp lệ: {masked_phone}")
         if "TOO_MANY_ATTEMPTS_TRY_LATER" in err_msg:
             raise RuntimeError("Đã gửi quá nhiều yêu cầu trong thời gian ngắn. Vui lòng thử lại sau!")
         raise RuntimeError(f"Lỗi Firebase ({resp.status_code}): {err_msg}")
