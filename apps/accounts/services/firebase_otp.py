@@ -116,21 +116,19 @@ def send_sms_otp(
     :return: dict chứa 'phoneNumber', 'sessionInfo', 'isMock', 'testOtp'
     """
     phone_e164 = format_phone_number(phone_number)
-    masked_phone = mask_phone_number(phone_e164)
     config = load_firebase_config()
     api_key = config.get("apiKey")
 
     # Nếu chưa có cấu hình Firebase thật: Chạy chế độ test/fallback
     if not api_key or "YOUR_FIREBASE" in api_key:
         logger.info(
-            "[Firebase OTP Dev Mode] Chưa cấu hình API Key. Tạo phiên OTP thử nghiệm cho %s",
-            masked_phone,
+            "[Firebase OTP Dev Mode] Chưa cấu hình API Key. Tạo phiên OTP thử nghiệm."
         )
         mock_session = (
             f"mock_session_{phone_e164.replace('+', '')}_{os.urandom(8).hex()}"
         )
         print("\n==================== [FIREBASE OTP TEST] ====================")
-        print(f"Số điện thoại: {masked_phone}")
+        print("Chế độ: Thử nghiệm Dev Mode (Không tốn SMS Firebase)")
         print("Mã OTP thử nghiệm: 123456")
         print("Session Info: [REDACTED]")
         print("=============================================================\n")
@@ -159,11 +157,11 @@ def send_sms_otp(
 
         if "MISSING_RECAPTCHA_TOKEN" in err_msg:
             raise RuntimeError(
-                f"Firebase yêu cầu xác thực reCAPTCHA cho số {masked_phone}.\n"
+                "Firebase yêu cầu xác thực reCAPTCHA cho số điện thoại này.\n"
                 "Gợi ý: Thêm số vào 'Phone numbers for testing' trên Firebase Console để test miễn phí."
             )
         if "INVALID_PHONE_NUMBER" in err_msg:
-            raise RuntimeError(f"Số điện thoại không hợp lệ: {masked_phone}")
+            raise RuntimeError("Số điện thoại không hợp lệ theo chuẩn quốc tế E.164.")
         if "TOO_MANY_ATTEMPTS_TRY_LATER" in err_msg:
             raise RuntimeError(
                 "Đã gửi quá nhiều yêu cầu trong thời gian ngắn. Vui lòng thử lại sau!"
