@@ -12,11 +12,13 @@ from apps.parking.views.sessions import (
     SessionDetailView,
     SessionListView,
 )
+from apps.parking.views.structure import ParkingStructureView
 
 __all__ = [
     "CheckInView",
     "CheckOutView",
     "GateListView",
+    "ParkingStructureView",
     "PlateScanView",
     "SessionDetailView",
     "SessionListView",

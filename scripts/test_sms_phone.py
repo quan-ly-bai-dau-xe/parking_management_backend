@@ -146,9 +146,16 @@ def run_phone_sms_test(raw_phone: str) -> None:
 
         # Xac thuc OTP de hoan tat dang ky
         print("\n[4] Kich ban 1 (Tiep): XAC NHAN OTP DE HOAN TAT DANG KY")
+        reg_code = (
+            str(otp_reg.get("testOtp") or "123456")
+            if isinstance(otp_reg, dict)
+            else str(otp_reg)
+        )
+        reg_session = otp_reg.get("sessionInfo") if isinstance(otp_reg, dict) else None
         new_account, customer = confirm_register_sms(
             phone=clean_phone,
-            otp=otp_reg,
+            otp=reg_code,
+            session_info=reg_session,
             password="StrongPassword123!",
             full_name="Nguyen Van A",
         )
@@ -172,9 +179,18 @@ def run_phone_sms_test(raw_phone: str) -> None:
 
         if otp_forgot:
             print("\n[6] Kich ban 2 (Tiep): XAC NHAN OTP VA DAT MAT KHAU MOI")
+            forgot_code = (
+                str(otp_forgot.get("testOtp") or "123456")
+                if isinstance(otp_forgot, dict)
+                else str(otp_forgot)
+            )
+            forgot_session = (
+                otp_forgot.get("sessionInfo") if isinstance(otp_forgot, dict) else None
+            )
             updated_account = confirm_password_reset_sms(
                 phone=clean_phone,
-                otp=otp_forgot,
+                otp=forgot_code,
+                session_info=forgot_session,
                 new_password="NewSecurePassword456!",
             )
             print(

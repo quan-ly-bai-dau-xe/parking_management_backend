@@ -7,7 +7,13 @@ drf-spectacular-sidecar==2026.10.1
 django-filter==26.2
 django-environ==0.14.0
 argon2-cffi==25.1.0
+cryptography>=49.0.0
+requests>=2.34.2
 fast-alpr[onnx]==0.4.0
-Pillow==12.3.0
-gunicorn==23.0.0
+Pillow>=12.3.0
+numpy>=2.4.0
 cloudinary==1.46.3
+openpyxl>=3.1.5
+reportlab>=5.0.1
+redis>=5.2.1
+gunicorn==23.0.0
