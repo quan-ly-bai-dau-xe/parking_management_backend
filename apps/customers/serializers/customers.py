@@ -182,6 +182,9 @@ class CustomerListSerializer(serializers.Serializer):
     identity_card_number = serializers.SerializerMethodField()
     status = serializers.CharField()
     status_display = serializers.SerializerMethodField()
+    date_of_birth = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
+    gender = serializers.SerializerMethodField()
     vehicles_count = serializers.SerializerMethodField()
     has_active_ticket = serializers.SerializerMethodField()
     row_version = serializers.IntegerField()
@@ -206,6 +209,23 @@ class CustomerListSerializer(serializers.Serializer):
     def get_status_display(self, obj: Customer) -> str:
         status_code = getattr(obj, "status", "ACTIVE")
         return STATUS_DISPLAY_MAP.get(status_code, status_code)
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_date_of_birth(self, obj: Customer) -> str | None:
+        if getattr(obj, "is_anonymized", False):
+            return None
+        dob = getattr(obj, "date_of_birth", None)
+        return dob.isoformat() if dob else None
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_email(self, obj: Customer) -> str | None:
+        if getattr(obj, "is_anonymized", False):
+            return "***@***"
+        return getattr(obj, "email", "")
+
+    @extend_schema_field(serializers.CharField(allow_null=True))
+    def get_gender(self, obj: Customer) -> str | None:
+        return getattr(obj, "gender", "")
 
     @extend_schema_field(serializers.IntegerField)
     def get_vehicles_count(self, obj: Customer) -> int:
