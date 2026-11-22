@@ -46,7 +46,7 @@ def get_dummy_password_hash() -> str:
         primary_hasher = get_hasher()
         if primary_hasher.algorithm and primary_hasher.algorithm.startswith("pbkdf2"):
             return DUMMY_PBKDF2_HASH
-    except ValueError, LookupError:
+    except (ValueError, LookupError):
         pass
     return DUMMY_ARGON2_HASH
 

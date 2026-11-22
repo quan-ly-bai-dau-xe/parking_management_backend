@@ -167,6 +167,7 @@ class VehicleLookupView(APIView):
         },
     )
     def get(self, request: Request) -> Response:
+
         plate = request.query_params.get("license_plate")
         if not plate or not str(plate).strip():
             raise BusinessAPIException(
