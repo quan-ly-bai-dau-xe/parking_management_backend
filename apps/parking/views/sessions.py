@@ -23,12 +23,16 @@ from apps.core.messages import ALL_MESSAGES
 from apps.core.pagination import StandardResultsSetPagination
 from apps.core.permissions import IsEmployeeOrManager
 from apps.core.serializers import ErrorEnvelopeSerializer
-from apps.parking.selectors.sessions import get_session_by_id, list_sessions
+from apps.parking.selectors.sessions import (
+    get_session_by_id,
+    list_sessions,
+)
 from apps.parking.serializers.sessions import (
     CheckInRequestSerializer,
     CheckInResponseSerializer,
     CheckOutRequestSerializer,
     CheckOutResponseSerializer,
+    FeePreviewResponseSerializer,
     ParkingSessionFilterSerializer,
     PaymentSummarySerializer,
     SessionDetailSerializer,
@@ -36,6 +40,7 @@ from apps.parking.serializers.sessions import (
 )
 from apps.parking.services.check_in import check_in_vehicle
 from apps.parking.services.check_out import check_out_vehicle
+from apps.parking.services.tariff import get_fee_preview
 from apps.parking.views.scans import (
     finalize_observability_response,
     init_observability_context,
@@ -475,6 +480,8 @@ class CheckOutView(APIView):
             exit_image_url=data.get("exit_image_url"),
             user=request.user,
             notes=data.get("notes"),
+            waive_fee=data.get("waive_fee", False),
+            waiver_reason=data.get("waiver_reason"),
         )
         stages["db"] = (time.perf_counter() - t_db0) * 1000.0
         set_observability_metadata(
@@ -494,6 +501,76 @@ class CheckOutView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class FeePreviewView(APIView):
+    """
+    API Xem trước cước phí đỗ xe cho phiên đang mở (Fee Preview per TL-57).
+    Cho phép nhân viên và quản lý xem thời gian đỗ thực tế và cước phí tạm tính
+    trước khi thực hiện check-out phương tiện.
+    """
+
+    permission_classes = [IsAuthenticated, IsEmployeeOrManager]
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        init_observability_context(request)
+        super().initial(request, *args, **kwargs)
+
+    def finalize_response(
+        self, request: Request, response: Response, *args: Any, **kwargs: Any
+    ) -> Response:
+        resp = super().finalize_response(request, response, *args, **kwargs)
+        return finalize_observability_response(
+            request, resp, "/api/v1/parking/sessions/fee-preview/"
+        )
+
+    @extend_schema(
+        operation_id="parking_sessions_fee_preview",
+        tags=["Parking - Vehicle entry/exit"],
+        summary="Xem trước cước phí phiên đỗ xe đang mở",
+        description=(
+            "Truy vấn phiên đỗ xe đang mở qua license_plate HOẶC session_code, "
+            "tính toán thời gian thực cước phí dự kiến phải thu, kiểm tra trạng thái vé tháng hợp lệ, "
+            "và trả về thông tin chi tiết phục vụ màn hình Làn Ra (ExitLanePanel)."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="license_plate",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Biển số xe cần xem trước phí (vd: 51A-897.14)",
+            ),
+            OpenApiParameter(
+                name="session_code",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Mã phiên đỗ xe cần xem trước phí (vd: #PK-20261018-001)",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=FeePreviewResponseSerializer,
+                description="Xem trước cước phí thành công",
+            ),
+            400: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Thiếu tham số nhận diện phiên (license_plate hoặc session_code)",
+            ),
+            404: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Không tìm thấy phiên đỗ xe đang mở (PROP-4.5.1-P06)",
+            ),
+        },
+    )
+    def get(self, request: Request) -> Response:
+        preview_data = get_fee_preview(
+            license_plate=request.query_params.get("license_plate"),
+            session_code=request.query_params.get("session_code"),
+        )
+        serializer = FeePreviewResponseSerializer(preview_data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class SessionListView(APIView):

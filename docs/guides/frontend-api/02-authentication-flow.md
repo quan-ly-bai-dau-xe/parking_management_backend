@@ -228,4 +228,163 @@ Set-Cookie: parking_remember_token=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Ma
 }
 ```
 
+### 4.7 Step 6: Password Reset via Email
+
+For users requesting password recovery by email per REQ-4.1-F04 and TL-36:
+
+#### Case 1: Request Password Reset (`POST /api/v1/auth/forgot-password/`)
+
+Accepts email, enforces anti-enumeration (always 200 OK) and rate limiting (3 requests/hour per email, 10/hour per IP):
+
+```http
+POST /api/v1/auth/forgot-password/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: application/json
+
+{"email": "hoang.dinh.khang@example.com"}
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "detail": "Nếu email tồn tại trong hệ thống, hướng dẫn đặt lại mật khẩu đã được gửi."
+}
+```
+
+- When rate limit is exceeded: returns HTTP `429 Too Many Requests` (`PROP-4.1-P07`).
+
+#### Case 2: Confirm Password Reset (`POST /api/v1/auth/reset-password/`)
+
+Verifies the single-use token, updates password, and revokes prior persistent remember-tokens:
+
+```http
+POST /api/v1/auth/reset-password/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: application/json
+
+{"token": "[MASKED]", "new_password": "[MASKED]", "confirm_password": "[MASKED]"}
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "detail": "Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới."
+}
+```
+
+- Invalid, used, or expired token returns HTTP `400 Bad Request` (`PROP-4.1-P08`).
+- Password mismatch returns HTTP `400 Bad Request` (`PROP-4.1-P09`).
+
+### 4.8 Step 7: Password Reset via SMS OTP
+
+For users resetting their password using SMS OTP verification per TL-01 and OQ-03:
+
+#### Case 1: Request SMS OTP (`POST /api/v1/auth/forgot-password/sms/`)
+
+```http
+POST /api/v1/auth/forgot-password/sms/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: application/json
+
+{"phone": "0880721788"}
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "detail": "Mã OTP xác thực đã được gửi tới số điện thoại của bạn qua tin nhắn SMS."
+}
+```
+
+- Invalid phone format: HTTP `400 Bad Request` (`PROP-4.1-P15`).
+- Rate limit exceeded (3/hr phone, 10/hr IP): HTTP `429 Too Many Requests` (`PROP-4.1-P12`).
+- Resend within 60s cooldown: HTTP `429 Too Many Requests` (`PROP-4.1-P17`).
+
+#### Case 2: Confirm SMS OTP Reset (`POST /api/v1/auth/reset-password/sms/`)
+
+```http
+POST /api/v1/auth/reset-password/sms/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: application/json
+
+{"phone": "0880721788", "otp": "123456", "new_password": "[MASKED]", "confirm_password": "[MASKED]"}
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "detail": "Đặt lại mật khẩu thành công. Vui lòng đăng nhập bằng mật khẩu mới."
+}
+```
+
+- Invalid or expired OTP: HTTP `400 Bad Request` (`PROP-4.1-P11`).
+- More than 5 failed attempts: HTTP `400 Bad Request` (`PROP-4.1-P16`).
+
+### 4.9 Step 8: Customer Registration via SMS OTP
+
+Self-registration for new customers (`CUSTOMER` role) authenticated via phone verification:
+
+#### Case 1: Request Registration OTP (`POST /api/v1/auth/register/sms/request/`)
+
+```http
+POST /api/v1/auth/register/sms/request/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: application/json
+
+{"phone": "0912345678"}
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "detail": "Mã OTP xác thực đã được gửi tới số điện thoại của bạn qua tin nhắn SMS."
+}
+```
+
+- Duplicate active phone: HTTP `409 Conflict` (`PROP-4.1-P13`).
+
+#### Case 2: Confirm Registration (`POST /api/v1/auth/register/sms/confirm/`)
+
+```http
+POST /api/v1/auth/register/sms/confirm/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: application/json
+
+{
+  "phone": "0912345678",
+  "otp": "123456",
+  "full_name": "Nguyễn Văn A",
+  "id_card_number": "049098012345",
+  "password": "[MASKED]",
+  "confirm_password": "[MASKED]"
+}
+
+HTTP/1.1 201 Created
+Content-Type: application/json
+
+{
+  "detail": "Đăng ký tài khoản thành công."
+}
+```
+
+- Duplicate CCCD/CMND: HTTP `409 Conflict` (`PROP-4.1-P18`).
+
 ---

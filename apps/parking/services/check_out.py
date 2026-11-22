@@ -4,11 +4,14 @@ Handles atomic vehicle exit, fee computation, select_for_update locking,
 payment generation, and soft-deleted vehicle exit support.
 """
 
+from decimal import Decimal
 from typing import Any
 
 from django.db import transaction
 from django.utils import timezone
+from rest_framework import status
 
+from apps.audit.models import ActivityLog
 from apps.core.exceptions import BusinessAPIException
 from apps.core.messages import ALL_MESSAGES
 from apps.employees.models import Employee
@@ -28,6 +31,8 @@ def check_out_vehicle(
     exit_image_url: str | None = None,
     user: Any = None,
     notes: str | None = None,
+    waive_fee: bool = False,
+    waiver_reason: str | None = None,
 ) -> tuple[VehicleEntryExitLog, Payment | None, dict[str, Any] | None]:
     """
     Thực hiện check-out kết thúc phiên đỗ xe:
@@ -167,47 +172,115 @@ def check_out_vehicle(
 
         now = timezone.now()
 
-        # 4. Tính toán cước phí (OQ-85, TL-50)
-        fee_amount = calculate_parking_fee(session, now)
-
-        # 5. Xác định nhân viên xử lý
+        # 4. Xác định nhân viên xử lý
         handled_by_employee = None
         if user and getattr(user, "is_authenticated", False):
             handled_by_employee = Employee.objects.filter(
                 account=user, deleted_at__isnull=True
             ).first()
 
-        # 6. Xử lý thanh toán nếu cước phí > 0
         payment_record = None
-        if fee_amount > 0:
-            if not payment_method or str(payment_method).upper() not in (
-                "CASH",
-                "VIETQR",
-            ):
+
+        # 5. Xử lý tính phí hoặc miễn cước đặc cách (TL-58)
+        if waive_fee:
+            # 5a. Kiểm tra thẩm quyền Quản lý (chỉ MANAGER mới có quyền miễn cước)
+            user_role = (
+                getattr(user, "role", None)
+                if user and getattr(user, "is_authenticated", False)
+                else None
+            )
+            if user_role != "MANAGER":
                 raise BusinessAPIException(
-                    code="PROP-4.5.1-P09",
+                    code="PROP-4.5.1-P18",
                     message=ALL_MESSAGES.get(
-                        "PROP-4.5.1-P09",
-                        "Yêu cầu chọn phương thức thanh toán hợp lệ khi cước phí đỗ xe lớn hơn 0.",
+                        "PROP-4.5.1-P18",
+                        "Chỉ Quản lý mới có quyền miễn cước phí đỗ xe.",
                     ),
-                    status_code=400,
+                    status_code=status.HTTP_403_FORBIDDEN,
                 )
 
-            clean_code = session.session_code.replace("#", "")
-            payment_code = f"PAY-SES-{clean_code}"
+            # 5b. Kiểm tra lý do miễn cước (bắt buộc, không được để trống hoặc toàn khoảng trắng)
+            if not waiver_reason or not str(waiver_reason).strip():
+                raise BusinessAPIException(
+                    code="PROP-4.5.1-P19",
+                    message=ALL_MESSAGES.get(
+                        "PROP-4.5.1-P19",
+                        "Vui lòng cung cấp lý do miễn cước đặc cách.",
+                    ),
+                    status_code=status.HTTP_400_BAD_REQUEST,
+                )
 
-            payment_record = Payment.objects.create(
-                code=payment_code,
-                amount=fee_amount,
-                method=str(payment_method).upper(),
-                status="PAID",
-                paid_at=now,
-                received_by=handled_by_employee,
-                session=session,
-                ticket=None,
-                renewal=None,
-                notes=f"Thanh toán cước phí phiên đỗ xe {session.session_code}",
+            clean_waiver_reason = str(waiver_reason).strip()
+            fee_amount = Decimal("0.00")
+
+            # BỎ QUA kiểm tra payment_method và KHÔNG tạo bản ghi Payment
+            # Ghi chú kiểm toán: nối thêm vào session.notes
+            approver_email = getattr(user, "email", "") or getattr(
+                user, "username", "Quản lý"
             )
+            waiver_audit_note = f"[MIỄN CƯỚC ĐẶC CÁCH]: {clean_waiver_reason} (Người duyệt: {approver_email})"
+            if notes and str(notes).strip():
+                current_notes = f"{str(notes).strip()}\n{waiver_audit_note}"
+            else:
+                current_notes = waiver_audit_note
+
+            if session.notes and session.notes.strip():
+                session.notes = f"{session.notes.strip()}\n{current_notes}"
+            else:
+                session.notes = current_notes
+
+            # Ghi log kiểm toán vào ActivityLog
+            ActivityLog.objects.create(
+                actor_account=user
+                if getattr(user, "is_authenticated", False)
+                else None,
+                action="SESSION_CHECK_OUT_WAIVED",
+                entity_type="vehicle_entry_exit_log",
+                entity_id=session.id,
+                message=(
+                    f"Miễn cước đặc cách phiên đỗ {session.session_code}. "
+                    f"Biển số: {session.license_plate}. Lý do: {clean_waiver_reason}. "
+                    f"Người duyệt: {approver_email}."
+                ),
+                occurred_at=now,
+            )
+        else:
+            # 5c. Tính toán cước phí bình thường (OQ-85, TL-50)
+            fee_amount = calculate_parking_fee(session, now)
+
+            # 6. Xử lý thanh toán nếu cước phí > 0
+            if fee_amount > 0:
+                if not payment_method or str(payment_method).upper() not in (
+                    "CASH",
+                    "VIETQR",
+                ):
+                    raise BusinessAPIException(
+                        code="PROP-4.5.1-P09",
+                        message=ALL_MESSAGES.get(
+                            "PROP-4.5.1-P09",
+                            "Yêu cầu chọn phương thức thanh toán hợp lệ khi cước phí đỗ xe lớn hơn 0.",
+                        ),
+                        status_code=400,
+                    )
+
+                clean_code = session.session_code.replace("#", "")
+                payment_code = f"PAY-SES-{clean_code}"
+
+                payment_record = Payment.objects.create(
+                    code=payment_code,
+                    amount=fee_amount,
+                    method=str(payment_method).upper(),
+                    status="PAID",
+                    paid_at=now,
+                    received_by=handled_by_employee,
+                    session=session,
+                    ticket=None,
+                    renewal=None,
+                    notes=f"Thanh toán cước phí phiên đỗ xe {session.session_code}",
+                )
+
+            if notes:
+                session.notes = notes
 
         # 7. Cập nhật thông tin kết thúc phiên đỗ xe
         session.exit_time = now
@@ -215,8 +288,6 @@ def check_out_vehicle(
         session.exit_image_url = exit_image_url
         session.exit_handled_by = handled_by_employee
         session.fee_amount = fee_amount
-        if notes:
-            session.notes = notes
         session.save()
 
     # Gán đầy đủ quan hệ cho session tránh N+1 khi serialize qua SessionDetailSerializer

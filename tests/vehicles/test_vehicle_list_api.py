@@ -36,7 +36,7 @@ def test_vehicle_list_default_pagination_and_envelope(employee_client):
     assert "previous" in data
     assert "results" in data
 
-    assert data["count"] == 30
+    assert data["count"] == 31
     assert len(data["results"]) == 20  # Default page_size = 20
     assert data["total_pages"] == 2
     assert data["current_page"] == 1
@@ -118,7 +118,7 @@ def test_vehicle_list_handwritten_ground_truth_seed_assertions(employee_client):
 def test_vehicle_list_filter_status_parked_active_left(employee_client):
     """
     Kiểm tra bộ lọc status (parked, active, left) theo đúng phân hoạch
-    đã chứng minh bằng SQL độc lập: parked=10, active=5, left=15.
+    đã chứng minh bằng SQL độc lập: parked=10, active=5, left=16.
     """
     # 1. Filter status=parked -> exactly 10
     res_parked = employee_client.get(f"{ENDPOINT_URL}?status=parked&page_size=50")
@@ -134,10 +134,10 @@ def test_vehicle_list_filter_status_parked_active_left(employee_client):
     for v in res_active.json()["results"]:
         assert v["status"] == "active"
 
-    # 3. Filter status=left -> exactly 15
+    # 3. Filter status=left -> exactly 16
     res_left = employee_client.get(f"{ENDPOINT_URL}?status=left&page_size=50")
     assert res_left.status_code == status.HTTP_200_OK
-    assert res_left.json()["count"] == 15
+    assert res_left.json()["count"] == 16
     for v in res_left.json()["results"]:
         assert v["status"] == "left"
 
@@ -145,11 +145,11 @@ def test_vehicle_list_filter_status_parked_active_left(employee_client):
 def test_vehicle_list_filter_ticket_state(employee_client):
     """
     Kiểm tra bộ lọc ticket_state (valid, expiring_soon, expired, none).
-    - Trên baseline seed sạch 30 xe:
+    - Trên baseline seed sạch 31 xe:
       - 10 xe có vé hợp lệ (valid).
       - 0 xe có vé sắp hết hạn (expiring_soon).
       - 12 xe có vé đã hết hạn (expired).
-      - 8 xe không có vé hoặc chỉ có vé CANCELLED (none).
+      - 9 xe không có vé hoặc chỉ có vé CANCELLED (none).
     """
     from datetime import timedelta
 
@@ -175,7 +175,7 @@ def test_vehicle_list_filter_ticket_state(employee_client):
 
     res_none = employee_client.get(f"{ENDPOINT_URL}?ticket_state=none&page_size=50")
     assert res_none.status_code == status.HTTP_200_OK
-    assert res_none.json()["count"] == 8
+    assert res_none.json()["count"] == 9
 
     # Tạo vé sắp hết hạn (expiring_soon) cho XE0027 (hiện là none)
     now = timezone.now()
@@ -271,8 +271,8 @@ def test_vehicle_list_filter_vehicle_type(employee_client):
     assert ev_count > 0
     assert all(v["vehicle_type"]["code"] == "EV" for v in res_ev.json()["results"])
 
-    # Total must equal 30
-    assert car_count + ev_count == 30
+    # Total must equal 31
+    assert car_count + ev_count == 31
 
 
 def test_vehicle_list_combined_filters(employee_client):

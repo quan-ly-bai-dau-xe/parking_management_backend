@@ -29,7 +29,10 @@ from apps.parking.serializers.scans import (
     PlateScanResponseSerializer,
 )
 from apps.parking.services.ocr import get_plate_recognizer
-from apps.parking.services.plate_scan import execute_plate_scan
+from apps.parking.services.plate_scan import (
+    PlateScanExecutionResult,
+    execute_plate_scan,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -66,6 +69,7 @@ def init_observability_context(request: Any) -> None:
     request._obs_review_status = None
     request._obs_review_reasons = []
     request._obs_plate = None
+    request._obs_gate_id = None
 
 
 def set_observability_metadata(
@@ -74,14 +78,23 @@ def set_observability_metadata(
     review_status: str | None = None,
     review_reasons: list[str] | None = None,
     plate: str | None = None,
+    gate_id: int | None = None,
+    result: Any = None,
 ) -> None:
     """Record observability attributes on the request object."""
+    if result is not None:
+        review_status = getattr(result, "review_status", review_status)
+        review_reasons = getattr(result, "review_reasons", review_reasons)
+        plate = getattr(result, "plate_normalized", plate)
+        gate_id = getattr(result, "gate_id", gate_id)
     if review_status is not None:
         request._obs_review_status = review_status
     if review_reasons is not None:
         request._obs_review_reasons = review_reasons
     if plate is not None:
         request._obs_plate = plate
+    if gate_id is not None:
+        request._obs_gate_id = gate_id
 
 
 def finalize_observability_response(
@@ -121,9 +134,78 @@ def finalize_observability_response(
         "review_status": getattr(request, "_obs_review_status", None),
         "review_reasons": getattr(request, "_obs_review_reasons", []),
         "plate": format_plate_for_log(getattr(request, "_obs_plate", None)),
+        "gate_id": getattr(request, "_obs_gate_id", None),
     }
     logger.info(json.dumps(record, ensure_ascii=False))
     return response
+
+
+def parse_preview_flag(raw_value: Any) -> bool:
+    """
+    Parse boolean strictly for preview field per Requirement R1 and Decision B1.
+    Accepts None/empty (default False), bool True/False, or case-insensitive 'true'/'false'.
+    Rejects any other value with HTTP 400 Bad Request and PROP-GEN-P01.
+    """
+    if raw_value is None or raw_value == "":
+        return False
+    if isinstance(raw_value, bool):
+        return raw_value
+    if isinstance(raw_value, str):
+        val = raw_value.strip().lower()
+        if val == "true":
+            return True
+        if val == "false":
+            return False
+    msg = ALL_MESSAGES["PROP-GEN-P01"]
+    raise BusinessAPIException(
+        code="PROP-GEN-P01",
+        message=msg,
+        status_code=status.HTTP_400_BAD_REQUEST,
+        details={"preview": [msg]},
+    )
+
+
+def parse_gate_id(raw_value: Any) -> int | None:
+    """
+    Parse and validate optional gate_id integer parameter.
+    Accepts None/empty (returns None), integer, or digit string (> 0).
+    Rejects any non-numeric or non-positive value with HTTP 400 Bad Request and PROP-GEN-P01.
+    """
+    if raw_value is None or raw_value == "":
+        return None
+    try:
+        if isinstance(raw_value, bool):
+            raise TypeError("Boolean value is not accepted for gate_id")
+        if isinstance(raw_value, float):
+            raise TypeError("Float value is not accepted for gate_id")
+        val = int(raw_value)
+        if val <= 0:
+            raise ValueError
+        return val
+    except (ValueError, TypeError):  # fmt: skip
+        msg = ALL_MESSAGES["PROP-GEN-P01"]
+        raise BusinessAPIException(
+            code="PROP-GEN-P01",
+            message=msg,
+            status_code=status.HTTP_400_BAD_REQUEST,
+            details={"gate_id": [msg]},
+        ) from None
+
+
+def _execute_scan_for_request(
+    request: Request,
+    image_file: Any,
+    stages: dict[str, float],
+) -> PlateScanExecutionResult:
+    """Delegate to execute_plate_scan with parsed request parameters."""
+    return execute_plate_scan(
+        image_file=image_file,
+        stages=stages,
+        recognizer=get_plate_recognizer(),
+        lookup_func=vehicle_lookup_func,
+        preview=parse_preview_flag(request.data.get("preview")),  # type: ignore[union-attr]
+        gate_id=parse_gate_id(request.data.get("gate_id")),  # type: ignore[union-attr]
+    )
 
 
 class PlateScanView(APIView):
@@ -183,10 +265,21 @@ class PlateScanView(APIView):
                 value={
                     "image": "camera_front_plate.jpg",
                     "gate_id": 1,
+                    "preview": "false",
                 },
                 request_only=True,
                 media_type="multipart/form-data",
-            )
+            ),
+            OpenApiExample(
+                "Quét xem trước không lưu ảnh (preview=true)",
+                value={
+                    "image": "camera_frame_preview.jpg",
+                    "gate_id": 1,
+                    "preview": "true",
+                },
+                request_only=True,
+                media_type="multipart/form-data",
+            ),
         ],
         responses={
             200: OpenApiResponse(
@@ -368,6 +461,69 @@ class PlateScanView(APIView):
                             "suggestions": ["50Z-1630", "50Z-1631"],
                         },
                     ),
+                    OpenApiExample(
+                        "Quét xem trước (preview=true, image_url là null)",
+                        value={
+                            "plate_raw": "51K-992.14",
+                            "plate_final": "51K99214",
+                            "candidates": [
+                                {
+                                    "plate_text": "51K-992.14",
+                                    "plate_normalized": "51K99214",
+                                    "confidence": 98.50,
+                                    "char_confidences": [
+                                        99.1,
+                                        98.8,
+                                        99.5,
+                                        97.9,
+                                        98.4,
+                                        98.0,
+                                        99.2,
+                                        98.7,
+                                    ],
+                                    "min_char_confidence": 97.90,
+                                    "bounding_box": {
+                                        "x1": 120,
+                                        "y1": 340,
+                                        "x2": 450,
+                                        "y2": 440,
+                                    },
+                                }
+                            ],
+                            "best_candidate": {
+                                "plate_text": "51K-992.14",
+                                "plate_normalized": "51K99214",
+                                "confidence": 98.50,
+                                "char_confidences": [
+                                    99.1,
+                                    98.8,
+                                    99.5,
+                                    97.9,
+                                    98.4,
+                                    98.0,
+                                    99.2,
+                                    98.7,
+                                ],
+                                "min_char_confidence": 97.90,
+                                "bounding_box": {
+                                    "x1": 120,
+                                    "y1": 340,
+                                    "x2": 450,
+                                    "y2": 440,
+                                },
+                            },
+                            "image_url": None,
+                            "vehicle_lookup": None,
+                            "is_blacklisted": False,
+                            "open_session": None,
+                            "engine_name": "dual_ensemble",
+                            "latency_ms": 42.0,
+                            "review_status": "AUTO",
+                            "review_reasons": [],
+                            "corrections": [],
+                            "suggestions": [],
+                        },
+                    ),
                 ],
             ),
             400: OpenApiResponse(
@@ -388,6 +544,18 @@ class PlateScanView(APIView):
                             "code": "PROP-4.5.1-P04",
                             "message": "Định dạng tệp hình ảnh không được hỗ trợ.",
                             "details": {},
+                        },
+                    ),
+                    OpenApiExample(
+                        "Giá trị preview không hợp lệ",
+                        value={
+                            "code": "PROP-GEN-P01",
+                            "message": "Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu",
+                            "details": {
+                                "preview": [
+                                    "Dữ liệu không hợp lệ, xin mời nhập lại dữ liệu"
+                                ]
+                            },
                         },
                     ),
                 ],
@@ -455,26 +623,13 @@ class PlateScanView(APIView):
         if not image_file:
             raise BusinessAPIException(
                 code="PROP-4.5.1-P02",
-                message=ALL_MESSAGES.get(
-                    "PROP-4.5.1-P02",
-                    "Tệp hình ảnh biển số xe không được để trống.",
-                ),
+                message=ALL_MESSAGES["PROP-4.5.1-P02"],
                 status_code=status.HTTP_400_BAD_REQUEST,
             )
 
         stages: dict[str, float] = getattr(request, "_obs_stages", {})
-        result = execute_plate_scan(
-            image_file=image_file,
-            stages=stages,
-            recognizer=get_plate_recognizer(),
-            lookup_func=vehicle_lookup_func,
-        )
-
-        set_observability_metadata(
-            request,
-            review_status=result.review_status,
-            review_reasons=result.review_reasons,
-            plate=result.plate_normalized,
-        )
-
+        result = _execute_scan_for_request(
+            request, image_file, stages
+        )  # execute_plate_scan
+        set_observability_metadata(request, result=result)
         return Response(result.payload, status=status.HTTP_200_OK)

@@ -73,7 +73,11 @@ Content-Type: application/json
 - **Request Format**: `multipart/form-data` (with `X-CSRFToken` header).
 - **Form Fields**:
   - `image` (required): Plate image file (JPEG, PNG, WebP; max size 5MB).
-  - `gate_id` (optional): ID of barrier gate submitting the scan.
+  - `gate_id` (optional, positive integer): ID of barrier gate submitting the scan. Forwarded to service execution and tracked in request observability logs (`_obs_gate_id`). Invalid values (non-numeric, <= 0) return HTTP 400 Bad Request with code `PROP-GEN-P01`.
+  - `preview` (optional, boolean string `"true"` or `"false"`, default: `false`):
+    - When `true`: Run image decode, OCR, position-aware corrections, review policy evaluation, and vehicle/session/blacklist lookups without uploading the image to Cloudinary; returns `"image_url": null`. Optimized for continuous camera auto-detection loops.
+    - When `false` or omitted: Authoritative scan mode, uploads image to Cloudinary and returns permanent HTTPS image URL.
+    - Note: Invalid values trigger HTTP 400 Bad Request with code `PROP-GEN-P01`.
 
 #### Example 1: Successful Automatic Approval (`review_status: "AUTO"`)
 
@@ -326,6 +330,124 @@ X-Request-ID: bb89b602b5694d7fb7c66f7158faf1ec
   "code": "PROP-4.5.1-P06",
   "message": "Không nhận diện được biển số xe từ hình ảnh đã cung cấp.",
   "details": {}
+}
+```
+
+#### Example 4: Continuous Camera Preview Scan (`preview: "true"`, `image_url: null`)
+
+Used by the laptop webcam continuous detection loop to obtain OCR recognition, review status, and vehicle lookup without persisting images to Cloudinary:
+
+```http
+POST /api/v1/parking/plate-scans/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]; sessionid=[MASKED]
+X-CSRFToken: [MASKED]
+Content-Type: multipart/form-data; boundary=----WebKitFormBoundary7MA4YWxkTrZu0gW
+
+[Multipart Form Data: image=frame_preview.jpg (image/jpeg), gate_id=1, preview="true"]
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+X-Request-ID: e12d8a901f4c478bb2f3e8b0918c4621
+
+{
+  "plate_raw": "43K-860.50",
+  "plate_final": "43K86050",
+  "candidates": [
+    {
+      "plate_text": "43K-860.50",
+      "plate_normalized": "43K86050",
+      "confidence": 98.5,
+      "char_confidences": [
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5,
+        98.5
+      ],
+      "min_char_confidence": 98.5,
+      "bounding_box": {
+        "x1": 50,
+        "y1": 50,
+        "x2": 350,
+        "y2": 150
+      }
+    }
+  ],
+  "best_candidate": {
+    "plate_text": "43K86050",
+    "plate_normalized": "43K86050",
+    "confidence": 98.5,
+    "char_confidences": [
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5,
+      98.5
+    ],
+    "min_char_confidence": 98.5,
+    "bounding_box": {
+      "x1": 50,
+      "y1": 50,
+      "x2": 350,
+      "y2": 150
+    }
+  },
+  "image_url": null,
+  "vehicle_lookup": {
+    "vehicle": {
+      "id": 1,
+      "code": "XE0001",
+      "license_plate": "43K-860.50",
+      "license_plate_norm": "43K86050",
+      "model_name": "Vios 1.5G",
+      "brand": "Toyota",
+      "color": "Trắng",
+      "vehicle_type": "Ô tô",
+      "vehicle_type_code": "CAR"
+    },
+    "customer": {
+      "id": 16,
+      "code": "KH0001",
+      "full_name": "Trịnh Xuân Trường",
+      "phone": "0868851325",
+      "is_anonymized": false
+    },
+    "parking_position": {
+      "slot_id": 1,
+      "slot_code": "A-01",
+      "zone_code": "A",
+      "floor_code": "B1",
+      "floor_name": "Tầng B1",
+      "display_text": "Tầng B1 - Zone A - A-01"
+    },
+    "active_ticket": {
+      "id": 1,
+      "code": "VT0001",
+      "ticket_type_name": "Vé tháng",
+      "price": "500000.00",
+      "effective_from": "2026-03-31T17:00:00+00:00",
+      "effective_to": "2026-11-30T17:00:00+00:00",
+      "status": "ACTIVE"
+    },
+    "open_session": null,
+    "is_blacklisted": false
+  },
+  "is_blacklisted": false,
+  "open_session": null,
+  "engine_name": "dummy",
+  "latency_ms": 1.0,
+  "review_status": "AUTO",
+  "review_reasons": [],
+  "corrections": [],
+  "suggestions": []
 }
 ```
 
@@ -624,12 +746,16 @@ When `review_status === "NEEDS_REVIEW"`:
 ### 8.6 Vehicle Check-Out (`POST /api/v1/parking/sessions/check-out/`)
 
 - **Purpose**: Conclude vehicle parking session at exit gate, automatically calculate parking fee (0 VND for `ACTIVE` monthly passes; otherwise calculated by hourly block: 10,000 VND/hour), and record payment record `payment`.
-- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Required Permission**: `EMPLOYEE` or `MANAGER` (fee waiver restricted to `MANAGER` only).
 - **Required Headers**: `X-CSRFToken`.
 - **Input Rules**:
   - Provide exactly **one of two criteria**: `session_code` OR `license_plate`.
   - Exit gate `exit_gate_id` must have attribute `direction="OUT"` (selecting an `IN` gate returns error `PROP-4.5.1-P12`).
-  - If transient parking fee is `> 0`, `payment_method` is mandatory (`CASH` or `VIETQR`).
+  - If transient parking fee is `> 0` and `waive_fee=false`, `payment_method` is mandatory (`CASH` or `VIETQR`).
+  - **Fee Waiver (`waive_fee=true`)** (TL-58, TL-59):
+    - Only `MANAGER` accounts are permitted. Calling as `EMPLOYEE` returns HTTP 403 `PROP-4.5.1-P18` (`"Chỉ Quản lý mới có quyền miễn cước phí đỗ xe."`).
+    - `waiver_reason` is mandatory and cannot be empty/whitespace. Empty reason returns HTTP 400 `PROP-4.5.1-P19` (`"Vui lòng cung cấp lý do miễn cước đặc cách."`).
+    - When waived: `fee_amount = 0.00`, `payment_method` is ignored, no `Payment` record is created. Audit note is appended to `session.notes` and immutable event is recorded in `ActivityLog` (`action="SESSION_CHECK_OUT_WAIVED"`).
 - **Live Stack Example (HTTP `200 OK`)**:
 
   ```http
@@ -686,6 +812,43 @@ When `review_status === "NEEDS_REVIEW"`:
       "paid_at": "2026-10-22T15:00:27.362731Z"
     },
     "vehicle_lookup": null
+  }
+  ```
+
+### 8.6b Vehicle Fee Preview (`GET /api/v1/parking/sessions/fee-preview/`)
+
+- **Purpose**: Real-time calculation of expected parking fee for an open session (`exit_time IS NULL`) before check-out confirmation (TL-57). Supports ExitLanePanel on both registered and unregistered vehicles.
+- **Required Permission**: `EMPLOYEE` or `MANAGER`.
+- **Query Parameters**:
+  - `license_plate`: string (optional, e.g. `51A-897.14`).
+  - `session_code`: string (optional, e.g. `#PK-20261017-037`).
+  - *Rule*: At least one parameter must be supplied. Missing both returns HTTP 400 `PROP-4.5.1-P11`.
+- **Error Codes**:
+  - `400 Bad Request` (`PROP-4.5.1-P11`): Missing both session identification criteria (`session_code` and `license_plate`).
+  - `404 Not Found` (`PROP-4.5.1-P06`): Open parking session matching criteria not found.
+- **Live Example (HTTP `200 OK`)**:
+
+  ```http
+  GET /api/v1/parking/sessions/fee-preview/?license_plate=51A-897.14 HTTP/1.1
+  Host: 127.0.0.1:8000
+  Accept: application/json
+  Cookie: csrftoken=[MASKED]; sessionid=[MASKED]
+
+  HTTP/1.1 200 OK
+  Content-Type: application/json
+
+  {
+    "session_id": 123,
+    "session_code": "#PK-20261106-001",
+    "license_plate": "51A-897.14",
+    "entry_time": "2026-11-06T08:00:00Z",
+    "duration_minutes": 65,
+    "duration_text": "1 giờ 5 phút",
+    "fee_amount": 20000.0,
+    "has_active_ticket": false,
+    "ticket_code": null,
+    "is_exempt": false,
+    "hourly_rate": 10000.0
   }
   ```
 

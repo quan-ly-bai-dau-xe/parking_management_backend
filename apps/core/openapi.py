@@ -30,6 +30,12 @@ def postprocess_schema_descriptions(
     csrf_only_operations = {
         ("post", "/api/v1/auth/login/"),
         ("post", "/api/v1/auth/logout/"),
+        ("post", "/api/v1/auth/forgot-password/"),
+        ("post", "/api/v1/auth/reset-password/"),
+        ("post", "/api/v1/auth/forgot-password/sms/"),
+        ("post", "/api/v1/auth/reset-password/sms/"),
+        ("post", "/api/v1/auth/register/sms/request/"),
+        ("post", "/api/v1/auth/register/sms/confirm/"),
     }
 
     # 3. Enforce per-operation security requirements across all paths

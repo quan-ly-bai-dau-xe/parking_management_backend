@@ -77,7 +77,7 @@ def test_selector_invalid_status_and_ticket_state_ignored():
     qs = get_vehicles_queryset(
         status_filter="UNKNOWN_STATUS", ticket_state="UNKNOWN_STATE"
     )
-    assert qs.count() == 30
+    assert qs.count() == 31
 
 
 def test_selector_invalid_ordering_fallback():
@@ -422,7 +422,7 @@ def test_view_list_unpaginated_fallback(auth_employee):
     response = view(request)
     assert response.status_code == status.HTTP_200_OK
     assert isinstance(response.data, list)
-    assert len(response.data) == 30
+    assert len(response.data) == 31
 
 
 # ---------------------------------------------------------------------------

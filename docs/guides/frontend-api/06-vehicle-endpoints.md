@@ -41,7 +41,7 @@ The Vehicle Management module (`apps/vehicles`) powers the `Quản lý xe` admin
     - `expired`: `effective_to < now()` (Badge `"Đã hết hạn"`, excluding `CANCELLED`).
     - `none`: Vehicle has no subscription ticket or only cancelled tickets.
 - **KPI Metrics Definition**:
-  - `total_vehicles`: Total non-deleted vehicles registered in the system (30 on baseline seed).
+  - `total_vehicles`: Total non-deleted vehicles registered in the system (31 on baseline seed).
   - `active_vehicles`: Vehicles currently parked in lot (`exit_time IS NULL`) OR holding a valid/expiring soon subscription ticket (`rep_ticket_state IN ('valid', 'expiring_soon')`). Total is 15 on baseline seed.
   - `expiring_soon_tickets`: Vehicles holding a representative ticket expiring within 7 days (`TICKET_EXPIRING_SOON_DAYS = 7`, 0 on baseline seed).
   - `expired_tickets`: Vehicles holding an expired representative ticket (12 on baseline seed; excluding CANCELLED tickets VT0023, VT0024, VT0025).
@@ -64,7 +64,7 @@ The Vehicle Management module (`apps/vehicles`) powers the `Quản lý xe` admin
   Content-Type: application/json
 
   {
-    "total_vehicles": 30,
+    "total_vehicles": 31,
     "active_vehicles": 15,
     "expiring_soon_tickets": 0,
     "expired_tickets": 12
@@ -108,8 +108,8 @@ The Vehicle Management module (`apps/vehicles`) powers the `Quản lý xe` admin
   Content-Type: application/json
 
   {
-    "count": 30,
-    "total_pages": 15,
+    "count": 31,
+    "total_pages": 16,
     "current_page": 1,
     "page_size": 2,
     "next": "http://127.0.0.1:8000/api/v1/vehicles/?page=2&page_size=2",

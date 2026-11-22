@@ -172,3 +172,46 @@ export interface paths {
 4. The full API catalog and request/response examples will synchronize automatically into Postman.
 
 ---
+
+## 14. Dashboard & Analytics Endpoints (`Trang chủ & Thống kê KPI`)
+
+Access to Dashboard endpoints requires authentication (`IsAuthenticated`) and staff permissions (`IsEmployeeOrManager`). `CUSTOMER` role returns `403 Forbidden` (`MSG-4.2-M01`). Anonymous calls return `401 Unauthorized` (`MSG-4.1-M02`). Financial revenue data is strictly restricted to `MANAGER` only (`null` for `EMPLOYEE` per Rule 01 § 2).
+
+| Method | Endpoint | Access | Purpose |
+|---|---|---|---|
+| `GET` | `/api/v1/dashboard/` | `EMPLOYEE`, `MANAGER` | Full dashboard overview — returns `kpis`, `floors`, `traffic_chart`, `alerts`, `recent_activities` in a single call. |
+| `GET` | `/api/v1/dashboard/kpis/` | `EMPLOYEE`, `MANAGER` | Four KPI groups: slot occupancy, traffic, revenue (MANAGER only), and AI recognition rate. |
+| `GET` | `/api/v1/dashboard/floors/` | `EMPLOYEE`, `MANAGER` | Occupancy percentage bars per floor (B1, B2, B3) per TL-28.6. |
+| `GET` | `/api/v1/dashboard/traffic/` | `EMPLOYEE`, `MANAGER` | Hourly vehicle entry/exit counts for the last 24 hours (ascending order). |
+| `GET` | `/api/v1/dashboard/alerts/` | `EMPLOYEE`, `MANAGER` | Up to 10 system alerts — unresolved alerts first (TL-13). Accepts optional `limit` query param. |
+| `GET` | `/api/v1/dashboard/activities/` | `EMPLOYEE`, `MANAGER` | Up to 10 most recent vehicle entry/exit log events for the live activity feed. Accepts optional `limit` query param. |
+
+### 14.1 Dashboard Overview (`GET /api/v1/dashboard/`)
+
+```http
+GET /api/v1/dashboard/ HTTP/1.1
+Host: 127.0.0.1:8000
+Accept: application/json
+Cookie: csrftoken=[MASKED]; sessionid=[MASKED]
+
+HTTP/1.1 200 OK
+Content-Type: application/json
+
+{
+  "kpis": {},
+  "floors": [],
+  "traffic_chart": [],
+  "alerts": [],
+  "recent_activities": []
+}
+```
+
+### 14.2 Detailed Dashboard Endpoints
+
+- **KPI Cards (`GET /api/v1/dashboard/kpis/`)**: Returns slot occupancy, 24h traffic, financial revenue (Manager only), and AI recognition statistics.
+- **Floor Occupancy (`GET /api/v1/dashboard/floors/`)**: Returns formatted occupancy percentage bars per parking floor (B1, B2, B3).
+- **Traffic Trend (`GET /api/v1/dashboard/traffic/`)**: Returns 24-hour vehicle traffic counts aggregated hourly.
+- **System Alerts (`GET /api/v1/dashboard/alerts/`)**: Returns prioritized system alerts (CRITICAL > WARNING > INFO).
+- **Recent Activity Feed (`GET /api/v1/dashboard/activities/`)**: Returns live vehicle entry and exit stream.
+
+---
