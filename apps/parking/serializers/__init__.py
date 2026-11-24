@@ -25,6 +25,11 @@ from apps.parking.serializers.sessions import (
     PaymentSummarySerializer,
     SessionDetailSerializer,
     SessionListItemSerializer,
+    SessionUpdateSerializer,
+)
+from apps.parking.serializers.slots import (
+    ParkingSlotSerializer,
+    ParkingSlotUpdateSerializer,
 )
 
 __all__ = [
@@ -38,12 +43,15 @@ __all__ = [
     "OpenSessionSummarySerializer",
     "ParkingGateSerializer",
     "ParkingPositionSerializer",
+    "ParkingSlotSerializer",
+    "ParkingSlotUpdateSerializer",
     "PaymentSummarySerializer",
     "PlateCandidateSerializer",
     "PlateScanRequestSerializer",
     "PlateScanResponseSerializer",
     "SessionDetailSerializer",
     "SessionListItemSerializer",
+    "SessionUpdateSerializer",
     "VehicleDetailSerializer",
     "VehicleLookupResponseSerializer",
 ]

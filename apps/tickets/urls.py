@@ -1,7 +1,26 @@
 """
 URL configuration for tickets app.
+Routes:
+- api/v1/tickets/types/
+- api/v1/tickets/
+- api/v1/tickets/<int:id>/
+- api/v1/tickets/<int:id>/renew/
 """
 
-urlpatterns: list = [
-    # API endpoints will be added here as views are implemented
+from django.urls import path
+
+from apps.tickets.views import (
+    TicketDetailView,
+    TicketListCreateView,
+    TicketRenewView,
+    TicketTypeListView,
+)
+
+app_name = "tickets"
+
+urlpatterns = [
+    path("tickets/types/", TicketTypeListView.as_view(), name="ticket-types-list"),
+    path("tickets/", TicketListCreateView.as_view(), name="tickets-list-create"),
+    path("tickets/<int:id>/", TicketDetailView.as_view(), name="tickets-detail"),
+    path("tickets/<int:id>/renew/", TicketRenewView.as_view(), name="tickets-renew"),
 ]

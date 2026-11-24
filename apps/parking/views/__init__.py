@@ -12,6 +12,7 @@ from apps.parking.views.sessions import (
     SessionDetailView,
     SessionListView,
 )
+from apps.parking.views.slots import SlotDetailUpdateView, SlotListView
 from apps.parking.views.structure import ParkingStructureView
 
 __all__ = [
@@ -22,6 +23,8 @@ __all__ = [
     "PlateScanView",
     "SessionDetailView",
     "SessionListView",
+    "SlotDetailUpdateView",
+    "SlotListView",
     "VehicleLookupView",
     "VehicleSearchView",
 ]

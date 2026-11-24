@@ -9,9 +9,12 @@ from apps.parking.views import (
     CheckInView,
     CheckOutView,
     GateListView,
+    ParkingStructureView,
     PlateScanView,
     SessionDetailView,
     SessionListView,
+    SlotDetailUpdateView,
+    SlotListView,
     VehicleLookupView,
     VehicleSearchView,
 )
@@ -20,6 +23,11 @@ from apps.parking.views.sessions import FeePreviewView
 app_name = "parking"
 
 urlpatterns = [
+    # 0. Sơ đồ bãi xe (Mục 4.5.2)
+    path("structure/", ParkingStructureView.as_view(), name="parking-structure"),
+    # 0b. Quản lý ô đỗ xe (Danh sách và chi tiết/cập nhật trạng thái)
+    path("slots/", SlotListView.as_view(), name="slots-list"),
+    path("slots/<int:pk>/", SlotDetailUpdateView.as_view(), name="slots-detail"),
     # 1. Quét biển số xe từ hình ảnh OCR
     path("plate-scans/", PlateScanView.as_view(), name="plate-scans"),
     # 2. Tra cứu phương tiện chính xác theo biển số đã chuẩn hóa

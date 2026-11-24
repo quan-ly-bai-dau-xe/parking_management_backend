@@ -534,3 +534,22 @@ class ParkingSessionFilterSerializer(serializers.Serializer):
             raise serializers.ValidationError(errors)
 
         return attrs
+
+
+class SessionUpdateSerializer(serializers.Serializer):
+    """
+    Serializer cập nhật thông tin phiên đỗ xe (gán/đổi vị trí đỗ, ghi chú).
+    """
+
+    slot_id = serializers.IntegerField(
+        required=False,
+        allow_null=True,
+        help_text="ID vị trí ô đỗ xe mới",
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_null=True,
+        allow_blank=True,
+        help_text="Ghi chú phiên đỗ",
+    )
+

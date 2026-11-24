@@ -23,6 +23,7 @@ from apps.core.messages import ALL_MESSAGES
 from apps.core.pagination import StandardResultsSetPagination
 from apps.core.permissions import IsEmployeeOrManager
 from apps.core.serializers import ErrorEnvelopeSerializer
+from apps.parking.models import ParkingSlot, VehicleEntryExitLog
 from apps.parking.selectors.sessions import (
     get_session_by_id,
     list_sessions,
@@ -37,6 +38,7 @@ from apps.parking.serializers.sessions import (
     PaymentSummarySerializer,
     SessionDetailSerializer,
     SessionListItemSerializer,
+    SessionUpdateSerializer,
 )
 from apps.parking.services.check_in import check_in_vehicle
 from apps.parking.services.check_out import check_out_vehicle
@@ -873,3 +875,72 @@ class SessionDetailView(APIView):
 
         serializer = SessionDetailSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        operation_id="parking_session_patch",
+        tags=["Parking"],
+        summary="Cập nhật phiên đỗ xe (gán vị trí ô đỗ, ghi chú)",
+        description="Cập nhật ô đỗ xe (slot_id) hoặc ghi chú cho một phiên đỗ xe.",
+        request=SessionUpdateSerializer,
+        responses={200: SessionDetailSerializer},
+    )
+    def patch(self, request: Request, pk: int) -> Response:
+        session = VehicleEntryExitLog.objects.filter(id=pk).first()
+        if not session:
+            raise BusinessAPIException(
+                code="MSG-4.4.1-M01",
+                message=ALL_MESSAGES.get("MSG-4.4.1-M01", "Không tìm thấy dữ liệu"),
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = SessionUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+
+        old_slot = session.slot
+
+        if "slot_id" in validated_data:
+            slot_id = validated_data["slot_id"]
+            if slot_id is not None:
+                new_slot = ParkingSlot.objects.filter(id=slot_id, deleted_at__isnull=True).first()
+                if not new_slot:
+                    raise BusinessAPIException(
+                        code="MSG-4.4.1-M01",
+                        message="Vị trí ô đỗ xe không tồn tại hoặc đã bị xóa.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                session.slot = new_slot
+            else:
+                session.slot = None
+
+        if "notes" in validated_data:
+            session.notes = validated_data["notes"]
+
+        update_fields = []
+        if "slot_id" in validated_data:
+            update_fields.append("slot")
+        if "notes" in validated_data:
+            update_fields.append("notes")
+
+        if update_fields:
+            session.save(update_fields=update_fields)
+
+        # Sau khi session đã liên kết slot và lưu vào DB, trigger DB hoặc logic cập nhật slot status
+        if "slot_id" in validated_data:
+            if session.slot and session.exit_time is None:
+                if session.slot.status != "OCCUPIED":
+                    session.slot.status = "OCCUPIED"
+                    session.slot.save(update_fields=["status"])
+
+            # Nếu đổi từ ô cũ sang ô mới, giải phóng ô cũ nếu không còn phiên nào khác
+            if old_slot and (slot_id is None or old_slot.id != slot_id):
+                other_active = VehicleEntryExitLog.objects.filter(
+                    slot=old_slot, exit_time__isnull=True
+                ).exclude(id=session.id).exists()
+                if not other_active and old_slot.status == "OCCUPIED":
+                    old_slot.status = "AVAILABLE"
+                    old_slot.save(update_fields=["status"])
+
+        updated_session = get_session_by_id(pk)
+        return Response(SessionDetailSerializer(updated_session).data, status=status.HTTP_200_OK)
+

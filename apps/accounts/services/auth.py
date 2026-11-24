@@ -2,6 +2,8 @@
 Authentication services for accounts app per ADR-0004, Schema v2, and TL-01.
 """
 
+from __future__ import annotations
+
 import hashlib
 import re
 import secrets
