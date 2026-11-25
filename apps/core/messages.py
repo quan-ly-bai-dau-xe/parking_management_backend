@@ -168,6 +168,22 @@ PROPOSAL_MESSAGES = {
     "PROP-PAY-SETTLED-IMMUTABLE": "Không thể chỉnh sửa thông tin tài chính hoặc liên kết của chứng từ thanh toán đã hoàn thành (PAID) hoặc đã hoàn tiền (REFUNDED).",
     "PROP-PAY-STATUS-TRANSITION": "Chuyển đổi trạng thái thanh toán không hợp lệ.",
     "PROP-SLOT-VEHICLE-TYPE-MISMATCH": "Loại phương tiện không tương thích với danh sách loại xe cho phép của vị trí đỗ này.",
+    # WP3 Customer Wallet & Self-Service [PROPOSAL] messages (TL-98 - TL-102)
+    "PROP-WALLET-INSUFFICIENT": "Số dư ví không đủ để thực hiện giao dịch.",
+    "PROP-WALLET-LOCKED": "Ví khách hàng hiện đang bị khóa hoặc đã đóng, không thể giao dịch.",
+    "PROP-WALLET-IDEMPOTENCY-CONFLICT": "Khóa giao dịch (idempotency_key) đã được sử dụng với nội dung khác.",
+    "PROP-WALLET-SIMULATED-DISABLED": "Tính năng nạp tiền VietQR giả lập hiện đang tắt.",
+    "PROP-WALLET-DUPLICATE-ACTIVE-TICKET": "Phương tiện đã có vé đang hiệu lực trong khoảng thời gian này.",
+    "PROP-WALLET-DELETE-NONZERO": "Ví khách hàng còn số dư lớn hơn 0, không được phép xóa.",
+    "PROP-WALLET-NOT-FOUND": "Không tìm thấy ví của khách hàng.",
+    "PROP-4.6.4-P06": "Vé đã thanh toán không được phép tự hủy trực tuyến; vui lòng liên hệ nhân viên quầy để được hỗ trợ.",
+    "PROP-4.6.4-P07": "Vé đã được hủy trước đó.",
+    "PROP-4.6.4-P08": "Vé đã hết hạn, không thể hủy.",
+    "PROP-CUSTOMER-INACTIVE": "Tài khoản khách hàng đang bị tạm ngưng hoặc thuộc danh sách đen, không thể thực hiện thao tác này.",
+    # WP6 VNPAY Sandbox Wallet Top-Up [PROPOSAL] messages (TL-104)
+    "PROP-VNPAY-DISABLED": "Cổng thanh toán VNPAY hiện chưa được cấu hình hoặc tạm ngừng hoạt động.",
+    "PROP-VNPAY-AMOUNT-RANGE": "Số tiền nạp qua VNPAY phải là số nguyên VND nằm trong giới hạn cho phép.",
+    "PROP-VNPAY-RATE-LIMITED": "Bạn thao tác tạo yêu cầu nạp tiền VNPAY quá nhanh, vui lòng thử lại sau.",
 }
 
 ALL_MESSAGES = {**SRS_MESSAGES, **PROPOSAL_MESSAGES}

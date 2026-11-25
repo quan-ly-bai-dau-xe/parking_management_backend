@@ -10,6 +10,7 @@ from apps.reports.views.dashboard import (
     DashboardOverviewView,
     DashboardTrafficChartView,
 )
+from apps.reports.views.statistics import StatisticsSummaryView
 
 __all__ = [
     "DashboardOverviewView",
@@ -18,4 +19,5 @@ __all__ = [
     "DashboardTrafficChartView",
     "DashboardAlertsView",
     "DashboardActivityFeedView",
+    "StatisticsSummaryView",
 ]

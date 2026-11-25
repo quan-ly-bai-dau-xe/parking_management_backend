@@ -1446,7 +1446,7 @@ CREATE TABLE payment (
         REFERENCES account (id) ON DELETE RESTRICT,
     CONSTRAINT ck_payment_code_nonempty CHECK (btrim(code) <> ''),
     CONSTRAINT ck_payment_amount_nonnegative CHECK (amount >= 0),
-    CONSTRAINT ck_payment_method_enum CHECK (method IN ('CASH', 'VIETQR')),
+    CONSTRAINT ck_payment_method_enum CHECK (method IN ('CASH', 'VIETQR', 'WALLET')),
     CONSTRAINT ck_payment_status_enum CHECK (
         status IN ('UNPAID', 'PAID', 'CANCELLED', 'REFUNDED')
     ),
@@ -1472,11 +1472,11 @@ CREATE INDEX idx_payment_renewal_id ON payment (renewal_id) WHERE deleted_at IS 
 CREATE INDEX idx_payment_paid_at_method ON payment (paid_at, method) WHERE deleted_at IS NULL AND status = 'PAID';
 CREATE INDEX idx_payment_revenue_today ON payment ((COALESCE(paid_at, created_at))) WHERE deleted_at IS NULL AND status = 'PAID';
 
-COMMENT ON TABLE payment IS 'Unified financial payment transactions supporting CASH and VIETQR methods and targeting exactly one session, ticket, or ticket_renewal (Trang chủ, Main Page, Quản lý vé, Lịch sử ra/vào, TL-07).';
+COMMENT ON TABLE payment IS 'Unified financial payment transactions supporting CASH, VIETQR, and WALLET methods and targeting exactly one session, ticket, or ticket_renewal (Trang chủ, Main Page, Quản lý vé, Lịch sử ra/vào, TL-07, ADR-0012).';
 COMMENT ON COLUMN payment.id IS 'Primary key identifier of the payment record.';
 COMMENT ON COLUMN payment.code IS 'Unique payment transaction code among active records.';
 COMMENT ON COLUMN payment.amount IS 'Payment amount in VND (NUMERIC(12,2), must be >= 0).';
-COMMENT ON COLUMN payment.method IS 'Payment method: CASH ("Tiền mặt") or VIETQR ("QR" / "VietQR") (TL-07).';
+COMMENT ON COLUMN payment.method IS 'Payment method: CASH ("Tiền mặt"), VIETQR ("QR" / "VietQR"), or WALLET ("Ví khách hàng") (TL-07, ADR-0012).';
 COMMENT ON COLUMN payment.status IS 'Payment lifecycle status: UNPAID, PAID, CANCELLED, or REFUNDED (TL-07, OQ-81).';
 COMMENT ON COLUMN payment.paid_at IS 'Timestamp when payment was settled; NULL while UNPAID.';
 COMMENT ON COLUMN payment.received_by IS 'Optional foreign key referencing cashier/operator employee.';
@@ -1490,6 +1490,127 @@ COMMENT ON COLUMN payment.created_at IS 'Record creation timestamp.';
 COMMENT ON COLUMN payment.updated_at IS 'Record last update timestamp.';
 COMMENT ON COLUMN payment.deleted_at IS 'Soft deletion timestamp (ADR-0003).';
 COMMENT ON COLUMN payment.deleted_by IS 'Account that performed soft deletion.';
+
+-- -----------------------------------------------------------------------------
+-- 6.4. Table: wallet
+-- Source: ADR-0012 (Customer Prepaid Wallet), WP3, TL-98
+-- -----------------------------------------------------------------------------
+CREATE TABLE wallet (
+    id BIGSERIAL,
+    customer_id BIGINT NOT NULL,
+    balance NUMERIC(14, 2) NOT NULL DEFAULT 0.00,
+    currency VARCHAR(3) NOT NULL DEFAULT 'VND',
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    row_version INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ NULL,
+    deleted_by BIGINT NULL,
+    CONSTRAINT pk_wallet PRIMARY KEY (id),
+    CONSTRAINT fk_wallet_customer FOREIGN KEY (customer_id)
+        REFERENCES customer (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_wallet_deleted_by FOREIGN KEY (deleted_by)
+        REFERENCES account (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_wallet_balance_nonnegative CHECK (balance >= 0),
+    CONSTRAINT ck_wallet_currency_enum CHECK (currency IN ('VND')),
+    CONSTRAINT ck_wallet_status_enum CHECK (status IN ('ACTIVE', 'LOCKED', 'CLOSED')),
+    CONSTRAINT ck_wallet_row_version_positive CHECK (row_version >= 1),
+    CONSTRAINT ck_wallet_soft_delete_pair CHECK (
+        (deleted_at IS NULL AND deleted_by IS NULL) OR (deleted_at IS NOT NULL)
+    )
+);
+
+CREATE UNIQUE INDEX uq_wallet_customer_active
+    ON wallet (customer_id)
+    WHERE deleted_at IS NULL;
+
+CREATE INDEX idx_wallet_status_active
+    ON wallet (status)
+    WHERE deleted_at IS NULL;
+
+COMMENT ON TABLE wallet IS 'Customer prepaid electronic wallet storing non-negative VND balance with OCC row_version and soft-delete lifecycle (ADR-0012, TL-98).';
+COMMENT ON COLUMN wallet.id IS 'Primary key identifier of the customer wallet.';
+COMMENT ON COLUMN wallet.customer_id IS 'Foreign key referencing owning customer (1:1 among active records via uq_wallet_customer_active, ON DELETE RESTRICT).';
+COMMENT ON COLUMN wallet.balance IS 'Current available wallet balance in VND (NUMERIC(14,2), must be >= 0).';
+COMMENT ON COLUMN wallet.currency IS 'ISO currency code of the wallet (default VND).';
+COMMENT ON COLUMN wallet.status IS 'Wallet operational status: ACTIVE, LOCKED, or CLOSED.';
+COMMENT ON COLUMN wallet.row_version IS 'Optimistic concurrency control version counter incremented automatically on update.';
+COMMENT ON COLUMN wallet.created_at IS 'Record creation timestamp (TIMESTAMPTZ).';
+COMMENT ON COLUMN wallet.updated_at IS 'Record last modification timestamp (TIMESTAMPTZ).';
+COMMENT ON COLUMN wallet.deleted_at IS 'Soft deletion timestamp; NULL indicates active record (ADR-0003).';
+COMMENT ON COLUMN wallet.deleted_by IS 'Foreign key referencing the account that performed soft deletion (ADR-0003).';
+
+-- -----------------------------------------------------------------------------
+-- 6.5. Table: wallet_transaction
+-- Source: ADR-0012 (Append-Only Wallet Ledger), WP3, TL-98
+-- -----------------------------------------------------------------------------
+CREATE TABLE wallet_transaction (
+    id BIGSERIAL,
+    wallet_id BIGINT NOT NULL,
+    amount NUMERIC(14, 2) NOT NULL,
+    balance_after NUMERIC(14, 2) NOT NULL,
+    transaction_type VARCHAR(10) NOT NULL,
+    kind VARCHAR(30) NOT NULL,
+    idempotency_key VARCHAR(100) NOT NULL,
+    reference_type VARCHAR(50) NULL,
+    reference_id BIGINT NULL,
+    note TEXT NULL,
+    created_by_id BIGINT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT pk_wallet_transaction PRIMARY KEY (id),
+    CONSTRAINT uq_wallet_tx_idempotency_key UNIQUE (idempotency_key),
+    CONSTRAINT fk_wallet_tx_wallet FOREIGN KEY (wallet_id)
+        REFERENCES wallet (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_wallet_tx_created_by FOREIGN KEY (created_by_id)
+        REFERENCES account (id) ON DELETE RESTRICT,
+    CONSTRAINT ck_wallet_tx_amount_nonzero CHECK (amount <> 0),
+    CONSTRAINT ck_wallet_tx_balance_after_nonnegative CHECK (balance_after >= 0),
+    CONSTRAINT ck_wallet_tx_type_enum CHECK (transaction_type IN ('CREDIT', 'DEBIT')),
+    CONSTRAINT ck_wallet_tx_type_amount_sign CHECK (
+        (transaction_type = 'CREDIT' AND amount > 0)
+        OR (transaction_type = 'DEBIT' AND amount < 0)
+    ),
+    CONSTRAINT ck_wallet_tx_kind_enum CHECK (
+        kind IN (
+            'TOPUP_CASH',
+            'TOPUP_VIETQR',
+            'TOPUP_VNPAY',
+            'TICKET_PURCHASE',
+            'TICKET_RENEWAL',
+            'PARKING_FEE',
+            'REFUND',
+            'ADJUSTMENT'
+        )
+    ),
+    CONSTRAINT ck_wallet_tx_idempotency_nonempty CHECK (btrim(idempotency_key) <> ''),
+    CONSTRAINT ck_wallet_tx_reference_type_nonempty CHECK (
+        reference_type IS NULL OR btrim(reference_type) <> ''
+    )
+);
+
+CREATE INDEX idx_wallet_tx_wallet_created
+    ON wallet_transaction (wallet_id, created_at DESC, id DESC);
+
+CREATE INDEX idx_wallet_tx_reference
+    ON wallet_transaction (reference_type, reference_id)
+    WHERE reference_type IS NOT NULL;
+
+CREATE INDEX idx_wallet_tx_kind_created
+    ON wallet_transaction (kind, created_at DESC);
+
+COMMENT ON TABLE wallet_transaction IS 'Strictly append-only financial ledger recording every wallet credit and debit with idempotency key and post-transaction balance snapshot (ADR-0012, TL-98).';
+COMMENT ON COLUMN wallet_transaction.id IS 'Primary key identifier of the wallet ledger entry.';
+COMMENT ON COLUMN wallet_transaction.wallet_id IS 'Foreign key referencing parent wallet (ON DELETE RESTRICT).';
+COMMENT ON COLUMN wallet_transaction.amount IS 'Signed transaction amount in VND (NUMERIC(14,2); positive for CREDIT, negative for DEBIT, never 0).';
+COMMENT ON COLUMN wallet_transaction.balance_after IS 'Wallet balance immediately after this transaction (NUMERIC(14,2), must be >= 0).';
+COMMENT ON COLUMN wallet_transaction.transaction_type IS 'Ledger entry direction: CREDIT or DEBIT.';
+COMMENT ON COLUMN wallet_transaction.kind IS 'Business classification: TOPUP_CASH, TOPUP_VIETQR, TOPUP_VNPAY, TICKET_PURCHASE, TICKET_RENEWAL, PARKING_FEE, REFUND, or ADJUSTMENT.';
+COMMENT ON COLUMN wallet_transaction.idempotency_key IS 'Globally unique idempotency key preventing duplicate ledger mutations on retries.';
+COMMENT ON COLUMN wallet_transaction.reference_type IS 'Optional domain entity type linked to this ledger entry (e.g., PAYMENT, TICKET, TICKET_RENEWAL, VEHICLE_SESSION).';
+COMMENT ON COLUMN wallet_transaction.reference_id IS 'Optional primary key of the referenced domain entity.';
+COMMENT ON COLUMN wallet_transaction.note IS 'Optional human-readable description or staff/system note for the transaction.';
+COMMENT ON COLUMN wallet_transaction.created_by_id IS 'Optional foreign key referencing the acting account; NULL for automated system operations.';
+COMMENT ON COLUMN wallet_transaction.created_at IS 'Immutable ledger entry creation timestamp (TIMESTAMPTZ).';
 
 -- =============================================================================
 -- SECTION 7: ACTIVITY FEED, ALERTS, NEWS & NOTIFICATIONS (TL-12, TL-13, TL-15)
@@ -1773,6 +1894,10 @@ CREATE TRIGGER trg_payment_row_version
 
 CREATE TRIGGER trg_news_row_version
     BEFORE UPDATE ON news
+    FOR EACH ROW EXECUTE FUNCTION fn_update_row_version_and_timestamp();
+
+CREATE TRIGGER trg_wallet_row_version
+    BEFORE UPDATE ON wallet
     FOR EACH ROW EXECUTE FUNCTION fn_update_row_version_and_timestamp();
 
 -- -----------------------------------------------------------------------------
@@ -2415,6 +2540,10 @@ CREATE TRIGGER trg_guard_ward_immutable
     BEFORE DELETE ON administrative_ward
     FOR EACH ROW EXECUTE FUNCTION fn_guard_hard_immutable_table();
 
+CREATE TRIGGER trg_guard_wallet_immutable
+    BEFORE DELETE ON wallet
+    FOR EACH ROW EXECUTE FUNCTION fn_guard_hard_immutable_table();
+
 -- -----------------------------------------------------------------------------
 -- 8.12. Trigger Function: fn_guard_slot_allowed_vehicle_type_delete()
 -- Blocks removing an allowed vehicle type from a slot while active tickets,
@@ -2636,6 +2765,7 @@ DECLARE
     ];
     v_forbidden_tables VARCHAR[] := ARRAY[
         'ticket', 'ticket_renewal', 'payment', 'vehicle_entry_exit_log', 'activity_log', 'system_alert',
+        'wallet', 'wallet_transaction',
         'administrative_province', 'administrative_district', 'administrative_ward'
     ];
     v_tbl VARCHAR;
@@ -3135,6 +3265,14 @@ BEGIN
                     USING ERRCODE = 'check_violation',
                           HINT = 'Cannot soft delete payment with status PAID or REFUNDED (PROP-DEL-PAYMENT-SETTLED, TL-39).';
             END IF;
+
+        -- 13. wallet guard (ADR-0012, TL-98)
+        ELSIF TG_TABLE_NAME = 'wallet' THEN
+            IF OLD.balance > 0 THEN
+                RAISE EXCEPTION 'Ví khách hàng còn số dư lớn hơn 0, không được phép xóa.'
+                    USING ERRCODE = 'check_violation',
+                          HINT = 'Wallet with positive balance cannot be soft-deleted (PROP-WALLET-DELETE-NONZERO, ADR-0012).';
+            END IF;
         END IF;
 
         RETURN NEW;
@@ -3336,6 +3474,16 @@ BEGIN
                         USING ERRCODE = 'check_violation';
                 END IF;
             END IF;
+
+        -- 13. wallet restore: owning customer must be active (ADR-0012)
+        ELSIF TG_TABLE_NAME = 'wallet' THEN
+            SELECT deleted_at INTO v_parent_deleted
+            FROM customer WHERE id = NEW.customer_id;
+            IF v_parent_deleted IS NOT NULL THEN
+                RAISE EXCEPTION 'Không thể khôi phục ví khi khách hàng sở hữu đang bị xóa.'
+                    USING ERRCODE = 'check_violation',
+                          HINT = 'Owning customer is deleted (ADR-0012).';
+            END IF;
         END IF;
 
         RETURN NEW;
@@ -3417,6 +3565,10 @@ CREATE TRIGGER trg_guard_soft_delete_and_restore_news
 
 CREATE TRIGGER trg_guard_soft_delete_and_restore_notification
     BEFORE UPDATE OF deleted_at ON notification
+    FOR EACH ROW EXECUTE FUNCTION fn_guard_soft_delete_and_restore();
+
+CREATE TRIGGER trg_guard_soft_delete_and_restore_wallet
+    BEFORE UPDATE OF deleted_at ON wallet
     FOR EACH ROW EXECUTE FUNCTION fn_guard_soft_delete_and_restore();
 
 -- -----------------------------------------------------------------------------
@@ -3528,6 +3680,10 @@ CREATE TRIGGER trg_audit_soft_delete_and_restore_notification
     AFTER UPDATE OF deleted_at ON notification
     FOR EACH ROW EXECUTE FUNCTION fn_audit_soft_delete_and_restore();
 
+CREATE TRIGGER trg_audit_soft_delete_and_restore_wallet
+    AFTER UPDATE OF deleted_at ON wallet
+    FOR EACH ROW EXECUTE FUNCTION fn_audit_soft_delete_and_restore();
+
 -- -----------------------------------------------------------------------------
 -- 8.17. Trigger Function: fn_guard_payment_update()
 -- Enforces payment status transitions and settled-payment immutability (TL-42):
@@ -3624,7 +3780,29 @@ CREATE TRIGGER trg_guard_payment_update
     BEFORE UPDATE ON payment
     FOR EACH ROW EXECUTE FUNCTION fn_guard_payment_update();
 
--- Harden privilege boundary: revoke direct PUBLIC EXECUTE on all 15 internal trigger functions
+-- -----------------------------------------------------------------------------
+-- 8.18. Trigger Function: fn_block_wallet_transaction_mutations()
+-- Enforces strict append-only immutability on wallet_transaction (ADR-0012, TL-98).
+-- -----------------------------------------------------------------------------
+CREATE FUNCTION fn_block_wallet_transaction_mutations()
+RETURNS TRIGGER
+LANGUAGE plpgsql
+SET search_path = public, pg_temp
+AS $$
+BEGIN
+    RAISE EXCEPTION 'Sổ cái giao dịch ví là bảng chỉ ghi (append-only), không cho phép cập nhật hoặc xóa.'
+        USING ERRCODE = 'check_violation',
+              HINT = 'wallet_transaction is strictly append-only (ADR-0012, TL-98).';
+END;
+$$;
+
+COMMENT ON FUNCTION fn_block_wallet_transaction_mutations() IS 'Enforces append-only immutability on wallet_transaction by rejecting UPDATE and DELETE operations (ADR-0012, TL-98).';
+
+CREATE TRIGGER trg_block_wallet_transaction_mutations
+    BEFORE UPDATE OR DELETE ON wallet_transaction
+    FOR EACH ROW EXECUTE FUNCTION fn_block_wallet_transaction_mutations();
+
+-- Harden privilege boundary: revoke direct PUBLIC EXECUTE on all 16 internal trigger functions
 REVOKE ALL ON FUNCTION
     fn_update_row_version_and_timestamp(),
     fn_guard_parking_slot_status(),
@@ -3640,7 +3818,8 @@ REVOKE ALL ON FUNCTION
     fn_guard_prevent_plain_delete(),
     fn_guard_soft_delete_and_restore(),
     fn_audit_soft_delete_and_restore(),
-    fn_guard_payment_update()
+    fn_guard_payment_update(),
+    fn_block_wallet_transaction_mutations()
 FROM PUBLIC;
 
 -- =============================================================================

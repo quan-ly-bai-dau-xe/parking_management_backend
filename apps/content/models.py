@@ -43,9 +43,9 @@ class Notification(SoftDeleteBaseModel):
 
     NOTIFICATION_TYPE_CHOICES = [
         ("SYSTEM", "Hệ thống"),
-        ("ALERT", "Cảnh báo an ninh"),
-        ("TICKET", "Thông báo vé xe"),
+        ("TICKET_EXPIRY", "Hết hạn / Gia hạn vé"),
         ("PAYMENT", "Thông báo thanh toán"),
+        ("SECURITY", "Cảnh báo an ninh"),
     ]
 
     id = models.BigAutoField(primary_key=True)

@@ -1,13 +1,17 @@
 """Tickets views exports."""
 
 from apps.tickets.views.tickets import (
-    TicketDetailView,
+    TicketDetailUpdateDeleteView,
     TicketListCreateView,
     TicketRenewView,
     TicketTypeListView,
 )
 
+# Alias for backward compatibility
+TicketDetailView = TicketDetailUpdateDeleteView
+
 __all__ = [
+    "TicketDetailUpdateDeleteView",
     "TicketDetailView",
     "TicketListCreateView",
     "TicketRenewView",

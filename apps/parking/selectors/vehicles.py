@@ -5,6 +5,7 @@ Provides exact normalized-plate lookup per TL-17, TL-50, and SRS 4.5.1.
 
 from typing import Any
 
+from django.core.exceptions import ObjectDoesNotExist
 from django.db.models import Exists, Prefetch
 from django.utils import timezone
 
@@ -13,12 +14,13 @@ from apps.parking.models import PlateBlacklist, VehicleEntryExitLog
 from apps.parking.services.ocr import PlateRecognizer
 from apps.tickets.models import Ticket
 from apps.vehicles.models import Vehicle
+from apps.wallet.models import Wallet
 
 
 class CombinedVehicleContext:
     """
     Data transfer and representation context for combined vehicle lookup (Round 34 P4).
-    Contains vehicle, customer, active ticket, open session, and blacklist status
+    Contains vehicle, customer, wallet, active ticket, open session, and blacklist status
     fetched with minimum database round-trips.
     """
 
@@ -30,6 +32,7 @@ class CombinedVehicleContext:
         open_session: VehicleEntryExitLog | None = None,
         active_ticket: Ticket | None = None,
         is_blacklisted: bool = False,
+        wallet: Wallet | None = None,
     ) -> None:
         self.plate_normalized = plate_normalized
         self.vehicle = vehicle
@@ -37,6 +40,7 @@ class CombinedVehicleContext:
         self.open_session = open_session
         self.active_ticket = active_ticket
         self.is_blacklisted = is_blacklisted
+        self.wallet = wallet
 
     @property
     def open_session_data(self) -> dict[str, Any] | None:
@@ -71,6 +75,13 @@ class CombinedVehicleContext:
             return None
 
         customer = self.customer or self.vehicle.customer
+        wallet_fields = {
+            "has_wallet": self.wallet is not None,
+            "wallet_balance": f"{self.wallet.balance:.2f}"
+            if self.wallet is not None
+            else None,
+            "wallet_status": self.wallet.status if self.wallet is not None else None,
+        }
         if customer.is_anonymized:
             customer_info = {
                 "id": customer.id,
@@ -78,6 +89,7 @@ class CombinedVehicleContext:
                 "full_name": "Khách hàng ẩn danh",
                 "phone": None,
                 "is_anonymized": True,
+                **wallet_fields,
             }
         else:
             customer_info = {
@@ -86,6 +98,7 @@ class CombinedVehicleContext:
                 "full_name": customer.full_name,
                 "phone": customer.phone,
                 "is_anonymized": False,
+                **wallet_fields,
             }
 
         active_ticket_info = None
@@ -166,7 +179,7 @@ def get_combined_vehicle_context(
     # 1. Truy vấn phương tiện kèm quan hệ và annotate cờ blacklist
     vehicle = (
         Vehicle.objects.filter(license_plate_norm=norm_plate, deleted_at__isnull=True)
-        .select_related("vehicle_type", "customer")
+        .select_related("vehicle_type", "customer", "customer__wallet")
         .annotate(
             is_blacklisted_flag=Exists(
                 PlateBlacklist.objects.filter(
@@ -207,6 +220,14 @@ def get_combined_vehicle_context(
         active_tickets = getattr(vehicle, "prefetched_active_tickets", [])
         active_ticket = active_tickets[0] if active_tickets else None
         customer = vehicle.customer
+        wallet = None
+        if customer is not None:
+            try:
+                candidate_wallet = customer.wallet
+                if candidate_wallet and candidate_wallet.deleted_at is None:
+                    wallet = candidate_wallet
+            except ObjectDoesNotExist:
+                wallet = None
     else:
         # Nếu xe chưa đăng ký, kiểm tra cờ blacklist độc lập
         is_blacklisted = PlateBlacklist.objects.filter(
@@ -216,6 +237,7 @@ def get_combined_vehicle_context(
         ).exists()
         active_ticket = None
         customer = None
+        wallet = None
 
     return CombinedVehicleContext(
         plate_normalized=norm_plate,
@@ -224,6 +246,7 @@ def get_combined_vehicle_context(
         open_session=open_session,
         active_ticket=active_ticket,
         is_blacklisted=is_blacklisted,
+        wallet=wallet,
     )
 
 

@@ -2,14 +2,74 @@
 Shared fixtures and test configuration for apps.vehicles test suite.
 """
 
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Account
 from apps.customers.models import Customer
+from apps.tickets.models import Ticket
 from apps.vehicles.models import VehicleType
 
 pytestmark = pytest.mark.django_db
+
+
+@pytest.fixture(autouse=True)
+def seed_vehicle_ticket_baseline():
+    """
+    Shared fixture anchoring the 25 seeded tickets relative to timezone.now()
+    inside each test transaction. Guarantees 100% stable baseline distribution:
+      - 31 vehicles total
+      - 10 valid tickets (VT0001..VT0005, VT0007..VT0010, VT0012)
+      - 0 expiring soon tickets
+      - 12 expired tickets (VT0006, VT0011, VT0013..VT0022)
+      - 9 without active ticket (VT0023..VT0025 CANCELLED + 6 unassigned vehicles)
+      - 15 active vehicles (10 valid + 5 parked without valid ticket: XE0006, XE0018..XE0021)
+    """
+    now = timezone.now()
+    valid_codes = [
+        "VT0001",
+        "VT0002",
+        "VT0003",
+        "VT0004",
+        "VT0005",
+        "VT0007",
+        "VT0008",
+        "VT0009",
+        "VT0010",
+        "VT0012",
+    ]
+    expired_codes = [
+        "VT0006",
+        "VT0011",
+        "VT0013",
+        "VT0014",
+        "VT0015",
+        "VT0016",
+        "VT0017",
+        "VT0018",
+        "VT0019",
+        "VT0020",
+        "VT0021",
+        "VT0022",
+    ]
+    cancelled_codes = ["VT0023", "VT0024", "VT0025"]
+
+    Ticket.objects.filter(code__in=valid_codes).update(
+        effective_from=now - timedelta(days=30),
+        effective_to=now + timedelta(days=60),
+    )
+    Ticket.objects.filter(code__in=expired_codes).update(
+        effective_from=now - timedelta(days=60),
+        effective_to=now - timedelta(days=10),
+    )
+    Ticket.objects.filter(code__in=cancelled_codes).update(
+        effective_from=now - timedelta(days=90),
+        effective_to=now - timedelta(days=30),
+    )
+    yield
 
 
 @pytest.fixture

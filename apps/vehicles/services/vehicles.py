@@ -496,10 +496,10 @@ def delete_vehicle(
     actor_id: int | None = None,
 ) -> dict[str, str]:
     """
-    Soft-delete a vehicle with DEL-03 database trigger guards.
+    Soft-delete a vehicle with DEL-03 database trigger guards and Python defense-in-depth.
     Evaluates in strict order:
       1. Open session guard -> PROP-DEL-03-OPEN-SES (HTTP 409)
-      2. Active ticket guard -> PROP-DEL-03-ACTIVE-TKT (HTTP 409)
+      2. Active ticket guard (Rule R3c covering DAILY, MONTHLY, QUARTERLY, YEARLY) -> PROP-DEL-03-ACTIVE-TKT (HTTP 409)
       3. Active reservation guard -> PROP-DEL-03-ACTIVE-RSV (HTTP 409)
     """
     with transaction.atomic():
@@ -515,8 +515,52 @@ def delete_vehicle(
                 status_code=status.HTTP_404_NOT_FOUND,
             )
 
+        now = timezone.now()
+
+        # Guard 1 (Python defense-in-depth): Open parking session
+        from apps.parking.models import SlotReservation, VehicleEntryExitLog
+
+        open_session_exists = VehicleEntryExitLog.objects.filter(
+            vehicle_id=current_vehicle.id, exit_time__isnull=True
+        ).exists()
+        if open_session_exists:
+            raise BusinessAPIException(
+                code="PROP-DEL-03-OPEN-SES",
+                message="Phương tiện đang đỗ trong bãi xe (có phiên đỗ đang mở), không được phép xóa.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        # Guard 2 (Python defense-in-depth - Rule R3c): Active tickets across ALL 4 types
+        from apps.tickets.models import Ticket
+
+        has_active_ticket = Ticket.objects.filter(
+            vehicle_id=current_vehicle.id,
+            deleted_at__isnull=True,
+            status__in=["ACTIVE", "RENEWING"],
+            effective_to__gt=now,
+        ).exists()
+        if has_active_ticket:
+            raise BusinessAPIException(
+                code="PROP-DEL-03-ACTIVE-TKT",
+                message="Phương tiện đang có vé đỗ xe còn hiệu lực, không được phép xóa.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
+        # Guard 3 (Python defense-in-depth): Active slot reservation
+        has_active_rsv = SlotReservation.objects.filter(
+            vehicle_id=current_vehicle.id,
+            status="ACTIVE",
+            reserved_until__gt=now,
+        ).exists()
+        if has_active_rsv:
+            raise BusinessAPIException(
+                code="PROP-DEL-03-ACTIVE-RSV",
+                message="Phương tiện đang có đặt trước vị trí đỗ xe còn hiệu lực, không được phép xóa.",
+                status_code=status.HTTP_409_CONFLICT,
+            )
+
         try:
-            current_vehicle.deleted_at = timezone.now()
+            current_vehicle.deleted_at = now
             current_vehicle.deleted_by_id = actor_id
             current_vehicle.save(update_fields=["deleted_at", "deleted_by_id"])
         except (IntegrityError, DatabaseError) as exc:

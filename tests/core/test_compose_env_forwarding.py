@@ -74,6 +74,15 @@ UNFORWARDED_ALLOWLIST: dict[str, str] = {
     "GUNICORN_GRACEFUL_TIMEOUT": "Internal container worker graceful-timeout tuning with in-code defaults, not documented for operators",
     "GUNICORN_KEEPALIVE": "Internal container HTTP keepalive tuning with in-code defaults, not documented for operators",
     "GUNICORN_LOG_LEVEL": "Internal container log-level tuning with in-code defaults, not documented for operators",
+    "GATE_WORKER_CONCURRENCY_LIMIT": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_CONFIG_REFRESH_INTERVAL": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_COOLDOWN_SECONDS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_MAX_OCR_RATE_FPS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_MOTION_MAD_THRESHOLD": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_PENDING_MINUTES": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_PENDING_RECHECK_SECONDS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_PENDING_SEEN_SECONDS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_STREAMS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
 }
 
 # Allowlist for keys permitted to have a hard-coded literal value in compose instead of ${KEY...} interpolation.

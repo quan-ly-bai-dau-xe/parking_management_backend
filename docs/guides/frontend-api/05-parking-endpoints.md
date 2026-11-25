@@ -24,13 +24,36 @@ Content-Type: application/json
 }
 ```
 
-### 8.1 Retrieve Gate List (`GET /api/v1/parking/gates/`)
+### 8.1 Retrieve Gate List & Worker Telemetry (`GET /api/v1/parking/gates/`)
 
-- **Purpose**: Retrieve barrier gate list to populate entry/exit gate dropdown selectors.
+- **Purpose**: Retrieve barrier gate list to populate entry/exit gate selectors and monitor server-side `gate-worker` process telemetry (`worker_online`, `last_auto_event`).
 - **Required Permission**: `EMPLOYEE` or `MANAGER`.
 - **Query Parameters**:
   - `direction` (optional): Filter by gate direction (`IN` or `OUT`).
   - `is_active` (optional): Filter active gates (`true` or `false`).
+- **Response Fields**:
+  - `id` (integer): Gate primary key.
+  - `lot_id` (integer): Linked parking lot ID.
+  - `code` (string): Unique gate identifier (e.g., `"IN_01"`, `"OUT_01"`).
+  - `name` (string): Human-readable gate label.
+  - `direction` (string): Gate traffic direction (`"IN"` or `"OUT"`).
+  - `camera_status` (string): Camera connection health (`"ONLINE"`, `"DEGRADED"`, `"OFFLINE"`, or `"LOW_LIGHT"`). Dynamically mapped to `"OFFLINE"` on read (zero DB `UPDATE`, preserving `row_version`) whenever `worker_online` is `false`.
+  - `is_auto_scan` (boolean): Whether automated plate detection is enabled for this gate.
+  - `is_active` (boolean): Operational status of the gate.
+  - `worker_online` (boolean, TL-70, TL-72, TL-80, TL-86): Whether a background `gate-worker` process currently holds the PostgreSQL session-level advisory lock for this gate in `pg_locks` (`locktype='advisory'`, `classid=1195463749`, `objsubid IN (1, 2)`, `granted=true`).
+    - **Database Isolation Filter (TL-80, G9d)**: The underlying SQL query explicitly filters `d.datname = current_database()` by joining `pg_database` on `l.database = d.oid`. This prevents advisory locks of the same classid in a different database on the same shared PostgreSQL server from falsely marking gates online.
+    - When `true`: Frontend modal switches to **Viewer Mode** (displays live stream and server-side automated events; client-side auto-apply is disabled to prevent duplicate check-ins).
+    - When `false`: Frontend modal operates in **Browser Mode** (uses webcam or uploaded frames, client-side auto-apply policy runs with toggle banner).
+    - Before the first status poll resolves, Frontend holds an **Unknown** state (`workerOnline = null`) and suppresses client auto-apply (TL-76).
+    - **Polling Error Tolerance (TL-86, G8b)**: If a status poll fails (e.g., transient network blip, 401, 500), `gateService` returns an error distinguishable from an actual offline response (`worker_online: false`). The frontend modal retains its previous `workerOnline` value (viewer stays viewer, unknown stays unknown), preventing accidental flip to browser mode and avoiding HTTP 409 double-submit storms. Only after 3 consecutive failed polls does the modal show a subtle "status unavailable" note, and it still does not start auto-applying if the prior state was viewer or unknown.
+  - `last_auto_event` (object or `null`, TL-70, TL-72, TL-73, TL-82): Summary of the most recent automated decision event queried solely from `activity_log`:
+    - **Single Decision Row & Action Filter (TL-82, G7)**: To maintain audit row integrity and ensure N decisions produce exactly N decision rows, `last_auto_event` is chosen strictly from the four definitive decision actions (`"GATE_AUTO_CHECK_IN"`, `"GATE_AUTO_CHECK_OUT"`, `"GATE_AUTO_NEEDS_STAFF"`, `"GATE_AUTO_PAYMENT_REQUIRED"`). It never selects snapshot failure rows as the primary decision.
+    - `action` (string): Automated action code (`"GATE_AUTO_CHECK_IN"`, `"GATE_AUTO_CHECK_OUT"`, `"GATE_AUTO_NEEDS_STAFF"`, `"GATE_AUTO_PAYMENT_REQUIRED"`).
+    - `license_plate_masked` (string): Plate formatted with privacy masking (e.g., `"51A-***.14"` or `"30A***35"`).
+    - `reason` (string): Technical decision reason code (e.g., `"VALID_REGISTERED"`, `"VALID_FEE_ZERO"`, `"UNREGISTERED_VEHICLE"`, `"FEE_PAYMENT_REQUIRED"`, `"NO_AVAILABLE_SLOT"`, `"BLACKLISTED"`, `"OPEN_SESSION_ALREADY_EXISTS"`, `"NO_OPEN_SESSION"`, `"NEEDS_REVIEW"`, `"EXECUTION_FAILED"`).
+    - `occurred_at` (string, ISO 8601): UTC timestamp of the automated decision.
+    - `snapshot_error` (string or `null`): Sanitized failure reason if the asynchronous background snapshot upload failed or timed out (`null` when upload succeeded or is not applicable). When an upload fails, the worker records a distinct `GATE_AUTO_SNAPSHOT_FAILED` row; the serializer queries any subsequent `GATE_AUTO_SNAPSHOT_FAILED` row for the gate and attaches its reason here, providing frontend observability without duplicating decision rows or altering the decision action.
+  - **Pending Vehicle Liveness & "Still-Seen" Rule (`TL-103`)**: When `gate-worker` holds an unregistered entry (`UNREGISTERED_VEHICLE`) or an insufficient-wallet exit (`WALLET_INSUFFICIENT`), it re-evaluates the pending item every `GATE_WORKER_PENDING_RECHECK_SECONDS` (`5.0`s default) only while the vehicle remains "still seen" (`now - last_seen_at <= GATE_WORKER_PENDING_SEEN_SECONDS`, default `20`s) and executes the auto check-in/check-out only on a fresh sighting. If the plate temporarily drops out in `(20s, 60s]`, the worker waits silently with zero DB queries/logs/actions; if unseen for `> 3 * GATE_WORKER_PENDING_SEEN_SECONDS` (`60`s) or pending longer than `GATE_WORKER_PENDING_MINUTES` (`15`m / `900`s) from `first_seen_at`, the item is evicted so vehicles that already left the lane are never auto-processed upon late registration or top-up.
 - **Live Stack Example**:
 
   ```http
@@ -51,7 +74,15 @@ Content-Type: application/json
       "direction": "IN",
       "camera_status": "ONLINE",
       "is_auto_scan": true,
-      "is_active": true
+      "is_active": true,
+      "worker_online": true,
+      "last_auto_event": {
+        "action": "GATE_AUTO_CHECK_IN",
+        "license_plate_masked": "51A-***.14",
+        "reason": "VALID_REGISTERED",
+        "occurred_at": "2026-11-08T06:00:00Z",
+        "snapshot_error": null
+      }
     },
     {
       "id": 2,
@@ -59,9 +90,11 @@ Content-Type: application/json
       "code": "IN_02",
       "name": "Cổng vào 2",
       "direction": "IN",
-      "camera_status": "ONLINE",
+      "camera_status": "OFFLINE",
       "is_auto_scan": true,
-      "is_active": true
+      "is_active": true,
+      "worker_online": false,
+      "last_auto_event": null
     }
   ]
   ```
@@ -990,5 +1023,20 @@ When `review_status === "NEEDS_REVIEW"`:
     "details": {}
   }
   ```
+
+### 8.9 Parking Structure & Slot Management (WP1)
+
+- **`GET /api/v1/parking/structure/`** (`EMPLOYEE` or `MANAGER`): Retrieve hierarchical parking lot structure (lots, floors, zones).
+- **`GET /api/v1/parking/slots/`** (`EMPLOYEE` or `MANAGER`): List active parking slots with filters (`status`, `floor`, `zone`, `vehicle_type`, `slot_kind`, `search`).
+- **`POST /api/v1/parking/slots/`** (`MANAGER` + `X-CSRFToken`): Create a new parking slot (4.8.2).
+- **`GET /api/v1/parking/slots/{id}/`** (`EMPLOYEE` or `MANAGER`): Retrieve slot detail including active session, ticket, and reservation (4.8.4).
+- **`PATCH /api/v1/parking/slots/{id}/`** (`MANAGER` + `X-CSRFToken`): Update slot attributes or status with OCC `row_version` (4.8.3).
+- **`DELETE /api/v1/parking/slots/{id}/`** (`MANAGER` + `X-CSRFToken`): Soft-delete slot guarded against occupied/charging/reserved/ticketed states (4.8.5).
+
+### 8.10 Slot Reservations (4.5.2)
+
+- **`POST /api/v1/parking/slots/{id}/reserve/`** (`CUSTOMER`, `EMPLOYEE`, or `MANAGER` + `X-CSRFToken`): Create a slot reservation ("Register Parking") for an `AVAILABLE` slot matching the vehicle's allowed type; enforces GiST overlap exclusion (`409` `PROP-4.5.2-P05`). `CUSTOMER` may only reserve for their own active vehicles.
+- **`GET /api/v1/parking/reservations/`** (`CUSTOMER`, `EMPLOYEE`, or `MANAGER`): List reservations (`CUSTOMER` sees only their own reservations; staff sees all).
+- **`POST /api/v1/parking/reservations/{id}/cancel/`** (`CUSTOMER`, `EMPLOYEE`, or `MANAGER` + `X-CSRFToken`): Cancel an active reservation (`CUSTOMER` may only cancel their own).
 
 ---

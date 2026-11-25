@@ -105,6 +105,11 @@ def mask_phone_number(phone: str) -> str:
     return f"{phone[:3]}***{phone[-2:]}"
 
 
+def is_sms_otp_test_double_enabled() -> bool:
+    """Only allow mock/test-double OTP flows when DEBUG=True and explicit opt-in is enabled."""
+    return bool(settings.DEBUG) and bool(settings.SMS_OTP_TEST_DOUBLE_ENABLED)
+
+
 def send_sms_otp(
     phone_number: str, recaptcha_token: str | None = None
 ) -> dict[str, Any]:
@@ -119,8 +124,12 @@ def send_sms_otp(
     config = load_firebase_config()
     api_key = config.get("apiKey")
 
-    # Nếu chưa có cấu hình Firebase thật: Chạy chế độ test/fallback
+    # Nếu chưa có cấu hình Firebase thật: chỉ chạy chế độ test double khi được bật hợp lệ
     if not api_key or "YOUR_FIREBASE" in api_key:
+        if not is_sms_otp_test_double_enabled():
+            raise RuntimeError(
+                "Firebase SMS OTP chưa được cấu hình và chế độ test double đang tắt."
+            )
         logger.info(
             "[Firebase OTP Dev Mode] Chưa cấu hình API Key. Tạo phiên OTP thử nghiệm."
         )
@@ -186,23 +195,30 @@ def verify_sms_otp(session_info: str, otp_code: str) -> dict[str, Any]:
     clean_code = str(otp_code).strip()
     config = load_firebase_config()
     api_key = config.get("apiKey")
+    firebase_ready = bool(api_key and "YOUR_FIREBASE" not in api_key)
 
-    # Kiểm tra phiên test/mock
-    if (
-        not api_key
-        or "YOUR_FIREBASE" in api_key
-        or (session_info and session_info.startswith("mock_session_"))
-    ):
+    # Strict security gate: mock/test-double OTP is only valid when Firebase is
+    # unconfigured AND both DEBUG=True and SMS_OTP_TEST_DOUBLE_ENABLED=True.
+    if not firebase_ready:
+        if not is_sms_otp_test_double_enabled():
+            raise RuntimeError(
+                "Firebase SMS OTP chưa được cấu hình và chế độ test double đang tắt."
+            )
         if clean_code in ("123456", "000000"):
             return {
                 "status": "success",
                 "uid": f"mock_uid_{os.urandom(6).hex()}",
                 "phoneNumber": session_info.split("_")[2]
-                if "_" in session_info
+                if session_info
+                and "_" in session_info
+                and len(session_info.split("_")) > 2
                 else "+84900000000",
                 "isMock": True,
             }
         raise RuntimeError("Mã OTP thử nghiệm không chính xác (mặc định: 123456).")
+
+    if not session_info or session_info.startswith("mock_session_"):
+        raise RuntimeError("Phiên xác thực OTP không hợp lệ.")
 
     url = f"https://identitytoolkit.googleapis.com/v1/accounts:signInWithPhoneNumber?key={api_key}"
     payload = {

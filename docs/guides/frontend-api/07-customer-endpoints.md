@@ -373,3 +373,49 @@ Content-Type: application/json
 | `MSG-4.4.5-M01` | 200 | `Xóa thành công` | Successful soft-deletion of customer. |
 
 ---
+
+### 10.10 Customer Wallet (Staff / Manager Management)
+
+- **`GET /api/v1/customers/{id}/wallet/`** (`EMPLOYEE` or `MANAGER`): Retrieve customer wallet balance, currency (`VND`), and operational status (`ACTIVE`, `LOCKED`, `CLOSED`).
+- **`GET /api/v1/customers/{id}/wallet/transactions/`** (`EMPLOYEE` or `MANAGER`): Retrieve paginated append-only wallet ledger transactions (`kind`, `direction` filters).
+- **`POST /api/v1/customers/{id}/wallet/topup/`** (`EMPLOYEE` or `MANAGER` + `X-CSRFToken`): Staff-assisted counter `CASH` top-up with `amount`, optional `idempotency_key`, and `note`; audited in `activity_log` (`WALLET_STAFF_TOPUP`).
+
+---
+
+### 10.11 Customer Self-Service Portal (`/api/v1/me/*`)
+
+All `/api/v1/me/*` endpoints require an authenticated `CUSTOMER` account (`IsCustomer`) linked to an active `Customer` profile and strictly scope all reads/writes to the authenticated customer:
+
+- **`GET /api/v1/me/wallet/`**: Retrieve current customer wallet balance, status, and read-only `topup_channels` capability metadata (`vnpay_enabled`, `vnpay_is_sandbox`, `vnpay_topup_min`, `vnpay_topup_max`, `simulated_vietqr_enabled`).
+- **`GET /api/v1/me/wallet/transactions/`**: Paginated ledger history (`kind` filter supports `TOPUP_CASH`, `TOPUP_VIETQR`, `TOPUP_VNPAY`, `TICKET_PURCHASE`, `TICKET_RENEWAL`, `PARKING_FEE`, `REFUND`, `ADJUSTMENT`; `direction` query filter).
+- **`POST /api/v1/me/wallet/topups/`** (+ `X-CSRFToken`): Simulated VietQR top-up gated by `WALLET_SIMULATED_TOPUP_ENABLED` (records `kind="TOPUP_VIETQR"`; returns `403` `PROP-WALLET-SIMULATED-DISABLED` when disabled; idempotent via `idempotency_key`).
+- **`POST /api/v1/me/wallet/topups/vnpay/`** (+ `X-CSRFToken`): Initiate a VNPAY v2.1.0 sandbox wallet top-up. Accepts `{ "amount": <int VND>, "locale"?: "vn"|"en", "bank_code"?: "VNPAYQR"|"VNBANK"|"INTCARD", "order_info"?: "..." }`. Rate-limited per customer (`429` `PROP-VNPAY-RATE-LIMITED`), validates `[VNPAY_TOPUP_MIN, VNPAY_TOPUP_MAX]` (`400` `PROP-VNPAY-AMOUNT-RANGE`), checks `VNPAY_TMN_CODE`/`VNPAY_HASH_SECRET` (`503` `PROP-VNPAY-DISABLED`), and resolves client IP via `get_client_ip(request)` honoring `NUM_PROXIES` (uses `REMOTE_ADDR` when `NUM_PROXIES <= 0`, or the trusted `X-Forwarded-For` hop when `NUM_PROXIES > 0`). Returns `{ payment_url, txn_ref, amount, expires_at, is_sandbox }`.
+- **`GET /api/v1/me/wallet/topups/vnpay/{txn_ref}/`**: Poll whether a customer-owned `txn_ref` has been credited by the VNPAY IPN (`status`: `"PENDING"` or `"CREDITED"`, `amount`, `balance`, `wallet_transaction_id`, `credited_at`; returns `404` `MSG-4.4.1-M01` if invalid or owned by another customer).
+- **`GET /api/v1/payments/vnpay/ipn/`** (`AllowAny`, public server-to-server callback): Parses raw `QUERY_STRING` with strict UTF-8 decoding (`errors="strict"`), rejects duplicate `vnp_*` keys (HPP) or invalid percent-encoding with `RspCode="97"` (`0` DB queries), verifies canonical `quote_plus` HMAC-SHA512 `vnp_SecureHash` (128 lowercase hex chars, constant-time) first (`"97"`), validates `vnp_TmnCode` and `vnp_TxnRef` (`"01"`), checks `vnp_Amount == amount * 100` (`"04"`), checks duplicate `vnpay-{txn_ref}` (`"02"`), and credits wallet atomically (`kind="TOPUP_VNPAY"`, `kind_display="Nạp tiền qua VNPAY"`) only when both `vnp_ResponseCode == "00"` and `vnp_TransactionStatus == "00"` (`"00"`).
+- **`GET /api/v1/payments/vnpay/return/`** (`AllowAny`, public browser redirect): Applies the same strict raw `QUERY_STRING` extraction (HPP / UTF-8 fail-closed to `status=invalid_signature&code=97` without `txn_ref`), verifies `vnp_SecureHash` and `vnp_TxnRef` without writing to the database, and returns `302 Found` to `VNPAY_FRONTEND_RESULT_URL` (default `/wallet/vnpay-return`) with only `?status=pending|failed|invalid_signature&txn_ref=...&code=...`.
+- **`GET /api/v1/me/notifications/`**: Paginated customer notifications (`is_read`, `notification_type` query filters) including `unread_count` and parsed `missing_amount` when present (`PAYMENT` insufficient balance alerts). Invalid filter values return `400` `PROP-GEN-P01`.
+- **`POST /api/v1/me/notifications/{id}/read/`** (+ `X-CSRFToken`): Mark a single notification owned by the authenticated customer as read (returns `404` `MSG-4.4.1-M01` for non-existent or another customer's notification).
+- **`POST /api/v1/me/notifications/read-all/`** (+ `X-CSRFToken`): Mark all unread notifications for the authenticated customer as read.
+- **`GET /api/v1/me/profile/`** & **`PATCH /api/v1/me/profile/`** (+ `X-CSRFToken`): View and update personal profile with OCC `row_version`.
+- **`GET /api/v1/me/vehicles/`** & **`POST /api/v1/me/vehicles/`** (+ `X-CSRFToken`): List and register vehicles owned by the authenticated customer.
+- **`GET /api/v1/me/vehicles/{lookup}/`**, **`PATCH /api/v1/me/vehicles/{lookup}/`**, **`DELETE /api/v1/me/vehicles/{lookup}/`** (+ `X-CSRFToken`): Lookup by numeric `id` or vehicle `code`; deletion enforces all DEL-03 / R3c guards (`409` `PROP-DEL-03-OPEN-SES`, `PROP-DEL-03-ACTIVE-TKT`, `PROP-DEL-03-ACTIVE-RSV`).
+- **`GET /api/v1/me/tickets/`** & **`POST /api/v1/me/tickets/`** (+ `X-CSRFToken`): List customer tickets and purchase a ticket atomically from wallet (`Ticket` + `Payment` method `WALLET` + `WalletTransaction`; returns `409` `PROP-WALLET-INSUFFICIENT` if balance is insufficient).
+- **`POST /api/v1/me/tickets/{lookup}/cancel/`** (+ `X-CSRFToken`): Self-cancel unpaid tickets; paid tickets are rejected with `409` `PROP-4.6.4-P06` without silent refunds.
+- **`GET /api/v1/me/ticket-types/`**: Active ticket types and authoritative prices.
+- **`GET /api/v1/me/vehicle-types/`**: Active allowed vehicle types (`CAR`, `EV`).
+- **`GET /api/v1/me/parking-structure/`**: Read-only parking lot hierarchy (lots, floors, zones) for customer slot map view.
+- **`GET /api/v1/me/parking-slots/`**: Read-only parking slots status list for customer slot map view and reservation selection (4.5.2).
+
+| Error Code | HTTP Status | Description |
+|---|:---:|---|
+| `PROP-WALLET-INSUFFICIENT` | 409 | Wallet balance is less than required purchase/debit amount. |
+| `PROP-WALLET-LOCKED` | 409 | Wallet is `LOCKED` or `CLOSED`. |
+| `PROP-WALLET-IDEMPOTENCY-CONFLICT` | 409 | Idempotency key reused with mismatched payload. |
+| `PROP-WALLET-SIMULATED-DISABLED` | 403 | Simulated VietQR top-up feature flag is disabled. |
+| `PROP-WALLET-DUPLICATE-ACTIVE-TICKET` | 409 | Vehicle already holds an overlapping active ticket. |
+| `PROP-4.6.4-P06` | 409 | Paid ticket cannot be self-cancelled online. |
+| `PROP-VNPAY-DISABLED` | 503 | VNPAY payment gateway is not configured or temporarily disabled. |
+| `PROP-VNPAY-AMOUNT-RANGE` | 400 | VNPAY top-up amount must be an integer VND within `[VNPAY_TOPUP_MIN, VNPAY_TOPUP_MAX]`. |
+| `PROP-VNPAY-RATE-LIMITED` | 429 | Customer exceeded VNPAY top-up URL creation rate limit. |
+
+---
