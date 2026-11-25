@@ -12,9 +12,13 @@ Verifies:
 - Exclusion of soft-deleted vehicles from list results.
 """
 
+from datetime import timedelta
+
 import pytest
+from django.utils import timezone
 from rest_framework import status
 
+from apps.tickets.models import Ticket
 from apps.vehicles.models import Vehicle
 
 pytestmark = pytest.mark.django_db
@@ -63,6 +67,7 @@ def test_vehicle_list_handwritten_ground_truth_seed_assertions(employee_client):
     """
     Đối soát kết quả trả về của các phương tiện seed cụ thể với giá trị
     được tính toán độc lập từ SQL (không lấy từ code đang test).
+    Độc lập với ngày tháng: được bảo vệ bởi shared fixture seed_vehicle_ticket_baseline.
     """
     # 1. XE0001: Đang có phiên đỗ mở -> status='parked', ticket ACTIVE -> state='valid'
     res = employee_client.get(f"{ENDPOINT_URL}?code=XE0001")
@@ -91,6 +96,8 @@ def test_vehicle_list_handwritten_ground_truth_seed_assertions(employee_client):
     assert v7["status_display"] == "Đang hoạt động"
     assert v7["ticket"] is not None
     assert v7["ticket"]["state"] == "valid"
+    assert v7["ticket"]["state_display"] == "Còn hạn"
+    assert v7["ticket"]["days_remaining"] > 0
 
     # 3. XE0011: Không có phiên đỗ mở, có vé EXPIRED (VT0011) -> status='left', ticket có state='expired'
     res = employee_client.get(f"{ENDPOINT_URL}?code=XE0011")
@@ -145,44 +152,61 @@ def test_vehicle_list_filter_status_parked_active_left(employee_client):
 def test_vehicle_list_filter_ticket_state(employee_client):
     """
     Kiểm tra bộ lọc ticket_state (valid, expiring_soon, expired, none).
-    - Trên baseline seed sạch 31 xe:
-      - 10 xe có vé hợp lệ (valid).
-      - 0 xe có vé sắp hết hạn (expiring_soon).
-      - 12 xe có vé đã hết hạn (expired).
-      - 9 xe không có vé hoặc chỉ có vé CANCELLED (none).
+    Độc lập với ngày tháng: đối soát khớp chính xác 100% với ground truth CTE SQL độc lập tính tại thời điểm test.
     """
-    from datetime import timedelta
 
-    from django.utils import timezone
+    from apps.tickets.models import TicketType
+    from tests.vehicles.test_vehicle_property_tickets import (
+        _get_independent_handwritten_cte_sql,
+    )
 
-    from apps.tickets.models import Ticket, TicketType
+    expected = _get_independent_handwritten_cte_sql()
+    assert expected["total_vehicles"] == 31
+    assert expected["valid_tickets"] == 10
+    assert expected["expiring_soon_tickets"] == 0
+    assert expected["expired_tickets"] == 12
+    assert expected["none_tickets"] == 9
 
     res_valid = employee_client.get(f"{ENDPOINT_URL}?ticket_state=valid&page_size=50")
     assert res_valid.status_code == status.HTTP_200_OK
     assert res_valid.json()["count"] == 10
+    assert res_valid.json()["count"] == expected["valid_tickets"]
+    initial_valid_count = res_valid.json()["count"]
 
     res_expiring_initial = employee_client.get(
         f"{ENDPOINT_URL}?ticket_state=expiring_soon"
     )
     assert res_expiring_initial.status_code == status.HTTP_200_OK
     assert res_expiring_initial.json()["count"] == 0
+    assert res_expiring_initial.json()["count"] == expected["expiring_soon_tickets"]
+    initial_expiring_count = res_expiring_initial.json()["count"]
 
     res_expired = employee_client.get(
         f"{ENDPOINT_URL}?ticket_state=expired&page_size=50"
     )
     assert res_expired.status_code == status.HTTP_200_OK
     assert res_expired.json()["count"] == 12
+    assert res_expired.json()["count"] == expected["expired_tickets"]
+    initial_expired_count = res_expired.json()["count"]
 
     res_none = employee_client.get(f"{ENDPOINT_URL}?ticket_state=none&page_size=50")
     assert res_none.status_code == status.HTTP_200_OK
     assert res_none.json()["count"] == 9
+    assert res_none.json()["count"] == expected["none_tickets"]
+    assert (
+        initial_valid_count
+        + initial_expiring_count
+        + initial_expired_count
+        + res_none.json()["count"]
+        == 31
+    )
 
     # Tạo vé sắp hết hạn (expiring_soon) cho XE0027 (hiện là none)
     now = timezone.now()
     from apps.parking.models import ParkingSlot
 
     available_slots = list(
-        ParkingSlot.objects.exclude(
+        ParkingSlot.objects.filter(status="AVAILABLE").exclude(
             tickets__deleted_at__isnull=True,
             tickets__effective_to__gt=now,
         )[:2]
@@ -203,8 +227,8 @@ def test_vehicle_list_filter_ticket_state(employee_client):
 
     res_expiring = employee_client.get(f"{ENDPOINT_URL}?ticket_state=expiring_soon")
     assert res_expiring.status_code == status.HTTP_200_OK
-    assert res_expiring.json()["count"] == 1
-    assert res_expiring.json()["results"][0]["code"] == "XE0027"
+    assert res_expiring.json()["count"] == initial_expiring_count + 1
+    assert any(r["code"] == "XE0027" for r in res_expiring.json()["results"])
 
     # Tạo vé hết hạn (expired) mới cho XE0028 (hiện là none)
     v_expired = Vehicle.objects.filter(code="XE0028").first()
@@ -224,7 +248,7 @@ def test_vehicle_list_filter_ticket_state(employee_client):
         f"{ENDPOINT_URL}?ticket_state=expired&page_size=50"
     )
     assert res_expired_updated.status_code == status.HTTP_200_OK
-    assert res_expired_updated.json()["count"] == 13  # 12 seed + 1 mới
+    assert res_expired_updated.json()["count"] == initial_expired_count + 1
     expired_codes = [v["code"] for v in res_expired_updated.json()["results"]]
     assert "XE0028" in expired_codes
 

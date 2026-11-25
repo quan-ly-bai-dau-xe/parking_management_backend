@@ -187,6 +187,8 @@ class CustomerListSerializer(serializers.Serializer):
     gender = serializers.SerializerMethodField()
     vehicles_count = serializers.SerializerMethodField()
     has_active_ticket = serializers.SerializerMethodField()
+    wallet_balance = serializers.SerializerMethodField()
+    wallet_status = serializers.SerializerMethodField()
     row_version = serializers.IntegerField()
     is_anonymized = serializers.BooleanField()
     created_at = serializers.DateTimeField()
@@ -243,6 +245,18 @@ class CustomerListSerializer(serializers.Serializer):
             effective_to__gt=timezone.now(),
         ).exists()
 
+    @extend_schema_field(serializers.CharField)
+    def get_wallet_balance(self, obj: Customer) -> str:
+        val = getattr(obj, "wallet_balance_val", None)
+        if val is not None:
+            return f"{val:.2f}"
+        return "0.00"
+
+    @extend_schema_field(serializers.CharField)
+    def get_wallet_status(self, obj: Customer) -> str:
+        val = getattr(obj, "wallet_status_val", None)
+        return str(val) if val else "ACTIVE"
+
 
 @extend_schema_serializer(component_name="CustomerManagementDetail")
 class CustomerDetailSerializer(serializers.Serializer):
@@ -277,6 +291,8 @@ class CustomerDetailSerializer(serializers.Serializer):
     row_version = serializers.IntegerField()
     created_at = serializers.DateTimeField()
     updated_at = serializers.DateTimeField()
+    wallet_balance = serializers.SerializerMethodField()
+    wallet_status = serializers.SerializerMethodField()
     vehicles = serializers.SerializerMethodField()
 
     def get_full_name(self, obj: Customer) -> str:
@@ -336,6 +352,26 @@ class CustomerDetailSerializer(serializers.Serializer):
     def get_status_display(self, obj: Customer) -> str:
         status_code = getattr(obj, "status", "ACTIVE")
         return STATUS_DISPLAY_MAP.get(status_code, status_code)
+
+    @extend_schema_field(serializers.CharField)
+    def get_wallet_balance(self, obj: Customer) -> str:
+        val = getattr(obj, "wallet_balance_val", None)
+        if val is not None:
+            return f"{val:.2f}"
+        wallet = getattr(obj, "wallet", None)
+        if wallet and getattr(wallet, "deleted_at", None) is None:
+            return f"{wallet.balance:.2f}"
+        return "0.00"
+
+    @extend_schema_field(serializers.CharField)
+    def get_wallet_status(self, obj: Customer) -> str:
+        val = getattr(obj, "wallet_status_val", None)
+        if val:
+            return str(val)
+        wallet = getattr(obj, "wallet", None)
+        if wallet and getattr(wallet, "deleted_at", None) is None:
+            return str(wallet.status)
+        return "ACTIVE"
 
     def get_vehicles(self, obj: Customer) -> list[dict[str, Any]]:
         annotated = getattr(obj, "annotated_vehicles", None)

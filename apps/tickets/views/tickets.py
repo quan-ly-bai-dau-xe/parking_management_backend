@@ -1,15 +1,12 @@
 """
 Views for tickets app.
-Provides TicketType list, Ticket list, create, detail, and renew endpoints.
+Provides TicketType list, Ticket list, create, detail, update (with OCC),
+delete (with DEL-04 guards, Manager-only), and renew endpoints.
 """
 
 from __future__ import annotations
 
-from datetime import timedelta
-
-from django.db.models import Q
-from django.utils import timezone
-from drf_spectacular.utils import OpenApiResponse, extend_schema
+from drf_spectacular.utils import OpenApiParameter, OpenApiResponse, extend_schema
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.request import Request
@@ -17,18 +14,27 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.core.pagination import StandardResultsSetPagination
-from apps.core.permissions import IsEmployeeOrManager
-from apps.customers.models import Customer
-from apps.parking.models import ParkingSlot
-from apps.tickets.models import Ticket, TicketRenewal, TicketType
-from apps.tickets.serializers import (
+from apps.core.permissions import IsEmployeeOrManager, IsManager
+from apps.tickets.models import TicketType
+from apps.tickets.selectors.tickets import (
+    get_ticket_by_lookup,
+    get_tickets_queryset,
+)
+from apps.tickets.serializers.tickets import (
     TicketCreateSerializer,
+    TicketDeleteSuccessSerializer,
     TicketDetailSerializer,
     TicketListSerializer,
     TicketRenewSerializer,
     TicketTypeSerializer,
+    TicketUpdateSerializer,
 )
-from apps.vehicles.models import Vehicle
+from apps.tickets.services.tickets import (
+    create_ticket,
+    delete_ticket,
+    renew_ticket,
+    update_ticket,
+)
 
 
 class TicketTypeListView(APIView):
@@ -49,7 +55,7 @@ class TicketTypeListView(APIView):
 
 
 class TicketListCreateView(APIView):
-    """API Danh sách vé & Đăng ký vé mới."""
+    """API Danh sách vé & Đăng ký vé mới (SRS 4.6.1 & 4.6.2)."""
 
     permission_classes = [IsAuthenticated, IsEmployeeOrManager]
     pagination_class = StandardResultsSetPagination
@@ -58,43 +64,38 @@ class TicketListCreateView(APIView):
         operation_id="tickets_list",
         tags=["Tickets"],
         summary="Lấy danh sách vé đỗ xe phân trang",
+        parameters=[
+            OpenApiParameter(
+                name="q",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Tìm kiếm theo biển số xe, mã vé, tên KH, SĐT, mã KH",
+            ),
+            OpenApiParameter(
+                name="status",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Lọc theo trạng thái: ACTIVE, EXPIRED, RENEWING, CANCELLED",
+            ),
+            OpenApiParameter(
+                name="ticket_type",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                description="Lọc theo mã loại vé (DAILY, MONTHLY, QUARTERLY, YEARLY) hoặc ID",
+            ),
+        ],
         responses={200: TicketListSerializer(many=True)},
     )
     def get(self, request: Request) -> Response:
-        queryset = (
-            Ticket.objects.filter(deleted_at__isnull=True)
-            .select_related(
-                "ticket_type",
-                "customer",
-                "vehicle",
-                "vehicle__vehicle_type",
-                "slot",
-                "slot__zone",
-                "slot__zone__floor",
-            )
-            .order_by("-id")
-        )
-
         search_query = request.query_params.get("q", "").strip()
-        if search_query:
-            queryset = queryset.filter(
-                Q(code__icontains=search_query)
-                | Q(customer__full_name__icontains=search_query)
-                | Q(customer__phone__icontains=search_query)
-                | Q(customer__code__icontains=search_query)
-                | Q(vehicle__license_plate__icontains=search_query)
-            )
-
-        status_param = request.query_params.get("status", "").strip().upper()
-        if status_param and status_param != "ALL":
-            queryset = queryset.filter(status=status_param)
-
+        status_param = request.query_params.get("status", "").strip()
         ticket_type_param = request.query_params.get("ticket_type", "").strip()
-        if ticket_type_param and ticket_type_param != "ALL":
-            if ticket_type_param.isdigit():
-                queryset = queryset.filter(ticket_type_id=int(ticket_type_param))
-            else:
-                queryset = queryset.filter(ticket_type__code=ticket_type_param)
+
+        queryset = get_tickets_queryset(
+            search=search_query or None,
+            status=status_param or None,
+            ticket_type=ticket_type_param or None,
+        )
 
         paginator = self.pagination_class()
         paginated_qs = paginator.paginate_queryset(queryset, request)
@@ -111,166 +112,98 @@ class TicketListCreateView(APIView):
     def post(self, request: Request) -> Response:
         serializer = TicketCreateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
 
-        ticket_type = TicketType.objects.filter(
-            id=data["ticket_type_id"], deleted_at__isnull=True
-        ).first()
-        if not ticket_type:
-            return Response(
-                {"detail": "Loại vé không tồn tại hoặc đã bị xóa."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Tìm Customer
-        customer = None
-        if data.get("customer_id"):
-            customer = Customer.objects.filter(
-                id=data["customer_id"], deleted_at__isnull=True
-            ).first()
-        elif data.get("customer_code"):
-            customer = Customer.objects.filter(
-                code=data["customer_code"].strip(), deleted_at__isnull=True
-            ).first()
-
-        if not customer:
-            return Response(
-                {"detail": "Khách hàng không tồn tại."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Tìm Vehicle
-        vehicle = None
-        if data.get("vehicle_id"):
-            vehicle = Vehicle.objects.filter(
-                id=data["vehicle_id"], deleted_at__isnull=True
-            ).first()
-        elif data.get("license_plate"):
-            vehicle = Vehicle.objects.filter(
-                license_plate=data["license_plate"].strip(), deleted_at__isnull=True
-            ).first()
-
-        if not vehicle:
-            return Response(
-                {"detail": "Phương tiện không tồn tại."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        # Slot (nếu có)
-        slot = None
-        if data.get("slot_id"):
-            slot = ParkingSlot.objects.filter(
-                id=data["slot_id"], deleted_at__isnull=True
-            ).first()
-
-        if slot is None:
-            slot = ParkingSlot.objects.filter(
-                status="AVAILABLE", deleted_at__isnull=True
-            ).first()
-
-        if slot is None:
-            return Response(
-                {"error": "Không tìm thấy vị trí đỗ xe khả dụng để đăng ký vé."},
-                status=status.HTTP_400_BAD_REQUEST,
-            )
-
-        now = timezone.now()
-        effective_from = data.get("effective_from") or now
-        duration_days = ticket_type.duration_days or 30
-        effective_to = data.get("effective_to") or (
-            effective_from + timedelta(days=duration_days)
-        )
-        price = data.get("price") or ticket_type.default_price or 0
-
-        # Sinh mã vé VT%04d
-        last_ticket = Ticket.objects.order_by("-id").first()
-        next_num = (last_ticket.id + 1) if last_ticket else 1
-        ticket_code = f"VT{next_num:04d}"
-
-        employee = getattr(request.user, "employee_profile", None)
-
-        ticket = Ticket.objects.create(
-            code=ticket_code,
-            ticket_type=ticket_type,
-            customer=customer,
-            vehicle=vehicle,
-            slot=slot,
-            issued_by=employee,
-            price=price,
-            effective_from=effective_from,
-            effective_to=effective_to,
-            status="ACTIVE",
-            notes=data.get("notes", ""),
+        ticket = create_ticket(
+            data=serializer.validated_data,
+            actor_id=request.user.id if request.user.is_authenticated else None,
         )
 
         res_serializer = TicketDetailSerializer(ticket)
         return Response(res_serializer.data, status=status.HTTP_201_CREATED)
 
 
-class TicketDetailView(APIView):
-    """API Chi tiết & Hủy vé đỗ xe."""
+class TicketDetailUpdateDeleteView(APIView):
+    """
+    API Chi tiết, Chỉnh sửa & Xóa vé đỗ xe (SRS 4.6.1, 4.6.3, 4.6.4).
+    Hỗ trợ tra cứu linh hoạt bằng ID số hoặc Mã vé (chuỗi).
+    """
 
-    permission_classes = [IsAuthenticated, IsEmployeeOrManager]
+    def get_permissions(self):
+        if self.request.method == "DELETE":
+            return [IsAuthenticated(), IsManager()]
+        return [IsAuthenticated(), IsEmployeeOrManager()]
 
     @extend_schema(
         operation_id="tickets_retrieve",
         tags=["Tickets"],
         summary="Chi tiết vé đỗ xe",
-        description="Lấy thông tin chi tiết của vé đỗ xe theo ID.",
+        description="Lấy thông tin chi tiết vé đỗ xe kèm lịch sử gia hạn theo ID hoặc Mã vé.",
         responses={
             200: TicketDetailSerializer,
             404: OpenApiResponse(description="Không tìm thấy vé đỗ xe"),
         },
     )
-    def get(self, request: Request, id: int) -> Response:
-        ticket = (
-            Ticket.objects.filter(id=id, deleted_at__isnull=True)
-            .select_related(
-                "ticket_type",
-                "customer",
-                "vehicle",
-                "vehicle__vehicle_type",
-                "slot",
-                "slot__zone",
-                "slot__zone__floor",
-            )
-            .first()
-        )
+    def get(self, request: Request, lookup: str) -> Response:
+        ticket = get_ticket_by_lookup(lookup)
         if not ticket:
             return Response(
-                {"detail": "Không tìm thấy vé đỗ xe."},
+                {
+                    "code": "PROP-4.6.4-P05",
+                    "message": "Vé không tồn tại hoặc đã bị xóa.",
+                },
                 status=status.HTTP_404_NOT_FOUND,
             )
         serializer = TicketDetailSerializer(ticket)
         return Response(serializer.data, status=status.HTTP_200_OK)
 
     @extend_schema(
+        operation_id="tickets_update",
+        tags=["Tickets"],
+        summary="Chỉnh sửa vé đỗ xe / gia hạn vé (SRS 4.6.3)",
+        description="Cập nhật thông tin vé với kiểm soát khóa lạc quan (OCC) row_version.",
+        request=TicketUpdateSerializer,
+        responses={
+            200: TicketDetailSerializer,
+            400: OpenApiResponse(description="Dữ liệu không hợp lệ"),
+            404: OpenApiResponse(description="Không tìm thấy vé đỗ xe"),
+            409: OpenApiResponse(description="Xung đột khóa lạc quan OCC"),
+        },
+    )
+    def patch(self, request: Request, lookup: str) -> Response:
+        serializer = TicketUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        ticket = update_ticket(
+            lookup=lookup,
+            data=serializer.validated_data,
+            actor_id=request.user.id if request.user.is_authenticated else None,
+        )
+
+        res_serializer = TicketDetailSerializer(ticket)
+        return Response(res_serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
         operation_id="tickets_destroy",
         tags=["Tickets"],
-        summary="Hủy vé đỗ xe",
-        description="Chấm dứt hiệu lực và xóa mềm vé đỗ xe theo ID.",
+        summary="Xóa mềm vé đỗ xe (SRS 4.6.4 / DEL-04)",
+        description="Xóa mềm vé đỗ xe (Chỉ dành riêng cho Quản lý / MANAGER-only).",
         responses={
-            200: OpenApiResponse(description="Đã hủy vé đỗ xe thành công"),
+            200: TicketDeleteSuccessSerializer,
+            400: OpenApiResponse(description="Vé không đủ điều kiện xóa (DEL-04)"),
+            403: OpenApiResponse(description="Chỉ Quản lý mới có quyền xóa vé"),
             404: OpenApiResponse(description="Không tìm thấy vé đỗ xe"),
         },
     )
-    def delete(self, request: Request, id: int) -> Response:
-        ticket = Ticket.objects.filter(id=id, deleted_at__isnull=True).first()
-        if not ticket:
-            return Response(
-                {"detail": "Không tìm thấy vé đỗ xe."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-        ticket.status = "TERMINATED"
-        ticket.soft_delete()
-        return Response(
-            {"detail": f"Đã hủy vé đỗ xe {ticket.code} thành công."},
-            status=status.HTTP_200_OK,
+    def delete(self, request: Request, lookup: str) -> Response:
+        result = delete_ticket(
+            lookup=lookup,
+            actor_id=request.user.id if request.user.is_authenticated else None,
         )
+        return Response(result, status=status.HTTP_200_OK)
 
 
 class TicketRenewView(APIView):
-    """API Gia hạn vé đỗ xe."""
+    """API Gia hạn vé đỗ xe (SRS 4.6.3)."""
 
     permission_classes = [IsAuthenticated, IsEmployeeOrManager]
 
@@ -285,64 +218,15 @@ class TicketRenewView(APIView):
             404: OpenApiResponse(description="Không tìm thấy vé đỗ xe để gia hạn"),
         },
     )
-    def post(self, request: Request, id: int) -> Response:
-        ticket = Ticket.objects.filter(id=id, deleted_at__isnull=True).first()
-        if not ticket:
-            return Response(
-                {"detail": "Không tìm thấy vé đỗ xe để gia hạn."},
-                status=status.HTTP_404_NOT_FOUND,
-            )
-
+    def post(self, request: Request, lookup: str) -> Response:
         serializer = TicketRenewSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        data = serializer.validated_data
 
-        old_effective_to = ticket.effective_to
-        extend_days = data.get("extend_days", 30)
-        new_effective_to = max(old_effective_to, timezone.now()) + timedelta(
-            days=extend_days
+        ticket = renew_ticket(
+            lookup=lookup,
+            data=serializer.validated_data,
+            actor_id=request.user.id if request.user.is_authenticated else None,
         )
-
-        old_type = ticket.ticket_type
-        new_type = old_type
-        if data.get("ticket_type_id"):
-            found_type = TicketType.objects.filter(
-                id=data["ticket_type_id"], deleted_at__isnull=True
-            ).first()
-            if found_type:
-                new_type = found_type
-
-        old_slot = ticket.slot
-        new_slot = old_slot
-        if data.get("new_slot_id"):
-            found_slot = ParkingSlot.objects.filter(
-                id=data["new_slot_id"], deleted_at__isnull=True
-            ).first()
-            if found_slot:
-                new_slot = found_slot
-
-        employee = getattr(request.user, "employee_profile", None)
-
-        TicketRenewal.objects.create(
-            ticket=ticket,
-            old_slot=old_slot,
-            new_slot=new_slot,
-            old_ticket_type=old_type,
-            new_ticket_type=new_type,
-            old_price=ticket.price,
-            new_price=ticket.price + data.get("additional_price", 0),
-            old_effective_to=old_effective_to,
-            new_effective_to=new_effective_to,
-            additional_price=data.get("additional_price", 0),
-            notes=data.get("notes", ""),
-            renewed_by=employee,
-        )
-
-        ticket.effective_to = new_effective_to
-        ticket.ticket_type = new_type
-        ticket.slot = new_slot
-        ticket.status = "ACTIVE"
-        ticket.save()
 
         res_serializer = TicketDetailSerializer(ticket)
         return Response(res_serializer.data, status=status.HTTP_200_OK)

@@ -15,10 +15,13 @@ Zero mocks: all exceptions are authentic PostgreSQL errors caught within transac
 """
 
 from collections.abc import Callable
+from datetime import timedelta
 from typing import Any
 
 import pytest
 from django.db import DatabaseError, IntegrityError, connection, transaction
+from django.db.models import F
+from django.db.models.functions import Greatest
 from django.utils import timezone
 from rest_framework import status
 
@@ -385,7 +388,7 @@ def test_update_vehicle_service_and_api_db_exception_caught(manager_client):
     vehicle = ticket.vehicle
     # Close any open sessions and cancel active reservations first (DEL-04 guard), then soft-delete tickets
     vehicle.entry_exit_logs.filter(exit_time__isnull=True).update(
-        exit_time=timezone.now(),
+        exit_time=Greatest(F("entry_time") + timedelta(minutes=1), timezone.now()),
     )
     vehicle.reservations.filter(status="ACTIVE", deleted_at__isnull=True).update(
         status="CANCELLED"

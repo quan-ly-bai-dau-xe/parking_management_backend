@@ -1018,6 +1018,60 @@ WHERE NOT EXISTS (
       AND existing.occurred_at = sa.occurred_at::TIMESTAMPTZ
 );
 
+-- ----------------------------------------------------------------------------
+-- 2.20. CUSTOMER WALLETS & LEDGER TRANSACTIONS (ADR-0012, WP3)
+-- ----------------------------------------------------------------------------
+-- Seed active wallets for all 21 sample customers (KH0001..KH0021)
+INSERT INTO wallet (customer_id, balance, currency, status)
+SELECT
+    c.id,
+    COALESCE(v.initial_balance, 0.00),
+    'VND',
+    'ACTIVE'
+FROM customer c
+LEFT JOIN (
+    VALUES
+        ('KH0001', 1000000.00::NUMERIC(14, 2)),
+        ('KH0002',  500000.00::NUMERIC(14, 2)),
+        ('KH0003',  250000.00::NUMERIC(14, 2))
+) AS v(customer_code, initial_balance) ON v.customer_code = c.code
+WHERE c.deleted_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM wallet w
+      WHERE w.customer_id = c.id
+        AND w.deleted_at IS NULL
+  )
+ON CONFLICT (customer_id) WHERE deleted_at IS NULL DO NOTHING;
+
+-- Seed matching append-only ledger rows so SUM(amount) == wallet.balance for every wallet
+INSERT INTO wallet_transaction (
+    wallet_id, amount, balance_after, transaction_type, kind,
+    idempotency_key, reference_type, reference_id, note, created_by_id, created_at
+)
+SELECT
+    w.id,
+    tx.amount,
+    tx.balance_after,
+    'CREDIT',
+    tx.kind,
+    tx.idempotency_key,
+    'SEED',
+    NULL,
+    tx.note,
+    acc.id,
+    tx.created_at::TIMESTAMPTZ
+FROM (
+    VALUES
+        ('KH0001', 1000000.00::NUMERIC(14, 2), 1000000.00::NUMERIC(14, 2), 'TOPUP_CASH',   'SEED-WALLET-TX-KH0001-01', 'Nạp tiền mặt khởi tạo ví khách hàng tại quầy.', 'luong.mai.phuong@example.org', '2026-10-01 08:00:00+07'),
+        ('KH0002',  500000.00::NUMERIC(14, 2),  500000.00::NUMERIC(14, 2), 'TOPUP_VIETQR', 'SEED-WALLET-TX-KH0002-01', 'Nạp tiền ví qua VietQR khởi tạo mẫu.',          NULL,                           '2026-10-02 09:30:00+07'),
+        ('KH0003',  250000.00::NUMERIC(14, 2),  250000.00::NUMERIC(14, 2), 'TOPUP_CASH',   'SEED-WALLET-TX-KH0003-01', 'Nạp tiền mặt khởi tạo ví khách hàng tại quầy.', 'phan.thanh.thao@example.net',  '2026-10-03 10:15:00+07')
+) AS tx(customer_code, amount, balance_after, kind, idempotency_key, note, actor_email, created_at)
+JOIN customer c ON c.code = tx.customer_code AND c.deleted_at IS NULL
+JOIN wallet w ON w.customer_id = c.id AND w.deleted_at IS NULL
+LEFT JOIN account acc ON tx.actor_email IS NOT NULL AND lower(acc.email) = lower(tx.actor_email) AND acc.deleted_at IS NULL
+ON CONFLICT (idempotency_key) DO NOTHING;
+
 -- ============================================================================
 -- PART 2: SAMPLE OPERATIONAL DATA (REMOVABLE BLOCK — END)
 -- ============================================================================

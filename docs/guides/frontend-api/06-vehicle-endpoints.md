@@ -642,3 +642,12 @@ Database trigger `trg_guard_soft_delete_and_restore_vehicle` invokes `fn_guard_s
 | `MSG-4.3.1-M01` | 200 | `Xóa thành công` | Successful soft-deletion of vehicle. |
 
 ---
+
+### 9.11 Ticket Management Endpoints (WP2)
+
+- **`GET /api/v1/ticket-types/`** (`EMPLOYEE` or `MANAGER`): List active subscription ticket types and default prices.
+- **`GET /api/v1/tickets/`** & **`POST /api/v1/tickets/`** (`EMPLOYEE` or `MANAGER`, `X-CSRFToken` on `POST`): List paginated tickets (`q`, `status`, `ticket_type`) and issue a new ticket.
+- **`GET /api/v1/tickets/{lookup}/`**, **`PATCH /api/v1/tickets/{lookup}/`**, **`DELETE /api/v1/tickets/{lookup}/`** (`EMPLOYEE` or `MANAGER` for `GET`/`PATCH`; `MANAGER` only for `DELETE`): Lookup by numeric ID or ticket code, edit with OCC `row_version` (4.6.3), or soft-delete expired unrenewed tickets (4.6.4, DEL-04).
+- **`POST /api/v1/tickets/{lookup}/renew/`** (`EMPLOYEE` or `MANAGER` + `X-CSRFToken`): Renew an existing ticket (4.6.3).
+
+---

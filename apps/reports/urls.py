@@ -13,6 +13,7 @@ from apps.reports.views.dashboard import (
     DashboardOverviewView,
     DashboardTrafficChartView,
 )
+from apps.reports.views.statistics import StatisticsSummaryView
 
 app_name = "reports"
 
@@ -40,5 +41,11 @@ urlpatterns = [
         "dashboard/activities/",
         DashboardActivityFeedView.as_view(),
         name="dashboard-activities",
+    ),
+    # 7. Thống kê tổng hợp (SRS 4.7.1, Manager only)
+    path(
+        "reports/statistics/summary/",
+        StatisticsSummaryView.as_view(),
+        name="statistics-summary",
     ),
 ]

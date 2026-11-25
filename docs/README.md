@@ -27,6 +27,12 @@ Formal architectural decisions governing backend technology, security, and data 
 - [`0004-authentication-session-and-remember-token.md`](adr/0004-authentication-session-and-remember-token.md): Session authentication with CSRF for SPA and persistent remember token design.
 - [`0005-local-docker-compose-for-postgresql.md`](adr/0005-local-docker-compose-for-postgresql.md): Local PostgreSQL 18.6 container environment and volume mount specification (`/var/lib/postgresql`).
 - [`0006-django-skeleton-v2-schema-authority.md`](adr/0006-django-skeleton-v2-schema-authority.md): PostgreSQL Schema v2 authority, unmanaged Django models (`managed = False`), `RunSQL` initial migration, and 3-tier API foundation.
+- [`0007-backend-service-in-docker-compose-and-plate-ocr-engine.md`](adr/0007-backend-service-in-docker-compose-and-plate-ocr-engine.md): Backend Gunicorn service in Docker Compose, ONNX OCR engine, and thread/semaphore back-pressure tuning.
+- [`0009-dual-image-storage-backend-and-media-serving.md`](adr/0009-dual-image-storage-backend-and-media-serving.md): Dual image storage backend and secure media serving design.
+- [`0010-cloudinary-only-image-storage.md`](adr/0010-cloudinary-only-image-storage.md): Cloudinary-only fail-fast media storage architecture.
+- [`0011-gate-worker-process.md`](adr/0011-gate-worker-process.md): Dedicated headless gate worker process for MJPEG/RTSP camera ingestion and pending-vehicle liveness.
+- [`0012-customer-wallet-and-immutable-ledger.md`](adr/0012-customer-wallet-and-immutable-ledger.md): Customer prepaid wallet, append-only ledger, and `/api/v1/me/` self-service portal.
+- [`0013-vnpay-sandbox-wallet-topup.md`](adr/0013-vnpay-sandbox-wallet-topup.md): Stateless VNPAY v2.1.0 sandbox wallet top-up, IPN verification, and browser return redirect.
 
 ## 3. Database Catalog & Physical Schema (`db/`)
 

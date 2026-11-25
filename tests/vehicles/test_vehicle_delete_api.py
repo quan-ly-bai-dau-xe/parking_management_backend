@@ -66,8 +66,9 @@ def test_vehicle_delete_guard_3_active_slot_reservation(manager_client):
     now = timezone.now()
     rsv = SlotReservation.objects.get(code="RSV-2026-0001")
     rsv.status = "ACTIVE"
+    rsv.reserved_from = now - timedelta(hours=1)
     rsv.reserved_until = now + timedelta(hours=2)
-    rsv.save(update_fields=["status", "reserved_until"])
+    rsv.save(update_fields=["status", "reserved_from", "reserved_until"])
 
     response = manager_client.delete(f"{BASE_URL}{v16.id}/")
     assert response.status_code == status.HTTP_409_CONFLICT
@@ -175,3 +176,77 @@ def test_vehicle_delete_permissions(anonymous_client, customer_client, employee_
     assert res_emp.json().get("code") == "MSG-4.3.1-M01"
     v.refresh_from_db()
     assert v.deleted_at is not None
+
+
+def test_vehicle_delete_rule_r3c_blocks_all_four_ticket_types_when_active(
+    manager_client,
+):
+    """
+    Quy tắc R3c: Xóa phương tiện bị chặn với HTTP 409 PROP-DEL-03-ACTIVE-TKT
+    khi phương tiện đang có vé đỗ xe còn hiệu lực trên TOÀN BỘ 4 loại vé:
+    DAILY (Vé ngày), MONTHLY (Vé tháng), QUARTERLY (Vé quý), YEARLY (Vé năm).
+    """
+    from apps.customers.models import Customer
+    from apps.parking.models import ParkingSlot
+    from apps.tickets.models import Ticket, TicketType
+
+    now = timezone.now()
+    customer = Customer.objects.filter(deleted_at__isnull=True).first()
+    available_slots = list(
+        ParkingSlot.objects.filter(deleted_at__isnull=True, status="AVAILABLE").exclude(
+            tickets__status="ACTIVE"
+        )[:4]
+    )
+
+    for idx, type_code in enumerate(["DAILY", "MONTHLY", "QUARTERLY", "YEARLY"]):
+        tt = TicketType.objects.get(code=type_code)
+        slot = available_slots[idx]
+        # Sử dụng mã xe <= 10 ký tự (ví dụ XE9091)
+        v = Vehicle.objects.create(
+            code=f"XE909{idx + 1}",
+            license_plate=f"43A-999.0{idx + 1}",
+            model_name="VinFast VF8",
+            customer=customer,
+            vehicle_type_id=1,
+        )
+        Ticket.objects.create(
+            code=f"VT909{idx + 1}",
+            vehicle=v,
+            customer=customer,
+            slot=slot,
+            ticket_type=tt,
+            price=100000,
+            effective_from=now - timedelta(days=1),
+            effective_to=now + timedelta(days=30),
+            status="ACTIVE",
+        )
+
+        response = manager_client.delete(f"{BASE_URL}{v.id}/")
+        assert response.status_code == status.HTTP_409_CONFLICT, (
+            f"Rule R3c failed for ticket type {type_code}: expected 409, got {response.status_code}"
+        )
+        assert response.json().get("code") == "PROP-DEL-03-ACTIVE-TKT"
+        assert "vé đỗ xe còn hiệu lực" in response.json().get("message", "")
+
+
+def test_vehicle_delete_rule_r3c_allows_deletion_when_ticket_is_expired(
+    manager_client, auth_manager
+):
+    """
+    Quy tắc R3c: Phương tiện có vé đã hết hạn (như XE0022 với vé VT0022 hết hạn)
+    phải cho phép xóa thành công 200 OK cleanly với thông điệp MSG-4.3.1-M01.
+    """
+    v22 = Vehicle.objects.get(code="XE0022")
+    # Xác nhận vé VT0022 đã hết hạn
+    ticket = v22.tickets.first()
+    assert ticket is not None
+    assert ticket.effective_to < timezone.now() or ticket.status == "EXPIRED"
+
+    response = manager_client.delete(f"{BASE_URL}{v22.id}/")
+    assert response.status_code == status.HTTP_200_OK
+    assert response.json().get("code") == "MSG-4.3.1-M01"
+    assert response.json().get("message") == "Xóa thành công"
+
+    v22.refresh_from_db()
+    assert v22.deleted_at is not None
+    assert v22.deleted_by_id == auth_manager.id
