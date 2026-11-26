@@ -2,7 +2,13 @@
 Local development settings.
 """
 
+import os
+
 from .base import *
+
+# Enable simulated VietQR wallet top-up in local development unless explicitly overridden
+if "WALLET_SIMULATED_TOPUP_ENABLED" not in os.environ:
+    WALLET_SIMULATED_TOPUP_ENABLED = True
 
 # Validate and configure Cloudinary SDK for runtime
 validate_cloudinary_credentials(

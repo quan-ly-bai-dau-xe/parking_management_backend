@@ -13,8 +13,11 @@ from apps.parking.views import (
     PlateScanView,
     SessionDetailView,
     SessionListView,
-    SlotDetailUpdateView,
-    SlotListView,
+    SlotDetailUpdateDeleteView,
+    SlotListCreateView,
+    SlotReservationCancelView,
+    SlotReservationListView,
+    SlotReserveView,
     VehicleLookupView,
     VehicleSearchView,
 )
@@ -23,11 +26,30 @@ from apps.parking.views.sessions import FeePreviewView
 app_name = "parking"
 
 urlpatterns = [
-    # 0. Sơ đồ bãi xe (Mục 4.5.2)
-    path("structure/", ParkingStructureView.as_view(), name="parking-structure"),
-    # 0b. Quản lý ô đỗ xe (Danh sách và chi tiết/cập nhật trạng thái)
-    path("slots/", SlotListView.as_view(), name="slots-list"),
-    path("slots/<int:pk>/", SlotDetailUpdateView.as_view(), name="slots-detail"),
+    # 0. Sơ đồ cấu trúc bãi đỗ xe (Tầng -> Khu vực -> Ô đỗ) (Defect J1)
+    path("structure/", ParkingStructureView.as_view(), name="structure"),
+    # 0b. Quản lý ô đỗ xe (SRS 4.8.1 - 4.8.5)
+    path("slots/", SlotListCreateView.as_view(), name="slot-list-create"),
+    path(
+        "slots/<int:pk>/",
+        SlotDetailUpdateDeleteView.as_view(),
+        name="slot-detail-update-delete",
+    ),
+    path(
+        "slots/<int:pk>/reserve/",
+        SlotReserveView.as_view(),
+        name="slot-reserve",
+    ),
+    path(
+        "reservations/",
+        SlotReservationListView.as_view(),
+        name="reservation-list",
+    ),
+    path(
+        "reservations/<int:pk>/cancel/",
+        SlotReservationCancelView.as_view(),
+        name="reservation-cancel",
+    ),
     # 1. Quét biển số xe từ hình ảnh OCR
     path("plate-scans/", PlateScanView.as_view(), name="plate-scans"),
     # 2. Tra cứu phương tiện chính xác theo biển số đã chuẩn hóa

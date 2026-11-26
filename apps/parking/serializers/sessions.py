@@ -116,6 +116,9 @@ class SessionDetailSerializer(serializers.ModelSerializer):
     slot_display = serializers.SerializerMethodField(
         help_text="Mã hoặc vị trí đỗ hiển thị"
     )
+    payment_method = serializers.SerializerMethodField(
+        help_text="Phương thức thanh toán cước phí (CASH, VIETQR, WALLET) nếu có"
+    )
 
     class Meta:
         model = VehicleEntryExitLog
@@ -136,6 +139,7 @@ class SessionDetailSerializer(serializers.ModelSerializer):
             "recognition_source",
             "review_status",
             "fee_amount",
+            "payment_method",
             "entry_time",
             "exit_time",
             "duration_seconds",
@@ -149,6 +153,22 @@ class SessionDetailSerializer(serializers.ModelSerializer):
             "notes",
             "created_at",
         ]
+
+    def get_payment_method(self, obj: VehicleEntryExitLog) -> str | None:
+        if hasattr(obj, "paid_payment_method"):
+            return getattr(obj, "paid_payment_method", None)
+        if obj.exit_time is None:
+            return None
+        return (
+            Payment.objects.filter(
+                session_id=obj.id,
+                status="PAID",
+                deleted_at__isnull=True,
+            )
+            .order_by("-paid_at", "-id")
+            .values_list("method", flat=True)
+            .first()
+        )
 
     def get_entry_gate_name(self, obj: VehicleEntryExitLog) -> str | None:
         return obj.entry_gate.name if obj.entry_gate else None
@@ -209,10 +229,10 @@ class CheckOutRequestSerializer(serializers.Serializer):
         help_text="ID cổng ra (bắt buộc phải có direction='OUT')",
     )
     payment_method = serializers.ChoiceField(
-        choices=["CASH", "VIETQR"],
+        choices=["CASH", "VIETQR", "WALLET"],
         required=False,
         allow_null=True,
-        help_text="Phương thức thanh toán cước phí (bắt buộc khi fee_amount > 0: 'CASH' hoặc 'VIETQR')",
+        help_text="Phương thức thanh toán cước phí (bắt buộc khi fee_amount > 0: 'CASH', 'VIETQR' hoặc 'WALLET')",
     )
     exit_image_url = ParkingImageRelativeUrlField(
         help_text="Đường dẫn ảnh chụp lúc ra khỏi bãi",
@@ -283,6 +303,46 @@ class FeePreviewResponseSerializer(serializers.Serializer):
         coerce_to_string=False,
         help_text="Đơn giá cước phí theo giờ của bãi xe (VNĐ)",
     )
+    covered_minutes = serializers.IntegerField(
+        required=False,
+        default=0,
+        help_text="Số phút đỗ xe được bảo đảm miễn phí bởi vé gói",
+    )
+    overage_minutes = serializers.IntegerField(
+        required=False,
+        default=0,
+        help_text="Số phút đỗ vượt quá thời hạn hiệu lực vé gói",
+    )
+    overage_hours = serializers.IntegerField(
+        required=False,
+        default=0,
+        help_text="Số giờ vượt hạn bị tính cước (làm tròn lên theo block 1 giờ)",
+    )
+    billed_hours = serializers.IntegerField(
+        required=False,
+        default=0,
+        help_text="Tổng số giờ tính cước",
+    )
+    has_package_coverage = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Phiên đỗ có ít nhất một phần thời gian được vé gói bảo đảm",
+    )
+    ticket_type_code = serializers.CharField(
+        required=False,
+        allow_null=True,
+        help_text="Mã loại vé gói liên quan (DAILY, MONTHLY, QUARTERLY, YEARLY)",
+    )
+    ticket_effective_to = serializers.DateTimeField(
+        required=False,
+        allow_null=True,
+        help_text="Thời điểm hết hạn hiệu lực của vé gói liên quan",
+    )
+    fee_breakdown_mode = serializers.CharField(
+        required=False,
+        default="HOURLY",
+        help_text="Chế độ tính phí: TICKET_EXEMPT | PACKAGE_OVERAGE | HOURLY",
+    )
 
 
 class PaymentSummarySerializer(serializers.ModelSerializer):
@@ -336,6 +396,9 @@ class SessionListItemSerializer(serializers.ModelSerializer):
         help_text="Số điện thoại chủ xe (đã ẩn danh nếu cần)"
     )
     slot_code = serializers.SerializerMethodField(help_text="Mã vị trí đỗ")
+    payment_method = serializers.SerializerMethodField(
+        help_text="Phương thức thanh toán cước phí (CASH, VIETQR, WALLET) nếu có"
+    )
 
     class Meta:
         model = VehicleEntryExitLog
@@ -349,6 +412,7 @@ class SessionListItemSerializer(serializers.ModelSerializer):
             "duration_seconds",
             "duration_text",
             "fee_amount",
+            "payment_method",
             "entry_image_url",
             "exit_image_url",
             "entry_gate_name",
@@ -362,6 +426,22 @@ class SessionListItemSerializer(serializers.ModelSerializer):
             "customer_phone",
             "slot_code",
         ]
+
+    def get_payment_method(self, obj: VehicleEntryExitLog) -> str | None:
+        if hasattr(obj, "paid_payment_method"):
+            return getattr(obj, "paid_payment_method", None)
+        if obj.exit_time is None:
+            return None
+        return (
+            Payment.objects.filter(
+                session_id=obj.id,
+                status="PAID",
+                deleted_at__isnull=True,
+            )
+            .order_by("-paid_at", "-id")
+            .values_list("method", flat=True)
+            .first()
+        )
 
     def get_entry_gate_name(self, obj: VehicleEntryExitLog) -> str | None:
         return obj.entry_gate.name if obj.entry_gate else None

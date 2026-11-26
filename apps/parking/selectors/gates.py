@@ -7,6 +7,8 @@ from django.db.models import QuerySet
 
 from apps.parking.models import ParkingGate
 
+__all__ = ["get_gates", "get_gate_by_id"]
+
 
 def get_gates(
     direction: str | None = None, is_active: bool | None = None

@@ -14,6 +14,16 @@ from apps.reports.serializers.dashboard import (
     TrafficHourPointSerializer,
     TrafficKPISerializer,
 )
+from apps.reports.serializers.statistics import (
+    NonRevenueWalletTopupSerializer,
+    RevenueByPaymentMethodSerializer,
+    RevenueByTicketTypeSerializer,
+    StatisticsOccupancySerializer,
+    StatisticsPeriodSerializer,
+    StatisticsSummaryFilterSerializer,
+    StatisticsSummaryResponseSerializer,
+    StatisticsTrafficSerializer,
+)
 
 __all__ = [
     "SlotKPISerializer",
@@ -26,4 +36,12 @@ __all__ = [
     "EmergencyAlertSerializer",
     "RecentActivitySerializer",
     "DashboardOverviewResponseSerializer",
+    "StatisticsSummaryFilterSerializer",
+    "StatisticsPeriodSerializer",
+    "RevenueByTicketTypeSerializer",
+    "RevenueByPaymentMethodSerializer",
+    "NonRevenueWalletTopupSerializer",
+    "StatisticsTrafficSerializer",
+    "StatisticsOccupancySerializer",
+    "StatisticsSummaryResponseSerializer",
 ]

@@ -440,6 +440,29 @@ class SMSOTPRegisterServiceTest(TestCase):
         # Cache OTP đã được xóa
         self.assertIsNone(cache.get("otp:register:0912345678"))
 
+    def test_confirm_register_sms_real_db_provisions_wallet(self):
+        from apps.wallet.models import Wallet
+
+        otp = "654321"
+        phone = "0912349876"
+        cache.set(
+            f"otp:register:{phone}",
+            {"token_hash": hash_token(otp), "attempts": 0},
+            timeout=300,
+        )
+        acc, cust = confirm_register_sms(
+            phone=phone,
+            otp=otp,
+            password="SecurePassword123!",
+            full_name="Trần Thị Ví",
+        )
+        wallet = Wallet.objects.filter(
+            customer_id=cust.id, deleted_at__isnull=True
+        ).first()
+        self.assertIsNotNone(wallet)
+        self.assertEqual(wallet.balance, 0)
+        self.assertEqual(acc.role, "CUSTOMER")
+
 
 class SMSOTPViewsTest(TestCase):
     """Kiểm tra các endpoints REST API của SMS OTP."""
@@ -528,3 +551,99 @@ class SMSOTPViewsTest(TestCase):
         self.assertEqual(response.data["detail"], PROPOSAL_MESSAGES["PROP-4.1-P14"])
         self.assertEqual(response.data["account"]["role"], "CUSTOMER")
         self.assertEqual(response.data["customer"]["code"], "KH0001")
+
+
+class SMSOTPMockSessionSecurityRegressionTest(TestCase):
+    """Regression tests ensuring mock_session_ cannot bypass OTP when disabled or in production."""
+
+    def setUp(self):
+        cache.clear()
+        from rest_framework.test import APIClient
+
+        self.client = APIClient()
+
+    def test_register_confirm_rejects_mock_session_when_firebase_configured_and_disabled(
+        self,
+    ):
+        from django.test import override_settings
+
+        with override_settings(
+            DEBUG=False,
+            SMS_OTP_TEST_DOUBLE_ENABLED=False,
+            FIREBASE_API_KEY="AIzaSyRealProductionKeyForTest12345",
+        ):
+            res = self.client.post(
+                "/api/v1/auth/register/sms/confirm/",
+                {
+                    "phone": "0988776655",
+                    "otp": "123456",
+                    "password": "SecurePassword123!",
+                    "confirm_password": "SecurePassword123!",
+                    "full_name": "Attacker Bypass",
+                    "session_info": "mock_session_84988776655_attacker",
+                },
+                format="json",
+            )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.json()["code"], "PROP-4.1-P11")
+        self.assertFalse(Account.objects.filter(phone="0988776655").exists())
+
+    def test_reset_password_rejects_mock_session_when_firebase_configured_and_disabled(
+        self,
+    ):
+        from django.test import override_settings
+
+        acct = Account.objects.create_user(
+            email="victim_sms@parking.local",
+            phone="0988554433",
+            password="OldValidPassword123!",
+            role="CUSTOMER",
+            is_active=True,
+        )
+
+        with override_settings(
+            DEBUG=False,
+            SMS_OTP_TEST_DOUBLE_ENABLED=False,
+            FIREBASE_API_KEY="AIzaSyRealProductionKeyForTest12345",
+        ):
+            res = self.client.post(
+                "/api/v1/auth/reset-password/sms/",
+                {
+                    "phone": "0988554433",
+                    "otp": "123456",
+                    "new_password": "HackedPassword123!",
+                    "confirm_password": "HackedPassword123!",
+                    "session_info": "mock_session_84988554433_attacker",
+                },
+                format="json",
+            )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.json()["code"], "PROP-4.1-P11")
+        acct.refresh_from_db()
+        self.assertTrue(acct.check_password("OldValidPassword123!"))
+        self.assertFalse(acct.check_password("HackedPassword123!"))
+
+    def test_register_confirm_rejects_mock_session_even_if_debug_true_with_real_firebase(
+        self,
+    ):
+        from django.test import override_settings
+
+        with override_settings(
+            DEBUG=True,
+            SMS_OTP_TEST_DOUBLE_ENABLED=True,
+            FIREBASE_API_KEY="AIzaSyRealProductionKeyForTest12345",
+        ):
+            res = self.client.post(
+                "/api/v1/auth/register/sms/confirm/",
+                {
+                    "phone": "0988776656",
+                    "otp": "123456",
+                    "password": "SecurePassword123!",
+                    "confirm_password": "SecurePassword123!",
+                    "full_name": "Attacker Debug",
+                    "session_info": "mock_session_84988776656_attacker",
+                },
+                format="json",
+            )
+        self.assertEqual(res.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertEqual(res.json()["code"], "PROP-4.1-P11")

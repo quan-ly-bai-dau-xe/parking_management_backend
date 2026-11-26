@@ -395,8 +395,9 @@ def test_service_delete_vehicle_db_trigger_catch_blocks(auth_manager):
     now = timezone.now()
     rsv = SlotReservation.objects.get(code="RSV-2026-0001")
     rsv.status = "ACTIVE"
+    rsv.reserved_from = now - timedelta(hours=1)
     rsv.reserved_until = now + timedelta(hours=2)
-    rsv.save(update_fields=["status", "reserved_until"])
+    rsv.save(update_fields=["status", "reserved_from", "reserved_until"])
     with pytest.raises(BusinessAPIException) as exc3:
         delete_vehicle(v_rsv, actor_id=auth_manager.id)
     assert exc3.value.code == "PROP-DEL-03-ACTIVE-RSV"

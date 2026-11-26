@@ -576,14 +576,41 @@ def confirm_password_reset_sms(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
+    test_double_allowed = (
+        bool(settings.DEBUG)
+        and bool(settings.SMS_OTP_TEST_DOUBLE_ENABLED)
+        and not is_firebase_configured()
+    )
+    client_session_info = (
+        session_info.strip()
+        if isinstance(session_info, str) and session_info.strip()
+        else None
+    )
+    if (
+        client_session_info
+        and client_session_info.startswith("mock_session_")
+        and not test_double_allowed
+    ):
+        cache.set(attempt_key, attempts + 1, timeout=300)
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
     now = timezone.now()
     verified_by_firebase = False
 
-    # Thử xác minh qua Firebase nếu có session_info (truyền lên hoặc lưu trong cache)
-    active_session_info = session_info or cache.get(
-        f"firebase_session:reset:{clean_phone}"
-    )
-    if active_session_info and is_firebase_configured():
+    # Prefer server-side cached session_info; never send mock_session_ to real Firebase
+    server_session_info = cache.get(f"firebase_session:reset:{clean_phone}")
+    active_session_info = server_session_info or client_session_info
+    if (
+        active_session_info
+        and not active_session_info.startswith("mock_session_")
+        and is_firebase_configured()
+    ):
         try:
             fb_auth = fb_verify_sms_otp(active_session_info, clean_otp)
             if fb_auth.get("status") == "success":
@@ -661,7 +688,13 @@ def request_register_otp(
     limiter = SMSOTPLimiter()
     limiter.check_and_increment(request, clean_phone, action="register")
 
-    otp = generate_numeric_otp(6)
+    # Test double is strictly gated on DEBUG=True, explicit opt-in, and unconfigured Firebase.
+    test_double_active = (
+        bool(settings.DEBUG)
+        and bool(settings.SMS_OTP_TEST_DOUBLE_ENABLED)
+        and not is_firebase_configured()
+    )
+    otp = "123456" if test_double_active else generate_numeric_otp(6)
     token_hash = hash_token(otp)
     lifetime_seconds = settings.SMS_OTP_LIFETIME_SECONDS
 
@@ -760,13 +793,42 @@ def confirm_register_sms(
             status_code=status.HTTP_400_BAD_REQUEST,
         )
 
-    verified_by_firebase = False
-    active_session_info = (
-        session_info
-        or (cache_data.get("session_info") if isinstance(cache_data, dict) else None)
-        or cache.get(f"firebase_session:register:{clean_phone}")
+    test_double_allowed = (
+        bool(settings.DEBUG)
+        and bool(settings.SMS_OTP_TEST_DOUBLE_ENABLED)
+        and not is_firebase_configured()
     )
-    if active_session_info and is_firebase_configured():
+    client_session_info = (
+        session_info.strip()
+        if isinstance(session_info, str) and session_info.strip()
+        else None
+    )
+    if (
+        client_session_info
+        and client_session_info.startswith("mock_session_")
+        and not test_double_allowed
+    ):
+        if isinstance(cache_data, dict):
+            cache_data["attempts"] = attempts + 1
+            cache.set(cache_key, cache_data, timeout=300)
+        raise BusinessAPIException(
+            code="PROP-4.1-P11",
+            message=get_prop_message(
+                "PROP-4.1-P11", "Mã OTP không chính xác hoặc đã hết hạn."
+            ),
+            status_code=status.HTTP_400_BAD_REQUEST,
+        )
+
+    verified_by_firebase = False
+    server_session_info = (
+        cache_data.get("session_info") if isinstance(cache_data, dict) else None
+    ) or cache.get(f"firebase_session:register:{clean_phone}")
+    active_session_info = server_session_info or client_session_info
+    if (
+        active_session_info
+        and not active_session_info.startswith("mock_session_")
+        and is_firebase_configured()
+    ):
         try:
             fb_auth = fb_verify_sms_otp(active_session_info, clean_otp)
             if fb_auth.get("status") == "success":
@@ -887,6 +949,12 @@ def confirm_register_sms(
             account=account,
             status="ACTIVE",
         )
+
+        # Skip wallet provisioning when Customer ORM is mocked in unit tests without a real DB row.
+        if Customer.objects.filter(id=customer.id, deleted_at__isnull=True).exists():
+            from apps.wallet.services.wallet import ensure_wallet_for_customer
+
+            ensure_wallet_for_customer(customer.id)
 
         cache.delete(cache_key)
 

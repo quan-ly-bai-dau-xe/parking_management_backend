@@ -38,6 +38,21 @@ class CustomerDetailSerializer(serializers.Serializer):
     is_anonymized = serializers.BooleanField(
         help_text="Cờ bảo vệ dữ liệu cá nhân theo Nghị định 13/2023/NĐ-CP"
     )
+    has_wallet = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Khách hàng có ví điện tử hay không",
+    )
+    wallet_balance = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text="Số dư ví hiện tại (VND)",
+    )
+    wallet_status = serializers.CharField(
+        allow_null=True,
+        required=False,
+        help_text="Trạng thái ví (ACTIVE, LOCKED, CLOSED)",
+    )
 
 
 class ParkingPositionSerializer(serializers.Serializer):

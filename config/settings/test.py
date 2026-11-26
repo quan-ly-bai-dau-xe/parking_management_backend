@@ -12,6 +12,9 @@ SECRET_KEY = env("SECRET_KEY", default="") or secrets.token_urlsafe(50)
 # Ensure DEBUG is False during tests
 DEBUG = env.bool("DEBUG", default=False)
 
+# Enable simulated VietQR wallet top-up in test suite (can be overridden per-test)
+WALLET_SIMULATED_TOPUP_ENABLED = True
+
 # Keep the test suite independent of downloaded OCR model assets.
 PARKING_OCR_ENGINE = "dummy"
 

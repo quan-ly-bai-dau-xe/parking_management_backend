@@ -214,4 +214,8 @@ Content-Type: application/json
 - **System Alerts (`GET /api/v1/dashboard/alerts/`)**: Returns prioritized system alerts (CRITICAL > WARNING > INFO).
 - **Recent Activity Feed (`GET /api/v1/dashboard/activities/`)**: Returns live vehicle entry and exit stream.
 
+### 14.3 Statistics Summary (4.7.1)
+
+- **`GET /api/v1/reports/statistics/summary/`** (`MANAGER` only; `403` `MSG-4.2-M01` for `EMPLOYEE`/`CUSTOMER`): Retrieve aggregated revenue by ticket type and payment method (`CASH`, `VIETQR`, `WALLET`), separated non-revenue wallet top-ups (`wallet_topup_total`, `topup_cash_total`, `topup_vietqr_total`, `topup_vnpay_total` corresponding to `TOPUP_CASH`, `TOPUP_VIETQR`, `TOPUP_VNPAY`), vehicle entry/exit traffic, and slot occupancy for a date range (`start_date`, `end_date`, `400` `PROP-4.7.1-P01` on invalid range).
+
 ---

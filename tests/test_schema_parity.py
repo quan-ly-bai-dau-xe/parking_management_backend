@@ -2,8 +2,8 @@
 Schema Parity and Integrity Test Suite for PostgreSQL 18.6 and Django Unmanaged Models.
 
 Verifies:
-1. Exact 1:1 parity between PostgreSQL 18.6 catalog and Django unmanaged models (28 tables + 8 views).
-2. All 393 columns match in name, nullability (on base tables), and max_length.
+1. Exact 1:1 parity between PostgreSQL 18.6 catalog and Django unmanaged models (30 tables + 8 views).
+2. All 415 columns match in name, nullability (on base tables), and max_length.
 3. Foreign keys configuration (on_delete=DO_NOTHING, db_constraint=False).
 4. DB-managed fields immutability (editable=False).
 5. Soft-delete lifecycle (delete -> soft-delete, restore, hard_delete protection).
@@ -49,6 +49,8 @@ EXPECTED_TABLES = [
     "ticket",
     "ticket_renewal",
     "payment",
+    "wallet",
+    "wallet_transaction",
     "parking_lot",
     "parking_floor",
     "parking_zone",
@@ -84,7 +86,7 @@ def ensure_sample_data():
 
 
 def get_domain_models():
-    """Returns all 36 domain models across the 10 domain apps."""
+    """Returns all 38 domain models across the 11 domain apps."""
     domain_app_labels = {
         "core",
         "accounts",
@@ -96,12 +98,13 @@ def get_domain_models():
         "content",
         "audit",
         "reports",
+        "wallet",
     }
     return [m for m in apps.get_models() if m._meta.app_label in domain_app_labels]
 
 
 def test_database_tables_and_views_count():
-    """Verify that all 28 domain tables and 8 views exist in PostgreSQL 18.6."""
+    """Verify that all 30 domain tables and 8 views exist in PostgreSQL 18.6."""
     with connection.cursor() as cur:
         cur.execute("""
             SELECT table_name FROM information_schema.tables
@@ -125,10 +128,10 @@ def test_database_tables_and_views_count():
 
 
 def test_models_unmanaged_and_1to1_table_mapping():
-    """Verify all 36 domain models are unmanaged and map 1:1 to DB relations."""
+    """Verify all 38 domain models are unmanaged and map 1:1 to DB relations."""
     domain_models = get_domain_models()
-    assert len(domain_models) == 36, (
-        f"Expected 36 domain models, found {len(domain_models)}"
+    assert len(domain_models) == 38, (
+        f"Expected 38 domain models, found {len(domain_models)}"
     )
 
     for model in domain_models:
@@ -145,7 +148,7 @@ def test_models_unmanaged_and_1to1_table_mapping():
 
 
 def test_columns_count_and_names_exact_match():
-    """Verify all columns in all 36 relations match exactly in name and count (393 total)."""
+    """Verify all columns in all 38 relations match exactly in name and count (415 total)."""
     domain_models = get_domain_models()
     total_db_cols = 0
     total_dj_cols = 0
@@ -181,11 +184,11 @@ def test_columns_count_and_names_exact_match():
             total_db_cols += len(db_cols)
             total_dj_cols += len(dj_cols)
 
-    assert total_db_cols == 393, (
-        f"Expected 393 total columns in DB, got {total_db_cols}"
+    assert total_db_cols == 415, (
+        f"Expected 415 total columns in DB, got {total_db_cols}"
     )
-    assert total_dj_cols == 393, (
-        f"Expected 393 total columns in Django, got {total_dj_cols}"
+    assert total_dj_cols == 415, (
+        f"Expected 415 total columns in Django, got {total_dj_cols}"
     )
 
 
@@ -251,8 +254,8 @@ def test_foreign_keys_configuration():
                 )
                 fk_count += 1
 
-    assert fk_count >= 69, (
-        f"Expected at least 69 ForeignKeys in domain models, found {fk_count}"
+    assert fk_count >= 73, (
+        f"Expected at least 73 ForeignKeys in domain models, found {fk_count}"
     )
 
 
@@ -327,7 +330,7 @@ def test_query_all_8_unmanaged_views():
 
 
 def test_load_sample_data_idempotency():
-    """Verify running load_sample_data twice yields identical row counts on all 28 tables."""
+    """Verify running load_sample_data twice yields identical row counts on all 30 tables."""
     table_models = [
         m for m in get_domain_models() if not m._meta.db_table.startswith("v_")
     ]

@@ -1,6 +1,6 @@
 """
 Serializers for tickets app.
-Supports TicketType, Ticket listing, detail, creation, and renewal.
+Supports TicketType, Ticket listing, detail, creation, update, and renewal.
 """
 
 from __future__ import annotations
@@ -9,7 +9,7 @@ from decimal import Decimal
 
 from rest_framework import serializers
 
-from apps.tickets.models import Ticket, TicketType
+from apps.tickets.models import Ticket, TicketRenewal, TicketType
 
 
 class TicketTypeSerializer(serializers.ModelSerializer):
@@ -68,6 +68,75 @@ class TicketListSerializer(serializers.Serializer):
         return status_map.get(obj.status, obj.status)
 
 
+class TicketRenewalHistorySerializer(serializers.Serializer):
+    """Serializer lịch sử gia hạn vé đỗ xe."""
+
+    id = serializers.IntegerField()
+    old_slot_id = serializers.IntegerField(source="old_slot.id", allow_null=True)
+    old_slot_code = serializers.SerializerMethodField()
+    new_slot_id = serializers.IntegerField(source="new_slot.id", allow_null=True)
+    new_slot_code = serializers.SerializerMethodField()
+    old_ticket_type_id = serializers.IntegerField(
+        source="old_ticket_type.id", allow_null=True
+    )
+    old_ticket_type_name = serializers.CharField(
+        source="old_ticket_type.name", default=None, allow_null=True
+    )
+    new_ticket_type_id = serializers.IntegerField(
+        source="new_ticket_type.id", allow_null=True
+    )
+    new_ticket_type_name = serializers.CharField(
+        source="new_ticket_type.name", default=None, allow_null=True
+    )
+    old_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, allow_null=True
+    )
+    new_price = serializers.DecimalField(
+        max_digits=12, decimal_places=2, allow_null=True
+    )
+    old_effective_to = serializers.DateTimeField()
+    new_effective_to = serializers.DateTimeField()
+    additional_price = serializers.DecimalField(max_digits=12, decimal_places=2)
+    notes = serializers.CharField(allow_null=True, allow_blank=True)
+    renewed_by_name = serializers.SerializerMethodField()
+    renewed_at = serializers.DateTimeField(source="created_at")
+
+    def get_old_slot_code(self, obj: TicketRenewal) -> str | None:
+        if obj.old_slot:
+            floor = (
+                getattr(obj.old_slot.zone.floor, "name", "")
+                if getattr(obj.old_slot, "zone", None)
+                else ""
+            )
+            zone = (
+                getattr(obj.old_slot.zone, "code", "")
+                if getattr(obj.old_slot, "zone", None)
+                else ""
+            )
+            return f"{floor} - {zone}{obj.old_slot.code}".strip(" -")
+        return None
+
+    def get_new_slot_code(self, obj: TicketRenewal) -> str | None:
+        if obj.new_slot:
+            floor = (
+                getattr(obj.new_slot.zone.floor, "name", "")
+                if getattr(obj.new_slot, "zone", None)
+                else ""
+            )
+            zone = (
+                getattr(obj.new_slot.zone, "code", "")
+                if getattr(obj.new_slot, "zone", None)
+                else ""
+            )
+            return f"{floor} - {zone}{obj.new_slot.code}".strip(" -")
+        return None
+
+    def get_renewed_by_name(self, obj: TicketRenewal) -> str | None:
+        if obj.renewed_by:
+            return getattr(obj.renewed_by, "full_name", str(obj.renewed_by))
+        return None
+
+
 class TicketDetailSerializer(serializers.Serializer):
     """Serializer chi tiết vé đỗ xe."""
 
@@ -92,6 +161,7 @@ class TicketDetailSerializer(serializers.Serializer):
     status_display = serializers.SerializerMethodField()
     notes = serializers.CharField(allow_null=True, allow_blank=True)
     row_version = serializers.IntegerField()
+    renewals = TicketRenewalHistorySerializer(many=True, read_only=True)
 
     def get_slot_location(self, obj: Ticket) -> str:
         if obj.slot:
@@ -127,6 +197,41 @@ class TicketCreateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True)
 
 
+class TicketUpdateSerializer(serializers.Serializer):
+    """
+    Serializer cập nhật / sửa vé đỗ xe (SRS 4.6.3).
+    Yêu cầu bắt buộc row_version để kiểm soát đồng thời lạc quan (OCC).
+    """
+
+    row_version = serializers.IntegerField(
+        required=True, help_text="Phiên bản dòng dữ liệu cho kiểm soát OCC"
+    )
+    effective_to = serializers.DateTimeField(
+        required=False, help_text="Thời điểm hết hạn mới"
+    )
+    ticket_type_id = serializers.IntegerField(
+        required=False, allow_null=True, help_text="ID loại vé mới"
+    )
+    slot_id = serializers.IntegerField(
+        required=False, allow_null=True, help_text="ID vị trí đỗ mới"
+    )
+    price = serializers.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        required=False,
+        help_text="Giá vé điều chỉnh",
+    )
+    notes = serializers.CharField(
+        required=False,
+        allow_blank=True,
+        allow_null=True,
+        help_text="Ghi chú điều chỉnh",
+    )
+    status = serializers.ChoiceField(
+        choices=Ticket.STATUS_CHOICES, required=False, help_text="Trạng thái vé"
+    )
+
+
 class TicketRenewSerializer(serializers.Serializer):
     """Serializer gia hạn vé đỗ xe."""
 
@@ -137,3 +242,10 @@ class TicketRenewSerializer(serializers.Serializer):
     )
     extend_days = serializers.IntegerField(required=False, default=30)
     notes = serializers.CharField(required=False, allow_blank=True)
+
+
+class TicketDeleteSuccessSerializer(serializers.Serializer):
+    """Envelope phản hồi khi xóa vé thành công (SRS 4.6.4)."""
+
+    code = serializers.CharField(default="MSG-4.6.4-M01")
+    message = serializers.CharField(default="Xóa thành công")

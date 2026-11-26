@@ -84,9 +84,8 @@ class ParkingSlot(SoftDeleteModel):
 
     KIND_CHOICES = [
         ("STANDARD", "Ô tô tiêu chuẩn"),
+        ("PRIORITY", "Vị trí ưu tiên"),
         ("EV_CHARGING", "Xe điện có sạc"),
-        ("VIP", "Vị trí VIP"),
-        ("ACCESSIBLE", "Người khuyết tật"),
     ]
 
     STATUS_CHOICES = [

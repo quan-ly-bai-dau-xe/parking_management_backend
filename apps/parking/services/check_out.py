@@ -13,7 +13,7 @@ from rest_framework import status
 
 from apps.audit.models import ActivityLog
 from apps.core.exceptions import BusinessAPIException
-from apps.core.messages import ALL_MESSAGES
+from apps.core.messages import ALL_MESSAGES, get_message
 from apps.employees.models import Employee
 from apps.parking.models import ParkingGate, VehicleEntryExitLog
 from apps.parking.selectors.vehicles import get_combined_vehicle_context
@@ -21,6 +21,8 @@ from apps.parking.services.ocr import PlateRecognizer
 from apps.parking.services.tariff import calculate_parking_fee
 from apps.parking.services.upload import validate_parking_image_path
 from apps.tickets.models import Payment
+from apps.wallet.models import Wallet
+from apps.wallet.services.wallet import InsufficientWalletBalanceError, debit_wallet
 
 
 def check_out_vehicle(
@@ -44,7 +46,8 @@ def check_out_vehicle(
        - 0.00 VND nếu có vé ACTIVE hợp lệ.
        - Ngược lại: ceil(số giờ) * PARKING_HOURLY_RATE_VND.
     6. Nếu fee_amount > 0:
-       - Bắt buộc payment_method trong ('CASH', 'VIETQR').
+       - Bắt buộc payment_method trong ('CASH', 'VIETQR', 'WALLET').
+       - Nếu payment_method == 'WALLET': khóa dòng ví bằng select_for_update(), kiểm tra ví ACTIVE và đủ số dư, tạo Payment(method='WALLET', status='PAID') và gọi debit_wallet(..., kind='PARKING_FEE') trong cùng transaction.atomic().
        - Tạo đúng 1 bản ghi Payment trạng thái 'PAID' trong cùng transaction (ck_payment_single_target).
     7. Lưu phiên đỗ và giải phóng vị trí (DB trigger tự động cập nhật trạng thái slot).
     8. Đảm bảo check-out thành công ngay cả khi xe bị soft-deleted khi đang đỗ (OQ-67).
@@ -250,10 +253,10 @@ def check_out_vehicle(
 
             # 6. Xử lý thanh toán nếu cước phí > 0
             if fee_amount > 0:
-                if not payment_method or str(payment_method).upper() not in (
-                    "CASH",
-                    "VIETQR",
-                ):
+                method_upper = (
+                    str(payment_method).strip().upper() if payment_method else ""
+                )
+                if method_upper not in ("CASH", "VIETQR", "WALLET"):
                     raise BusinessAPIException(
                         code="PROP-4.5.1-P09",
                         message=ALL_MESSAGES.get(
@@ -263,13 +266,50 @@ def check_out_vehicle(
                         status_code=400,
                     )
 
-                clean_code = session.session_code.replace("#", "")
+                locked_wallet: Wallet | None = None
+                if method_upper == "WALLET":
+                    owner_customer_id = (
+                        session.vehicle.customer_id
+                        if session.vehicle_id is not None
+                        and session.vehicle is not None
+                        else None
+                    )
+                    if owner_customer_id is None:
+                        raise BusinessAPIException(
+                            code="PROP-WALLET-NOT-FOUND",
+                            message=get_message("PROP-WALLET-NOT-FOUND"),
+                            status_code=status.HTTP_404_NOT_FOUND,
+                        )
+                    locked_wallet = (
+                        Wallet.objects.select_for_update()
+                        .filter(customer_id=owner_customer_id, deleted_at__isnull=True)
+                        .first()
+                    )
+                    if not locked_wallet:
+                        raise BusinessAPIException(
+                            code="PROP-WALLET-NOT-FOUND",
+                            message=get_message("PROP-WALLET-NOT-FOUND"),
+                            status_code=status.HTTP_404_NOT_FOUND,
+                        )
+                    if locked_wallet.status != "ACTIVE":
+                        raise BusinessAPIException(
+                            code="PROP-WALLET-LOCKED",
+                            message=get_message("PROP-WALLET-LOCKED"),
+                            status_code=status.HTTP_409_CONFLICT,
+                        )
+                    if locked_wallet.balance < fee_amount:
+                        raise InsufficientWalletBalanceError(
+                            required_amount=fee_amount,
+                            current_balance=locked_wallet.balance,
+                        )
+
+                clean_code = session.session_code.replace("#", "")[:22]
                 payment_code = f"PAY-SES-{clean_code}"
 
                 payment_record = Payment.objects.create(
                     code=payment_code,
                     amount=fee_amount,
-                    method=str(payment_method).upper(),
+                    method=method_upper,
                     status="PAID",
                     paid_at=now,
                     received_by=handled_by_employee,
@@ -278,6 +318,27 @@ def check_out_vehicle(
                     renewal=None,
                     notes=f"Thanh toán cước phí phiên đỗ xe {session.session_code}",
                 )
+
+                if method_upper == "WALLET" and locked_wallet is not None:
+                    # wallet_transaction.created_by references Account(id), not Employee(id)
+                    actor_account_id = (
+                        user.id
+                        if user and getattr(user, "is_authenticated", False)
+                        else None
+                    )
+                    debit_wallet(
+                        wallet_id=locked_wallet.id,
+                        amount=fee_amount,
+                        kind="PARKING_FEE",
+                        idempotency_key=f"checkout-session-{session.id}",
+                        note=(
+                            f"Thanh toán cước phí phiên đỗ {session.session_code} "
+                            f"({session.license_plate})"
+                        ),
+                        reference_type="PAYMENT",
+                        reference_id=payment_record.id,
+                        actor_id=actor_account_id,
+                    )
 
             if notes:
                 session.notes = notes
@@ -293,6 +354,9 @@ def check_out_vehicle(
     # Gán đầy đủ quan hệ cho session tránh N+1 khi serialize qua SessionDetailSerializer
     session.exit_gate = exit_gate
     session.exit_handled_by = handled_by_employee
+    session.paid_payment_method = (  # type: ignore[attr-defined]
+        payment_record.method if payment_record is not None else None
+    )
 
     # Tra cứu thông tin xe sau khi check-out để trả về trong response (chỉ khi xe đã đăng ký)
     if session.vehicle_id is not None:

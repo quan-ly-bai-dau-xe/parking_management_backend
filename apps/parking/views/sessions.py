@@ -312,9 +312,10 @@ class CheckOutView(APIView):
         description=(
             "Kết thúc phiên đỗ xe tại cổng ra: nhận diện phiên qua mã phiên đỗ xe HOẶC biển số xe, "
             "khóa dòng bản ghi bằng select_for_update trong transaction atomic, xác thực cổng ra "
-            "(bắt buộc direction='OUT'), tính cước phí theo quy tắc (0 VND nếu có vé ACTIVE; "
-            "ngược lại ceil(giờ) * 10.000 VND), yêu cầu phương thức thanh toán CASH/VIETQR và tự động "
-            "tạo bản ghi Payment trạng thái PAID nếu có phí phát sinh. Hỗ trợ xe bị xóa mềm trong khi đỗ (OQ-67)."
+            "(bắt buộc direction='OUT'), tính cước phí theo quy tắc (0 VND cho thời gian trong hạn vé; "
+            "vượt hạn hoặc vãng lai tính block ceil(giờ) * 10.000 VND), yêu cầu phương thức thanh toán CASH/VIETQR/WALLET "
+            "và tự động tạo bản ghi Payment trạng thái PAID nếu có phí phát sinh (trừ ví nguyên tử nếu chọn WALLET). "
+            "Hỗ trợ xe bị xóa mềm trong khi đỗ (OQ-67)."
         ),
         request=CheckOutRequestSerializer,
         examples=[
@@ -439,7 +440,7 @@ class CheckOutView(APIView):
             ),
             404: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
-                description="Không tìm thấy phiên đỗ xe đang mở (MSG-4.5.1-M01)",
+                description="Không tìm thấy phiên đỗ xe đang mở (MSG-4.5.1-M01) hoặc ví khách hàng (PROP-WALLET-NOT-FOUND)",
                 examples=[
                     OpenApiExample(
                         "Không tìm thấy phiên",
@@ -448,12 +449,20 @@ class CheckOutView(APIView):
                             "message": "Không tìm thấy dữ liệu trùng khớp",
                             "details": {},
                         },
-                    )
+                    ),
+                    OpenApiExample(
+                        "Không tìm thấy ví khách hàng",
+                        value={
+                            "code": "PROP-WALLET-NOT-FOUND",
+                            "message": "Không tìm thấy ví của khách hàng.",
+                            "details": {},
+                        },
+                    ),
                 ],
             ),
             409: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
-                description="Phiên đỗ xe đã được kết thúc trước đó",
+                description="Xung đột nghiệp vụ (phiên đã đóng, ví bị khóa hoặc ví không đủ số dư)",
                 examples=[
                     OpenApiExample(
                         "Phiên đỗ xe đã đóng",
@@ -462,7 +471,27 @@ class CheckOutView(APIView):
                             "message": "Phiên đỗ xe này đã được kết thúc trước đó.",
                             "details": {},
                         },
-                    )
+                    ),
+                    OpenApiExample(
+                        "Số dư ví không đủ",
+                        value={
+                            "code": "PROP-WALLET-INSUFFICIENT",
+                            "message": "Số dư ví không đủ để thực hiện giao dịch.",
+                            "details": {
+                                "required_amount": "20000.00",
+                                "current_balance": "10000.00",
+                                "missing_amount": "10000.00",
+                            },
+                        },
+                    ),
+                    OpenApiExample(
+                        "Ví bị khóa",
+                        value={
+                            "code": "PROP-WALLET-LOCKED",
+                            "message": "Ví khách hàng hiện đang bị khóa hoặc đã đóng, không thể giao dịch.",
+                            "details": {},
+                        },
+                    ),
                 ],
             ),
         },

@@ -174,6 +174,7 @@ class Payment(SoftDeleteModel):
     METHOD_CHOICES = [
         ("CASH", "Tiền mặt"),
         ("VIETQR", "Chuyển khoản VietQR"),
+        ("WALLET", "Ví khách hàng"),
     ]
 
     STATUS_CHOICES = [

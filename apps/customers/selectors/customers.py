@@ -86,6 +86,13 @@ def get_customers_queryset(
         )
     )
 
+    from apps.wallet.models import Wallet
+
+    wallet_base = Wallet.objects.filter(
+        customer_id=OuterRef("pk"),
+        deleted_at__isnull=True,
+    )
+
     qs = Customer.objects.filter(deleted_at__isnull=True).annotate(
         vehicles_count=Count(
             "vehicles",
@@ -93,6 +100,8 @@ def get_customers_queryset(
             distinct=True,
         ),
         has_active_ticket=has_active_ticket,
+        wallet_balance_val=Subquery(wallet_base.values("balance")[:1]),
+        wallet_status_val=Subquery(wallet_base.values("status")[:1]),
     )
 
     # 1. Filter criteria
@@ -307,4 +316,12 @@ def get_customer_by_id(
         )
 
     customer.annotated_vehicles = annotated_vehicles  # type: ignore[attr-defined]
+    from apps.wallet.models import Wallet
+
+    wallet_obj = Wallet.objects.filter(
+        customer_id=customer.id,
+        deleted_at__isnull=True,
+    ).first()
+    customer.wallet_balance_val = wallet_obj.balance if wallet_obj else None  # type: ignore[attr-defined]
+    customer.wallet_status_val = wallet_obj.status if wallet_obj else None  # type: ignore[attr-defined]
     return customer

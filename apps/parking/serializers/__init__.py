@@ -2,7 +2,10 @@
 Parking serializers module exports.
 """
 
-from apps.parking.serializers.gates import ParkingGateSerializer
+from apps.parking.serializers.gates import (
+    GateAutoEventSerializer,
+    ParkingGateSerializer,
+)
 from apps.parking.serializers.lookup import (
     ActiveTicketSummarySerializer,
     CustomerDetailSerializer,
@@ -40,6 +43,7 @@ __all__ = [
     "CheckOutRequestSerializer",
     "CheckOutResponseSerializer",
     "CustomerDetailSerializer",
+    "GateAutoEventSerializer",
     "OpenSessionSummarySerializer",
     "ParkingGateSerializer",
     "ParkingPositionSerializer",

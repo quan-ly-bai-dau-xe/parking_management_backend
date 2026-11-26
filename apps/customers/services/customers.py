@@ -201,6 +201,10 @@ def create_customer(
                     actor_id=actor_id,
                 )
 
+        from apps.wallet.services.wallet import ensure_wallet_for_customer
+
+        ensure_wallet_for_customer(customer.id)
+
         return customer
 
 

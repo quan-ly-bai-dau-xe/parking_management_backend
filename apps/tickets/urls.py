@@ -1,26 +1,28 @@
 """
 URL configuration for tickets app.
-Routes:
-- api/v1/tickets/types/
-- api/v1/tickets/
-- api/v1/tickets/<int:id>/
-- api/v1/tickets/<int:id>/renew/
+Exposes endpoints for TicketType listing, Ticket CRUD, and Ticket Renewal.
 """
 
 from django.urls import path
 
-from apps.tickets.views import (
-    TicketDetailView,
+from apps.tickets.views.tickets import (
+    TicketDetailUpdateDeleteView,
     TicketListCreateView,
     TicketRenewView,
     TicketTypeListView,
 )
 
-app_name = "tickets"
-
 urlpatterns = [
-    path("tickets/types/", TicketTypeListView.as_view(), name="ticket-types-list"),
-    path("tickets/", TicketListCreateView.as_view(), name="tickets-list-create"),
-    path("tickets/<int:id>/", TicketDetailView.as_view(), name="tickets-detail"),
-    path("tickets/<int:id>/renew/", TicketRenewView.as_view(), name="tickets-renew"),
+    path("ticket-types/", TicketTypeListView.as_view(), name="ticket-type-list"),
+    path("tickets/", TicketListCreateView.as_view(), name="ticket-list-create"),
+    path(
+        "tickets/<str:lookup>/",
+        TicketDetailUpdateDeleteView.as_view(),
+        name="ticket-detail-update-delete",
+    ),
+    path(
+        "tickets/<str:lookup>/renew/",
+        TicketRenewView.as_view(),
+        name="ticket-renew",
+    ),
 ]

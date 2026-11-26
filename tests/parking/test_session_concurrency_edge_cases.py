@@ -32,7 +32,11 @@ from rest_framework.test import APIClient
 from apps.accounts.models import Account
 from apps.core.exceptions import BusinessAPIException
 from apps.parking.models import ParkingGate, ParkingSlot, VehicleEntryExitLog
-from apps.parking.services.ocr import DummyPlateRecognizer, set_global_recognizer
+from apps.parking.services.ocr import (
+    DummyPlateRecognizer,
+    PlateRecognizer,
+    set_global_recognizer,
+)
 from apps.parking.services.upload import validate_and_save_image
 from apps.tickets.models import Payment
 
@@ -254,8 +258,9 @@ class TestConcurrencyCheckInBoundary:
         )
 
         # Kiểm tra CSDL chỉ có duy nhất 1 phiên đỗ mở
+        norm_plate = PlateRecognizer.normalize_plate(plate)
         open_sessions_count = VehicleEntryExitLog.objects.filter(
-            license_plate=plate, exit_time__isnull=True
+            license_plate_norm=norm_plate, exit_time__isnull=True
         ).count()
         assert open_sessions_count == 1, (
             f"Expected 1 open session but found {open_sessions_count}"
