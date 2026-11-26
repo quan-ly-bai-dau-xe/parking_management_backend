@@ -9,6 +9,7 @@ from __future__ import annotations
 from typing import Any
 
 import pytest
+from django.db import connection
 from rest_framework.test import APIClient
 
 from apps.accounts.models import Account
@@ -144,3 +145,36 @@ def active_customer() -> Customer:
     )
     assert customer is not None, "Seed customer data missing"
     return customer
+
+
+@pytest.fixture(autouse=True)
+def ensure_wallet_tables(db):
+    """Tạo bảng customer_wallet và customer_wallet_transaction trong test database nếu chưa có."""
+    with connection.cursor() as cursor:
+        cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS customer_wallet (
+                id BIGSERIAL PRIMARY KEY,
+                customer_id BIGINT NOT NULL UNIQUE REFERENCES customer(id) ON DELETE CASCADE,
+                balance NUMERIC(12, 2) NOT NULL DEFAULT 0.00,
+                status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT ck_wallet_balance_nonnegative CHECK (balance >= 0)
+            );
+
+            CREATE TABLE IF NOT EXISTS customer_wallet_transaction (
+                id BIGSERIAL PRIMARY KEY,
+                wallet_id BIGINT NOT NULL REFERENCES customer_wallet(id) ON DELETE CASCADE,
+                transaction_type VARCHAR(20) NOT NULL,
+                amount NUMERIC(12, 2) NOT NULL,
+                balance_before NUMERIC(12, 2) NOT NULL,
+                balance_after NUMERIC(12, 2) NOT NULL,
+                session_id BIGINT NULL REFERENCES vehicle_entry_exit_log(id) ON DELETE SET NULL,
+                reference_code VARCHAR(50) NULL,
+                description TEXT NULL,
+                created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                CONSTRAINT ck_wallet_tx_amount_positive CHECK (amount > 0)
+            );
+            """
+        )
