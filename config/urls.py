@@ -30,6 +30,8 @@ urlpatterns: list = [
     path("api/v1/", include("apps.tickets.urls")),
     path("api/v1/parking/", include("apps.parking.urls")),
     path("api/v1/", include("apps.reports.urls")),
+    path("api/v1/", include("apps.wallet.urls")),
+    path("api/v1/", include("apps.payments.urls")),
     # OpenAPI Schema and Swagger UI documentation
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
     path(

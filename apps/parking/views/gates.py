@@ -70,6 +70,13 @@ class GateListView(APIView):
                                 "camera_status": "ONLINE",
                                 "is_auto_scan": True,
                                 "is_active": True,
+                                "worker_online": True,
+                                "last_auto_event": {
+                                    "action": "GATE_AUTO_CHECK_IN",
+                                    "license_plate_masked": "51A-***.14",
+                                    "reason": "VALID_REGISTERED",
+                                    "occurred_at": "2026-11-08T06:00:00Z",
+                                },
                             },
                             {
                                 "id": 2,
@@ -77,9 +84,11 @@ class GateListView(APIView):
                                 "code": "OUT_01",
                                 "name": "Cổng ra 1",
                                 "direction": "OUT",
-                                "camera_status": "ONLINE",
+                                "camera_status": "OFFLINE",
                                 "is_auto_scan": True,
                                 "is_active": True,
+                                "worker_online": False,
+                                "last_auto_event": None,
                             },
                         ],
                     )

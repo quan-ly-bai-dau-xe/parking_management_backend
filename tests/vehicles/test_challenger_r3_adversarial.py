@@ -429,11 +429,13 @@ def test_adversarial_owner_change_blocked_by_active_reservation_without_tickets(
     assert v.tickets.count() == 0
 
     # Attach RSV-2026-0003 to XE0026 as ACTIVE reservation
+    now = timezone.now()
     rsv = SlotReservation.objects.get(code="RSV-2026-0003")
     rsv.vehicle = v
     rsv.status = "ACTIVE"
-    rsv.reserved_until = timezone.now() + timedelta(hours=4)
-    rsv.save(update_fields=["vehicle", "status", "reserved_until"])
+    rsv.reserved_from = now - timedelta(hours=1)
+    rsv.reserved_until = now + timedelta(hours=4)
+    rsv.save(update_fields=["vehicle", "status", "reserved_from", "reserved_until"])
 
     new_cust = Customer.objects.create(
         code="KH-ADV-03",

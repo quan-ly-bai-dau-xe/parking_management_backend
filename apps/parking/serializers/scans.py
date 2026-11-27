@@ -31,6 +31,11 @@ class PlateScanRequestSerializer(serializers.Serializer):
         allow_null=True,
         help_text="ID cổng barrier nơi đặt camera quét biển số (tùy chọn)",
     )
+    preview = serializers.BooleanField(
+        required=False,
+        default=False,
+        help_text="Chế độ quét xem trước: chạy OCR, sửa ký tự, kiểm tra xe/phiên/danh sách đen nhưng không tải ảnh lên Cloudinary và trả về image_url: null (mặc định false)",
+    )
 
 
 class BoundingBoxSerializer(serializers.Serializer):
@@ -122,7 +127,9 @@ class PlateScanResponseSerializer(serializers.Serializer):
         help_text="Ứng viên có độ tin cậy cao nhất (giữ nguyên để tương thích ngược, plate_normalized đồng bộ với plate_final)",
     )
     image_url = serializers.CharField(
-        help_text="Đường dẫn truy cập tệp ảnh đã lưu an toàn trên máy chủ"
+        allow_null=True,
+        required=True,
+        help_text="Đường dẫn truy cập tệp ảnh đã lưu an toàn trên máy chủ (trả về null khi preview=true)",
     )
     vehicle_lookup = VehicleLookupResponseSerializer(
         allow_null=True,

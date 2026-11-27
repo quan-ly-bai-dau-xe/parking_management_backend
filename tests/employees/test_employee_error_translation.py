@@ -743,6 +743,8 @@ def test_guard_docs_proposal_codes_integrity_and_backend_alignment() -> None:
 
     repo_root = Path(settings.BASE_DIR)
     guide_file = repo_root / "docs" / "guides" / "01-frontend-api-guide.md"
+    split_dir = repo_root / "docs" / "guides" / "frontend-api"
+    split_files = sorted(split_dir.glob("*.md")) if split_dir.exists() else []
     endpoints_file = repo_root / "docs" / "api-endpoints.md"
 
     # 1. Trích xuất động tập mã hợp lệ từ backend service và catalog
@@ -759,7 +761,8 @@ def test_guard_docs_proposal_codes_integrity_and_backend_alignment() -> None:
     corrupted_entities: list[str] = []
     unmatched_codes: list[str] = []
 
-    for doc_path in (guide_file, endpoints_file):
+    target_docs = [guide_file, *split_files, endpoints_file]
+    for doc_path in target_docs:
         assert doc_path.is_file(), f"Tài liệu {doc_path} không tồn tại."
         lines = doc_path.read_text(encoding="utf-8").splitlines()
         for line_idx, line in enumerate(lines, 1):

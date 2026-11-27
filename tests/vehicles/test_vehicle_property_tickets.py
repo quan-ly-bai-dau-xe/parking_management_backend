@@ -122,20 +122,20 @@ def test_property_matches_independent_hand_written_cte_sql(employee_client):
     """
     Xác minh kết quả của API khớp 100% với câu truy vấn CTE SQL độc lập thuần túy.
     Số liệu baseline seed:
-      - total_vehicles: 30
+      - total_vehicles: 31
       - active_vehicles: 15
       - valid_tickets: 10
       - expiring_soon_tickets: 0
       - expired_tickets: 12
-      - none_tickets: 8 (3 CANCELLED + 5 không có vé)
+      - none_tickets: 9 (3 CANCELLED + 6 không có vé)
     """
     expected = _get_independent_handwritten_cte_sql()
-    assert expected["total_vehicles"] == 30
+    assert expected["total_vehicles"] == 31
     assert expected["active_vehicles"] == 15
     assert expected["valid_tickets"] == 10
     assert expected["expiring_soon_tickets"] == 0
     assert expected["expired_tickets"] == 12
-    assert expected["none_tickets"] == 8
+    assert expected["none_tickets"] == 9
 
     # Check Summary KPI endpoint
     res_summary = employee_client.get(SUMMARY_URL)
@@ -193,18 +193,18 @@ def test_property_full_agreement_across_all_ticket_states(employee_client):
 
     # Verify partition sum equals total vehicles
     total_partition = sum(detail_state_counts.values())
-    assert total_partition == kpi["total_vehicles"] == 30
+    assert total_partition == kpi["total_vehicles"] == 31
 
 
 def test_property_list_detail_row_by_row_identity(employee_client):
     """
-    Khẳng định tính đồng nhất từng hàng (Row-by-Row Identity) trên 100% xe seed (30 xe):
+    Khẳng định tính đồng nhất từng hàng (Row-by-Row Identity) trên 100% xe seed (31 xe):
     list_row['ticket'] == detail_view['ticket'].
     """
     res_list = employee_client.get(f"{LIST_URL}?page_size=50")
     assert res_list.status_code == status.HTTP_200_OK
     list_rows = res_list.json()["results"]
-    assert len(list_rows) == 30
+    assert len(list_rows) == 31
 
     for row in list_rows:
         vid = row["id"]

@@ -10,7 +10,8 @@
 --   - PART 1: Reference Lookup Data (required in all environments; TL-02..TL-20).
 --   - PART 2: Sample Operational Data (removable block for development/QA/demo;
 --     synthetic personal data generated from fixed PRNG seed 20261017, RFC 2606
---     example domains only, and Django '!' unusable password hashes).
+--     example domains only, Argon2id hash of shared dev-only password, reset to
+--     unusable '!' hashes in production via load_sample_data safety net).
 -- ============================================================================
 
 BEGIN;
@@ -349,31 +350,31 @@ ON CONFLICT (lot_id, code) WHERE deleted_at IS NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
 -- 2.6. SYSTEM ACCOUNTS (20 ACCOUNTS: 1 MANAGER, 7 EMPLOYEE, 12 CUSTOMER — TL-01, TL-21)
---   All password_hash values use Django's unusable-password prefix '!' + 40
---   deterministic alphanumeric characters (cannot authenticate until reset).
+--   All password_hash values use an Argon2id hash of the shared dev-only password
+--   (reset to unusable hashes in production via load_sample_data safety net).
 -- ----------------------------------------------------------------------------
 INSERT INTO account (email, phone, password_hash, role, is_active, last_login_at)
 VALUES
-    ('hoang.dinh.khang@example.com', '0880721788', '!llp4Vi0ulafwxv3xktvXAwiXkJ4v8cMts9V8fQaE', 'MANAGER', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('luong.mai.phuong@example.org', '0385211625', '!E6jx193Cyen0LYHbaggJh4BtFEXbRw9shHQiJmOr', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('do.minh.quan@example.net', '0760098704', '!Mw1JDg60wCADMDDhvHGBrfJGvwwByxD1hiWsgFAv', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('truong.ngoc.bich@example.com', '0374179898', '!1pV9O7ooVSRT4k9yPB3uvMesIxfDQdcxASGP9mxM', 'EMPLOYEE', FALSE, '2026-09-10 17:30:00+07'::TIMESTAMPTZ),
-    ('vu.quoc.hung@example.org', '0361681236', '!TBtnGqDHNZdZDzKQNdQ4Sw58g6ytwMnsPMgYffnA', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('phan.thanh.thao@example.net', '0356582610', '!3qEhSwoyvkygzqgJI0gx8d32Q71TxPYQ4dNIYdvx', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('ngo.gia.bao@example.com', '0864769738', '!fMRLWGbinmVscfJWo1HmExEK38YUJCByYbj482ja', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('dinh.lan.anh@example.org', '0707739639', '!U5baTmrr7Q0ooo2DacmYGciCUkzsYyATMXxV31e2', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
-    ('trinh.xuan.truong@example.com', '0868851325', '!EEQ6iA4trd3REvq6SLnQdhLEa3ZuEBp7VMKLZDRm', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('bui.khanh.doan@example.org', '0348083802', '!KO9wxoq4WS0BHsHXAeV8hMqx1QodybQyISzE7wGt', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('lam.hoang.viet@example.net', '0790226163', '!XbdFKsAaL2cXgqa3VFODVpLfA2A8E5UWxfIzdKso', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('doan.tuyet.mai@example.com', '0779009950', '!JGvi7DK0fo1HiO6v6nPzxTpIcM66JOepnjzxnN42', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('ho.trong.nghia@example.org', '0789632200', '!U0K2g0B312E2ontN1052JVAnRTCKjJVVYds9OBM8', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('ta.minh.chau@example.net', '0708960990', '!wEX7lFt7yqMjBHWUc1CK97JrUiwM7xpYOaKT7JpH', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('cao.tien.dung@example.com', '0327855040', '!EcDeO95IZ5MHRJ1fIYDxVgmDdzOE1Pug9KS4FEQs', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('duong.hong.nhung@example.org', '0332790866', '!ZR0oBqmkRna21d97OJ6rjGYK7TyMmENpFLnJ8zUn', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('ha.manh.cuong@example.net', '0861032661', '!FlMLLALLQW4wpka4Ksns1poZvCAFjBhlko9K5svc', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('mai.phuong.thao@example.com', '0781281571', '!UU83ZWiY7FvRxqeX8MbVHDbeKFVCrnE2RW8qjYZw', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('kieu.quoc.tuan@example.org', '0392758924', '!lIF9JTbeoxZFmxSScv5d4XPHYfz9KAnlk2kbAWyy', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
-    ('chu.kim.oanh@example.net', '0387755825', '!1inni527okEx5nAcUfvwrFeRVKDdIWAttelX3FTa', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ)
+    ('hoang.dinh.khang@example.com', '0880721788', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'MANAGER', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('luong.mai.phuong@example.org', '0385211625', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('do.minh.quan@example.net', '0760098704', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('truong.ngoc.bich@example.com', '0374179898', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', FALSE, '2026-09-10 17:30:00+07'::TIMESTAMPTZ),
+    ('vu.quoc.hung@example.org', '0361681236', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('phan.thanh.thao@example.net', '0356582610', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('ngo.gia.bao@example.com', '0864769738', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('dinh.lan.anh@example.org', '0707739639', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'EMPLOYEE', TRUE, '2026-10-17 07:05:00+07'::TIMESTAMPTZ),
+    ('trinh.xuan.truong@example.com', '0868851325', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('bui.khanh.doan@example.org', '0348083802', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('lam.hoang.viet@example.net', '0790226163', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('doan.tuyet.mai@example.com', '0779009950', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('ho.trong.nghia@example.org', '0789632200', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('ta.minh.chau@example.net', '0708960990', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('cao.tien.dung@example.com', '0327855040', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('duong.hong.nhung@example.org', '0332790866', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('ha.manh.cuong@example.net', '0861032661', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('mai.phuong.thao@example.com', '0781281571', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('kieu.quoc.tuan@example.org', '0392758924', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ),
+    ('chu.kim.oanh@example.net', '0387755825', 'argon2$argon2id$v=19$m=102400,t=2,p=8$aUJlWDM0NUt2Wm9vajFITGZkdFdBNw$VoKRwFmKhfzzFs/E6LGTR0hz3FuMKOIEV2XMe7GcbMo', 'CUSTOMER', TRUE, '2026-10-16 19:20:00+07'::TIMESTAMPTZ)
 ON CONFLICT (lower(email)) WHERE deleted_at IS NULL AND email IS NOT NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
@@ -418,7 +419,7 @@ LEFT JOIN account acc ON lower(acc.email) = lower(e.acc_email) AND acc.deleted_a
 ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
--- 2.8. CUSTOMERS (20 CUSTOMERS: KH0001..KH0020, INCLUDING NULL OPTIONAL FIELDS — TL-08, TL-18, TL-21)
+-- 2.8. CUSTOMERS (21 CUSTOMERS: KH0001..KH0021, INCLUDING NULL OPTIONAL FIELDS — TL-08, TL-18, TL-21)
 -- ----------------------------------------------------------------------------
 INSERT INTO customer (
     code, full_name, date_of_birth, gender, identity_card_number,
@@ -461,7 +462,8 @@ FROM (
         ('KH0017', 'Quách Đình Phong', '1985-02-09', 'Nam', '048085942100', '0771732321', 'quach.dinh.phong@example.com', 'Số 173 Đường Lê Duẩn', '48', 'HC', 'TT', NULL, 'SUSPENDED', 'Tạm ngừng sử dụng dịch vụ theo yêu cầu chủ xe khi đi công tác dài ngày'),
         ('KH0018', 'Đàm Thị Yến Nhi', '2000-08-11', 'Nữ', '049300512910', '0388194634', 'dam.yen.nhi@example.org', 'Số 39 Đường Võ Như Hưng', '49', 'DB', 'DN', NULL, 'SUSPENDED', 'Tạm ngừng để cập nhật lại giấy chứng nhận đăng ký phương tiện'),
         ('KH0019', 'Lục Văn Khải', '1978-12-25', 'Nam', '048078749185', '0704893550', 'luc.van.khai@example.net', 'Số 45 Đường Đống Đa', '48', 'HC', 'TT', NULL, 'BLACKLISTED', 'Nợ cước phí đỗ xe quá hạn thanh toán hơn 60 ngày'),
-        ('KH0020', 'Sơn Thị Bích Hợp', '1993-04-03', 'Nữ', '049193984241', '0766606745', 'son.bich.hop@example.com', 'Số 121 Đường Trần Đại Nghĩa', '49', 'DB', 'DN', NULL, 'BLACKLISTED', 'Vi phạm quy định an toàn giao thông trong khuôn viên bãi đỗ xe')
+        ('KH0020', 'Sơn Thị Bích Hợp', '1993-04-03', 'Nữ', '049193984241', '0766606745', 'son.bich.hop@example.com', 'Số 121 Đường Trần Đại Nghĩa', '49', 'DB', 'DN', NULL, 'BLACKLISTED', 'Vi phạm quy định an toàn giao thông trong khuôn viên bãi đỗ xe'),
+        ('KH0021', 'Khách Hàng Demo', '1990-01-01', 'Nam', '048099999999', '0909897140', 'demo.khachhang@example.com', 'Số 02 Nguyễn Văn Linh', '48', 'HC', 'TT', NULL, 'ACTIVE', NULL)
 ) AS c(code, full_name, dob, gender, cccd, phone, email, address, p_code, d_code, w_code, acc_email, status, status_reason)
 LEFT JOIN administrative_province prov ON prov.code = c.p_code
 LEFT JOIN administrative_district dist ON dist.code = c.d_code
@@ -470,7 +472,7 @@ LEFT JOIN account acc ON c.acc_email IS NOT NULL AND lower(acc.email) = lower(c.
 ON CONFLICT (code) WHERE deleted_at IS NULL DO NOTHING;
 
 -- ----------------------------------------------------------------------------
--- 2.9. VEHICLES (30 VEHICLES: XE0001..XE0030 OF TYPES CAR & EV — TL-09, TL-20)
+-- 2.9. VEHICLES (31 VEHICLES: XE0001..XE0031 OF TYPES CAR & EV — TL-09, TL-20)
 -- ----------------------------------------------------------------------------
 INSERT INTO vehicle (
     code, license_plate, model_name, brand, color,
@@ -517,7 +519,8 @@ FROM (
         ('XE0027', '92P-175.17', 'Creta 1.5', 'Hyundai', 'Trắng', NULL, NULL, 'CAR', 'KH0017'),
         ('XE0028', '43A-57382', 'Atto 3 Dynamic', 'BYD', 'Xanh dương', '/media/vehicles/xe0028.jpg', NULL, 'EV', 'KH0018'),
         ('XE0029', '92E-227.97', 'Veloz Cross', 'Toyota', 'Bạc', '/media/vehicles/xe0029.jpg', NULL, 'CAR', 'KH0019'),
-        ('XE0030', '75D-216.14', 'Wuling Mini EV', 'Wuling', 'Vàng', NULL, NULL, 'EV', 'KH0020')
+        ('XE0030', '75D-216.14', 'Wuling Mini EV', 'Wuling', 'Vàng', NULL, NULL, 'EV', 'KH0020'),
+        ('XE0031', '51A-897.14', 'Vios', 'Toyota', 'Bạc', NULL, 'Phương tiện demo nhận dạng camera', 'CAR', 'KH0021')
 ) AS v(code, license_plate, model_name, brand, color, image_url, notes, vtype_code, cust_code)
 JOIN vehicle_type vt ON vt.code = v.vtype_code AND vt.deleted_at IS NULL
 JOIN customer cust ON cust.code = v.cust_code AND cust.deleted_at IS NULL
@@ -545,18 +548,18 @@ SELECT
     t.effective_from::TIMESTAMPTZ
 FROM (
     VALUES
-        ('VT0001', 'XE0001', 'B1', 'A', 'A-01', 'MONTHLY', 'NV003', 500000.00, '2026-04-01 00:00:00+07', '2026-12-01 00:00:00+07', 'ACTIVE', 'Vé tháng ô tô khu A tầng B1'),
-        ('VT0002', 'XE0002', 'B1', 'C', 'C-01', 'QUARTERLY', 'NV003', 1200000.00, '2026-04-01 00:00:00+07', '2026-12-31 00:00:00+07', 'ACTIVE', 'Vé quý xe điện kèm sạc khu C tầng B1'),
-        ('VT0003', 'XE0003', 'B1', 'A', 'A-02', 'MONTHLY', 'NV006', 500000.00, '2026-04-05 00:00:00+07', '2026-11-25 00:00:00+07', 'ACTIVE', 'Vé tháng khách hàng thường xuyên'),
-        ('VT0004', 'XE0004', 'B1', 'A', 'A-03', 'YEARLY', 'NV001', 4800000.00, '2026-04-01 00:00:00+07', '2027-04-01 00:00:00+07', 'ACTIVE', 'Vé năm hợp đồng dài hạn'),
-        ('VT0005', 'XE0005', 'B1', 'C', 'C-02', 'MONTHLY', 'NV003', 500000.00, '2026-04-10 00:00:00+07', '2026-11-30 00:00:00+07', 'ACTIVE', 'Vé tháng xe điện VinFast VF e34'),
+        ('VT0001', 'XE0001', 'B1', 'A', 'A-01', 'MONTHLY', 'NV003', 500000.00, '2026-04-01 00:00:00+07', '2027-12-01 00:00:00+07', 'ACTIVE', 'Vé tháng ô tô khu A tầng B1'),
+        ('VT0002', 'XE0002', 'B1', 'C', 'C-01', 'QUARTERLY', 'NV003', 1200000.00, '2026-04-01 00:00:00+07', '2027-12-31 00:00:00+07', 'ACTIVE', 'Vé quý xe điện kèm sạc khu C tầng B1'),
+        ('VT0003', 'XE0003', 'B1', 'A', 'A-02', 'MONTHLY', 'NV006', 500000.00, '2026-04-05 00:00:00+07', '2027-11-25 00:00:00+07', 'ACTIVE', 'Vé tháng khách hàng thường xuyên'),
+        ('VT0004', 'XE0004', 'B1', 'A', 'A-03', 'YEARLY', 'NV001', 4800000.00, '2026-04-01 00:00:00+07', '2028-04-01 00:00:00+07', 'ACTIVE', 'Vé năm hợp đồng dài hạn'),
+        ('VT0005', 'XE0005', 'B1', 'C', 'C-02', 'MONTHLY', 'NV003', 500000.00, '2026-04-10 00:00:00+07', '2027-11-30 00:00:00+07', 'ACTIVE', 'Vé tháng xe điện VinFast VF e34'),
         ('VT0006', 'XE0006', 'B1', 'A', 'A-04', 'DAILY', 'NV006', 50000.00, '2026-04-15 00:00:00+07', '2026-10-25 00:00:00+07', 'ACTIVE', 'Vé ngắn hạn theo ngày đã gia hạn'),
-        ('VT0007', 'XE0007', 'B1', 'A', 'A-05', 'MONTHLY', 'NV003', 500000.00, '2026-04-08 00:00:00+07', '2026-11-20 00:00:00+07', 'ACTIVE', NULL),
-        ('VT0008', 'XE0008', 'B1', 'C', 'C-03', 'QUARTERLY', 'NV006', 1200000.00, '2026-04-02 00:00:00+07', '2026-12-15 00:00:00+07', 'ACTIVE', 'Vé quý ô tô điện khu C'),
-        ('VT0009', 'XE0009', 'B1', 'B', 'B-01', 'YEARLY', 'NV001', 4800000.00, '2026-04-01 00:00:00+07', '2027-04-01 00:00:00+07', 'ACTIVE', 'Vé năm ô ưu tiên khu B'),
-        ('VT0010', 'XE0010', 'B1', 'B', 'B-02', 'MONTHLY', 'NV003', 500000.00, '2026-04-12 00:00:00+07', '2026-11-18 00:00:00+07', 'ACTIVE', NULL),
+        ('VT0007', 'XE0007', 'B1', 'A', 'A-05', 'MONTHLY', 'NV003', 500000.00, '2026-04-08 00:00:00+07', '2027-11-20 00:00:00+07', 'ACTIVE', NULL),
+        ('VT0008', 'XE0008', 'B1', 'C', 'C-03', 'QUARTERLY', 'NV006', 1200000.00, '2026-04-02 00:00:00+07', '2027-12-15 00:00:00+07', 'ACTIVE', 'Vé quý ô tô điện khu C'),
+        ('VT0009', 'XE0009', 'B1', 'B', 'B-01', 'YEARLY', 'NV001', 4800000.00, '2026-04-01 00:00:00+07', '2028-04-01 00:00:00+07', 'ACTIVE', 'Vé năm ô ưu tiên khu B'),
+        ('VT0010', 'XE0010', 'B1', 'B', 'B-02', 'MONTHLY', 'NV003', 500000.00, '2026-04-12 00:00:00+07', '2027-12-18 00:00:00+07', 'ACTIVE', NULL),
         ('VT0011', 'XE0011', 'B1', 'A', 'A-06', 'DAILY', 'NV006', 50000.00, '2026-04-16 00:00:00+07', '2026-10-22 00:00:00+07', 'ACTIVE', 'Vé ngày khách đăng ký trước'),
-        ('VT0012', 'XE0012', 'B1', 'C', 'C-04', 'YEARLY', 'NV001', 4800000.00, '2026-04-01 00:00:00+07', '2027-04-01 00:00:00+07', 'ACTIVE', 'Vé năm xe điện VF 9 Plus'),
+        ('VT0012', 'XE0012', 'B1', 'C', 'C-04', 'YEARLY', 'NV001', 4800000.00, '2026-04-01 00:00:00+07', '2028-04-01 00:00:00+07', 'ACTIVE', 'Vé năm xe điện VF 9 Plus'),
         ('VT0013', 'XE0013', 'B1', 'A', 'A-07', 'MONTHLY', 'NV003', 500000.00, '2026-04-10 00:00:00+07', '2026-10-20 00:00:00+07', 'RENEWING', 'Đang chờ xác nhận gia hạn kỳ tiếp theo'),
         ('VT0014', 'XE0014', 'B1', 'B', 'B-03', 'QUARTERLY', 'NV006', 1200000.00, '2026-04-05 00:00:00+07', '2026-10-21 00:00:00+07', 'RENEWING', 'Chủ xe đăng ký gia hạn sang vé quý mới'),
         ('VT0015', 'XE0015', 'B1', 'B', 'B-04', 'MONTHLY', 'NV003', 500000.00, '2026-04-12 00:00:00+07', '2026-10-23 00:00:00+07', 'RENEWING', 'Đang xử lý thanh toán gia hạn VietQR'),
@@ -604,11 +607,11 @@ SELECT
     r.created_at::TIMESTAMPTZ
 FROM (
     VALUES
-        ('VT0001', 'B1', 'A', 'A-01', 'B1', 'A', 'A-01', 'MONTHLY', 'MONTHLY', 500000.00, 500000.00, '2026-11-01 00:00:00+07', '2026-12-01 00:00:00+07', 500000.00, 'Gia hạn thêm 30 ngày giữ nguyên vị trí A-01', 'NV003', '2026-10-01 09:15:00+07'),
-        ('VT0002', 'B1', 'C', 'C-01', 'B1', 'C', 'C-01', 'MONTHLY', 'QUARTERLY', 500000.00, 1200000.00, '2026-09-30 00:00:00+07', '2026-12-31 00:00:00+07', 1200000.00, 'Nâng cấp từ vé tháng lên vé quý khu sạc xe điện', 'NV006', '2026-09-28 14:20:00+07'),
-        ('VT0003', 'B1', 'A', 'A-02', 'B1', 'A', 'A-02', 'MONTHLY', 'MONTHLY', 500000.00, 500000.00, '2026-10-25 00:00:00+07', '2026-11-25 00:00:00+07', 500000.00, 'Gia hạn định kỳ tháng 11/2026', 'NV003', '2026-10-10 10:05:00+07'),
-        ('VT0005', 'B1', 'C', 'C-02', 'B1', 'C', 'C-02', 'MONTHLY', 'MONTHLY', 500000.00, 500000.00, '2026-10-30 00:00:00+07', '2026-11-30 00:00:00+07', 500000.00, 'Gia hạn vé tháng xe điện VF e34', 'NV006', '2026-10-12 16:40:00+07'),
-        ('VT0008', 'B1', 'C', 'C-03', 'B1', 'C', 'C-03', 'QUARTERLY', 'QUARTERLY', 1200000.00, 1200000.00, '2026-09-15 00:00:00+07', '2026-12-15 00:00:00+07', 1200000.00, 'Gia hạn vé quý kỳ Q4/2026', 'NV003', '2026-09-14 11:10:00+07')
+        ('VT0001', 'B1', 'A', 'A-01', 'B1', 'A', 'A-01', 'MONTHLY', 'MONTHLY', 500000.00, 500000.00, '2026-11-01 00:00:00+07', '2027-12-01 00:00:00+07', 500000.00, 'Gia hạn thêm 30 ngày giữ nguyên vị trí A-01', 'NV003', '2026-10-01 09:15:00+07'),
+        ('VT0002', 'B1', 'C', 'C-01', 'B1', 'C', 'C-01', 'MONTHLY', 'QUARTERLY', 500000.00, 1200000.00, '2026-09-30 00:00:00+07', '2027-12-31 00:00:00+07', 1200000.00, 'Nâng cấp từ vé tháng lên vé quý khu sạc xe điện', 'NV006', '2026-09-28 14:20:00+07'),
+        ('VT0003', 'B1', 'A', 'A-02', 'B1', 'A', 'A-02', 'MONTHLY', 'MONTHLY', 500000.00, 500000.00, '2026-10-25 00:00:00+07', '2027-11-25 00:00:00+07', 500000.00, 'Gia hạn định kỳ tháng 11/2026', 'NV003', '2026-10-10 10:05:00+07'),
+        ('VT0005', 'B1', 'C', 'C-02', 'B1', 'C', 'C-02', 'MONTHLY', 'MONTHLY', 500000.00, 500000.00, '2026-10-30 00:00:00+07', '2027-11-30 00:00:00+07', 500000.00, 'Gia hạn vé tháng xe điện VF e34', 'NV006', '2026-10-12 16:40:00+07'),
+        ('VT0008', 'B1', 'C', 'C-03', 'B1', 'C', 'C-03', 'QUARTERLY', 'QUARTERLY', 1200000.00, 1200000.00, '2026-09-15 00:00:00+07', '2027-12-15 00:00:00+07', 1200000.00, 'Gia hạn vé quý kỳ Q4/2026', 'NV003', '2026-09-14 11:10:00+07')
 ) AS r(ticket_code, old_fl, old_z, old_sl, new_fl, new_z, new_sl, old_tt_code, new_tt_code, old_price, new_price, old_eff_to, new_eff_to, add_price, notes, emp_code, created_at)
 JOIN ticket tk ON tk.code = r.ticket_code AND tk.deleted_at IS NULL
 JOIN parking_floor opf ON opf.code = r.old_fl AND opf.deleted_at IS NULL
@@ -1014,6 +1017,60 @@ WHERE NOT EXISTS (
     WHERE existing.alert_type = sa.alert_type
       AND existing.occurred_at = sa.occurred_at::TIMESTAMPTZ
 );
+
+-- ----------------------------------------------------------------------------
+-- 2.20. CUSTOMER WALLETS & LEDGER TRANSACTIONS (ADR-0012, WP3)
+-- ----------------------------------------------------------------------------
+-- Seed active wallets for all 21 sample customers (KH0001..KH0021)
+INSERT INTO wallet (customer_id, balance, currency, status)
+SELECT
+    c.id,
+    COALESCE(v.initial_balance, 0.00),
+    'VND',
+    'ACTIVE'
+FROM customer c
+LEFT JOIN (
+    VALUES
+        ('KH0001', 1000000.00::NUMERIC(14, 2)),
+        ('KH0002',  500000.00::NUMERIC(14, 2)),
+        ('KH0003',  250000.00::NUMERIC(14, 2))
+) AS v(customer_code, initial_balance) ON v.customer_code = c.code
+WHERE c.deleted_at IS NULL
+  AND NOT EXISTS (
+      SELECT 1
+      FROM wallet w
+      WHERE w.customer_id = c.id
+        AND w.deleted_at IS NULL
+  )
+ON CONFLICT (customer_id) WHERE deleted_at IS NULL DO NOTHING;
+
+-- Seed matching append-only ledger rows so SUM(amount) == wallet.balance for every wallet
+INSERT INTO wallet_transaction (
+    wallet_id, amount, balance_after, transaction_type, kind,
+    idempotency_key, reference_type, reference_id, note, created_by_id, created_at
+)
+SELECT
+    w.id,
+    tx.amount,
+    tx.balance_after,
+    'CREDIT',
+    tx.kind,
+    tx.idempotency_key,
+    'SEED',
+    NULL,
+    tx.note,
+    acc.id,
+    tx.created_at::TIMESTAMPTZ
+FROM (
+    VALUES
+        ('KH0001', 1000000.00::NUMERIC(14, 2), 1000000.00::NUMERIC(14, 2), 'TOPUP_CASH',   'SEED-WALLET-TX-KH0001-01', 'Nạp tiền mặt khởi tạo ví khách hàng tại quầy.', 'luong.mai.phuong@example.org', '2026-10-01 08:00:00+07'),
+        ('KH0002',  500000.00::NUMERIC(14, 2),  500000.00::NUMERIC(14, 2), 'TOPUP_VIETQR', 'SEED-WALLET-TX-KH0002-01', 'Nạp tiền ví qua VietQR khởi tạo mẫu.',          NULL,                           '2026-10-02 09:30:00+07'),
+        ('KH0003',  250000.00::NUMERIC(14, 2),  250000.00::NUMERIC(14, 2), 'TOPUP_CASH',   'SEED-WALLET-TX-KH0003-01', 'Nạp tiền mặt khởi tạo ví khách hàng tại quầy.', 'phan.thanh.thao@example.net',  '2026-10-03 10:15:00+07')
+) AS tx(customer_code, amount, balance_after, kind, idempotency_key, note, actor_email, created_at)
+JOIN customer c ON c.code = tx.customer_code AND c.deleted_at IS NULL
+JOIN wallet w ON w.customer_id = c.id AND w.deleted_at IS NULL
+LEFT JOIN account acc ON tx.actor_email IS NOT NULL AND lower(acc.email) = lower(tx.actor_email) AND acc.deleted_at IS NULL
+ON CONFLICT (idempotency_key) DO NOTHING;
 
 -- ============================================================================
 -- PART 2: SAMPLE OPERATIONAL DATA (REMOVABLE BLOCK — END)

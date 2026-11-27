@@ -186,9 +186,18 @@ EXPECTED_OPERATION_SECURITY: dict[tuple[str, str], list[Any]] = {
     ("GET", "/api/health/"): [],
     ("GET", "/api/v1/health/"): [],
     ("GET", "/api/v1/auth/csrf/"): [],
+    # WP6 VNPAY public callbacks
+    ("GET", "/api/v1/payments/vnpay/ipn/"): [],
+    ("GET", "/api/v1/payments/vnpay/return/"): [],
     # Auth actions: require CSRF header only
     ("POST", "/api/v1/auth/login/"): [{"csrfAuth": []}],
     ("POST", "/api/v1/auth/logout/"): [{"csrfAuth": []}],
+    ("POST", "/api/v1/auth/forgot-password/"): [{"csrfAuth": []}],
+    ("POST", "/api/v1/auth/reset-password/"): [{"csrfAuth": []}],
+    ("POST", "/api/v1/auth/forgot-password/sms/"): [{"csrfAuth": []}],
+    ("POST", "/api/v1/auth/reset-password/sms/"): [{"csrfAuth": []}],
+    ("POST", "/api/v1/auth/register/sms/request/"): [{"csrfAuth": []}],
+    ("POST", "/api/v1/auth/register/sms/confirm/"): [{"csrfAuth": []}],
     # Protected read operations: require session cookie only
     ("GET", "/api/v1/administrative/districts/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/administrative/provinces/"): [{"cookieAuth": []}],
@@ -197,11 +206,24 @@ EXPECTED_OPERATION_SECURITY: dict[tuple[str, str], list[Any]] = {
     ("GET", "/api/v1/customers/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/customers/summary/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/customers/{id}/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/dashboard/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/dashboard/activities/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/dashboard/alerts/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/dashboard/floors/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/dashboard/kpis/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/dashboard/traffic/"): [{"cookieAuth": []}],
+    # WP5 Reservations & Customer Parking Map (GET)
+    ("GET", "/api/v1/me/parking-slots/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/parking-structure/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/parking/reservations/"): [{"cookieAuth": []}],
+    # WP6 Statistics Summary 4.7.1
+    ("GET", "/api/v1/reports/statistics/summary/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/employees/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/employees/summary/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/employees/{id}/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/gates/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/sessions/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/parking/sessions/fee-preview/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/sessions/{id}/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/vehicle-lookup/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/parking/vehicle-search/"): [{"cookieAuth": []}],
@@ -211,6 +233,27 @@ EXPECTED_OPERATION_SECURITY: dict[tuple[str, str], list[Any]] = {
     ("GET", "/api/v1/vehicles/export/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/vehicles/summary/"): [{"cookieAuth": []}],
     ("GET", "/api/v1/vehicles/{id}/"): [{"cookieAuth": []}],
+    # WP1 Slots & Structure
+    ("GET", "/api/v1/parking/slots/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/parking/slots/{id}/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/parking/structure/"): [{"cookieAuth": []}],
+    # WP2 Tickets
+    ("GET", "/api/v1/ticket-types/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/tickets/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/tickets/{lookup}/"): [{"cookieAuth": []}],
+    # WP3 Wallet & Customer Self-Service (GET)
+    ("GET", "/api/v1/customers/{id}/wallet/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/customers/{id}/wallet/transactions/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/profile/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/ticket-types/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/tickets/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/vehicle-types/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/vehicles/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/vehicles/{lookup}/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/wallet/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/wallet/transactions/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/wallet/topups/vnpay/{txn_ref}/"): [{"cookieAuth": []}],
+    ("GET", "/api/v1/me/notifications/"): [{"cookieAuth": []}],
     # Protected mutating operations: require session cookie AND CSRF header in single dict
     ("POST", "/api/v1/customers/"): [{"cookieAuth": [], "csrfAuth": []}],
     ("PATCH", "/api/v1/customers/{id}/"): [{"cookieAuth": [], "csrfAuth": []}],
@@ -231,6 +274,42 @@ EXPECTED_OPERATION_SECURITY: dict[tuple[str, str], list[Any]] = {
     ("POST", "/api/v1/vehicles/"): [{"cookieAuth": [], "csrfAuth": []}],
     ("PATCH", "/api/v1/vehicles/{id}/"): [{"cookieAuth": [], "csrfAuth": []}],
     ("DELETE", "/api/v1/vehicles/{id}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    # WP1 Slots (mutating)
+    ("POST", "/api/v1/parking/slots/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("PATCH", "/api/v1/parking/slots/{id}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("DELETE", "/api/v1/parking/slots/{id}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    # WP2 Tickets (mutating)
+    ("POST", "/api/v1/tickets/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("PATCH", "/api/v1/tickets/{lookup}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("DELETE", "/api/v1/tickets/{lookup}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("POST", "/api/v1/tickets/{lookup}/renew/"): [{"cookieAuth": [], "csrfAuth": []}],
+    # WP3 Wallet & Customer Self-Service (mutating)
+    ("POST", "/api/v1/customers/{id}/wallet/topup/"): [
+        {"cookieAuth": [], "csrfAuth": []}
+    ],
+    ("PATCH", "/api/v1/me/profile/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("POST", "/api/v1/me/tickets/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("POST", "/api/v1/me/tickets/{lookup}/cancel/"): [
+        {"cookieAuth": [], "csrfAuth": []}
+    ],
+    ("POST", "/api/v1/me/vehicles/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("PATCH", "/api/v1/me/vehicles/{lookup}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("DELETE", "/api/v1/me/vehicles/{lookup}/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("POST", "/api/v1/me/wallet/topups/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("POST", "/api/v1/me/wallet/topups/vnpay/"): [{"cookieAuth": [], "csrfAuth": []}],
+    ("POST", "/api/v1/me/notifications/read-all/"): [
+        {"cookieAuth": [], "csrfAuth": []}
+    ],
+    ("POST", "/api/v1/me/notifications/{id}/read/"): [
+        {"cookieAuth": [], "csrfAuth": []}
+    ],
+    # WP5 Reservations (mutating)
+    ("POST", "/api/v1/parking/slots/{id}/reserve/"): [
+        {"cookieAuth": [], "csrfAuth": []}
+    ],
+    ("POST", "/api/v1/parking/reservations/{id}/cancel/"): [
+        {"cookieAuth": [], "csrfAuth": []}
+    ],
 }
 
 

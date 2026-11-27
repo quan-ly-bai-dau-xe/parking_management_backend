@@ -74,6 +74,15 @@ UNFORWARDED_ALLOWLIST: dict[str, str] = {
     "GUNICORN_GRACEFUL_TIMEOUT": "Internal container worker graceful-timeout tuning with in-code defaults, not documented for operators",
     "GUNICORN_KEEPALIVE": "Internal container HTTP keepalive tuning with in-code defaults, not documented for operators",
     "GUNICORN_LOG_LEVEL": "Internal container log-level tuning with in-code defaults, not documented for operators",
+    "GATE_WORKER_CONCURRENCY_LIMIT": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_CONFIG_REFRESH_INTERVAL": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_COOLDOWN_SECONDS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_MAX_OCR_RATE_FPS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_MOTION_MAD_THRESHOLD": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_PENDING_MINUTES": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_PENDING_RECHECK_SECONDS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_PENDING_SEEN_SECONDS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
+    "GATE_WORKER_STREAMS": "Forwarded to services.gate-worker.environment under the gate-worker profile rather than services.web.environment",
 }
 
 # Allowlist for keys permitted to have a hard-coded literal value in compose instead of ${KEY...} interpolation.
@@ -95,8 +104,6 @@ INTENTIONAL_DEFAULT_MISMATCH_ALLOWLIST: dict[str, str] = {
 
 # Allowlist for keys whose default value in docker-compose.yml intentionally differs from in-code defaults.
 INTENTIONAL_CODE_DEFAULT_MISMATCH_ALLOWLIST: dict[str, str] = {
-    "CORS_ALLOWED_ORIGINS": "Compose defaults to local dev origins http://localhost:3000,http://127.0.0.1:3000 while code defaults to empty list [] (deliberate local-stack convenience)",
-    "CSRF_TRUSTED_ORIGINS": "Compose defaults to local dev origins http://localhost:3000,http://127.0.0.1:3000 while code defaults to empty list [] (deliberate local-stack convenience)",
     "ALLOWED_HOSTS": "Compose defaults to 'localhost,127.0.0.1,web' for container networking while local settings default to ['localhost', '127.0.0.1', '[::1]']",
     "POSTGRES_DB": "Compose supplies the local-development default 'parking_db' (the same value as .env.example) while the code has no usable default for this key (declared with an empty-string default in base.py and read without a default in local.py, so it is required); deliberate local-stack convenience.",
     "POSTGRES_USER": "Compose supplies the local-development default 'parking_user' (the same value as .env.example) while the code has no usable default for this key (declared with an empty-string default in base.py and read without a default in local.py, so it is required); deliberate local-stack convenience.",

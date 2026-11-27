@@ -148,3 +148,334 @@ Canonical decision log for `parking_management_backend` (`TL-01`–`TL-51`). All
   3. **W3 — CSRF Token Visibility in Swagger UI & Round 48 Refinement (S1)**: Khai báo `securitySchemes.csrfAuth` (apiKey in header `X-CSRFToken`) qua `APPEND_COMPONENTS`. Trong Round 48 (S1), chuẩn hóa `SECURITY` trong `SPECTACULAR_SETTINGS` thành single requirement object `[{"cookieAuth": [], "csrfAuth": []}]` (thay vì cặp `OR`), và hướng dẫn rõ ràng trong `DESCRIPTION`: trình duyệt bảo vệ cookie `HttpOnly` nên không cho Swagger UI thiết lập thủ công `sessionid`. Phiên làm việc được thiết lập tự động khi gọi `POST /api/v1/auth/login/` trên cùng trang nhờ `SWAGGER_UI_SETTINGS["withCredentials"] = True`. Nút **Authorize** chỉ dùng để dán mã `csrftoken` (lấy từ `GET /api/v1/auth/csrf/`). Các thao tác đọc (GET) chỉ cần cookie phiên; các thao tác thay đổi dữ liệu yêu cầu cả cookie phiên và header `X-CSRFToken`. Các endpoint công khai không yêu cầu bảo mật (`[]`), đăng nhập/đăng xuất chỉ yêu cầu CSRF header (`[{"csrfAuth": []}]`).
   4. **W4 — Schema Semantic Envelopes, Health Checks & Hook Relocation (S2)**: Bổ sung `summary`, `description` (nêu rõ hai đường dẫn `/api/health/` cho hạ tầng và `/api/v1/health/` cho API v1 đều được duy trì có chủ đích), và ví dụ mẫu phản hồi HTTP 503 cho `HealthCheckView`. Trong Round 48 (S2), di chuyển hook `postprocess_schema_descriptions` từ `apps/core/views/health.py` sang module chuyên trách `apps/core/openapi.py` và cập nhật `POSTPROCESSING_HOOKS` trong `config/settings/base.py`, trả lại `apps/core/views/health.py` chỉ chứa các định nghĩa liên quan đến health check probe. Hook đồng thời thực thi chuẩn hóa per-operation security và bổ sung description cho `NullEnum` và `PaginatedSessionListItemList`.
   5. **W5 — Documentation Module Path Reconciliation**: Đồng bộ lại toàn bộ đường dẫn module `CSRF_FAILURE_VIEW` thành `apps.accounts.views.csrf.custom_csrf_failure_view` trong `README.md` và `docs/requirements/01-decision-log.md`. Đồng bộ hằng số danh mục thông điệp trong `docs/requirements/05-proposed-messages.md` thành `apps.core.messages.PROPOSAL_MESSAGES`.
+
+## 6. Round 80 Technical Decisions (`TL-55`)
+
+- **TL-55 — Backend Plate Scan Preview Mode (Decision B1)** (`[PROPOSAL]` | `apps/parking/`, `docs/guides/frontend-api/05-parking-endpoints.md`, Owner request 2026-11-01, Team Lead decision):
+  1. Bổ sung trường form tùy chọn `preview` kiểu boolean (mặc định `false`) cho endpoint `POST /api/v1/parking/plate-scans/`.
+  2. Khi `preview=true`: thực thi đầy đủ quy trình giải mã ảnh, OCR mô hình Dual-Ensemble, sửa ký tự theo vị trí (A3, H6), đánh giá chính sách duyệt AUTO/NEEDS_REVIEW (A2), và tra cứu phương tiện / vé / danh sách đen / phiên đỗ đang mở giống hệt luồng hiện tại, nhưng KHÔNG tải ảnh lên Cloudinary và trả về `image_url: null`.
+  3. Cấu hình `image_url = serializers.CharField(allow_null=True, required=True)` trong serializer phản hồi và schema OpenAPI (`drf-spectacular`), bảo đảm lệnh `python manage.py spectacular --validate --fail-on-warn` vượt qua mà không phát sinh cảnh báo.
+  4. Cơ chế parse boolean nghiêm ngặt: chấp nhận chuỗi `"true"` / `"false"` từ FormData; từ chối mọi giá trị sai lệch khác bằng mã lỗi HTTP 400 và phong bì chuẩn `PROP-GEN-P01`.
+  5. Khi `preview=false` hoặc không truyền: hành vi tương thích 100% từng byte với phiên bản trước (lưu ảnh lên Cloudinary và trả về URL ảnh hợp lệ).
+
+## 7. Plate Scan Gate ID Forwarding (`TL-56`)
+
+- **TL-56 — Barrier Gate ID Forwarding and Request Parameter Validation** (`[PROPOSAL]` | `apps/parking/views/scans.py`, `apps/parking/services/plate_scan.py`, `docs/guides/frontend-api/05-parking-endpoints.md`):
+  1. Phân tích và chuyển tiếp tham số tùy chọn `gate_id` từ `request.data` trong endpoint `POST /api/v1/parking/plate-scans/` vào `execute_plate_scan(..., gate_id=gate_id)`.
+  2. Xác thực giá trị `gate_id`: Chấp nhận số nguyên dương (`> 0`) hoặc để trống (`None`/`""`); từ chối các giá trị sai lệch (chuỗi không phải số, số nguyên <= 0, số thực) với mã lỗi HTTP 400 Bad Request và phong bì chuẩn `PROP-GEN-P01`.
+  3. Ghi nhận `_obs_gate_id` vào observability metadata (`PlateScanExecutionResult.gate_id`) và log có cấu trúc `parking_api_request` phục vụ giám sát vận hành bãi xe.
+  4. Bảo toàn nguyên tắc thin controller của `PlateScanView.post` (duy trì kiểm định AST số dòng lệnh logic: đúng 6 câu lệnh logic và <= 20 dòng AST nodes).
+
+## 8. Round 85 Technical Decisions (`TL-57` – `TL-61`)
+
+- **TL-57 — Real-Time Fee Preview Endpoint for Open Parking Sessions** (`[PROPOSAL]` | `apps/parking/views/sessions.py`, `apps/parking/serializers/sessions.py`, `apps/parking/urls.py`, `docs/guides/frontend-api/05-parking-endpoints.md`, Round 85 Milestone 1):
+  1. Bổ sung endpoint read-only `GET /api/v1/parking/sessions/fee-preview/?license_plate=...` (hoặc `session_code=...`) phục vụ màn hình Làn Ra (ExitLanePanel) xem trước cước phí trước khi bấm check-out.
+  2. Quyền truy cập: `[IsAuthenticated, IsEmployeeOrManager]`.
+  3. Tái sử dụng selector `get_open_session_by_identifier` và service tính cước `calculate_parking_fee(session, now)`.
+  4. Trả về payload cấu trúc `FeePreviewResponseSerializer` gồm 11 trường: `session_id`, `session_code`, `license_plate`, `entry_time`, `duration_minutes`, `duration_text`, `fee_amount`, `has_active_ticket`, `ticket_code`, `is_exempt`, `hourly_rate`.
+  5. Xử lý lỗi: HTTP 400 `PROP-4.5.1-P11` nếu thiếu cả 2 tham số; HTTP 404 `PROP-4.5.1-P06` nếu không tìm thấy phiên đỗ xe đang mở.
+  6. Zero DB schema changes: hoàn toàn không thay đổi schema CSDL PostgreSQL.
+
+- **TL-58 — Exit Fee Waiver Authorization & Workflow Rules** (`[PROPOSAL]` | `apps/parking/services/check_out.py`, `apps/parking/serializers/sessions.py`, Round 85 Milestone 1):
+  1. Mở rộng `CheckOutRequestSerializer` tiếp nhận 2 trường: `waive_fee` (boolean, default=False) và `waiver_reason` (string, optional/nullable).
+  2. Thẩm quyền miễn cước đặc cách: Ràng buộc an toàn tài chính nghiêm ngặt, chỉ tài khoản có vai trò `MANAGER` (`request.user.role == 'MANAGER'`) mới được phép gửi `waive_fee=True`. Nhân viên (`EMPLOYEE`) hoặc `CUSTOMER` gọi sẽ bị từ chối với HTTP 403 Forbidden và mã lỗi `PROP-4.5.1-P18` ("Chỉ Quản lý mới có quyền miễn cước phí đỗ xe.").
+  3. Bắt buộc lý do miễn cước: Khi `waive_fee=True`, trường `waiver_reason` không được để trống hoặc chỉ chứa khoảng trắng. Nếu rỗng, hệ thống từ chối với HTTP 400 Bad Request và mã lỗi `PROP-4.5.1-P19` ("Vui lòng cung cấp lý do miễn cước đặc cách.").
+  4. Cơ chế tính phí khi miễn cước: Gán `fee_amount = Decimal("0.00")`, bỏ qua yêu cầu `payment_method` và KHÔNG tạo bản ghi `Payment`.
+  5. Tương thích ngược 100%: Khi `waive_fee=False` hoặc không truyền, toàn bộ quy trình tính cước, yêu cầu `payment_method` và sinh hóa đơn `Payment` giữ nguyên như cũ.
+
+- **TL-59 — Audit Trail Mechanism for Fee Waiver Without Schema Mutation** (`[PROPOSAL]` | `apps/parking/services/check_out.py`, `apps/audit/models.py`, Round 85 Milestone 1):
+  1. Bảo toàn bất biến `db/01-schema.sql` (zero schema change).
+  2. Ghi chú kiểm toán vào trường `notes` của `VehicleEntryExitLog`: Tự động nối thêm nội dung `[MIỄN CƯỚC ĐẶC CÁCH]: {waiver_reason} (Người duyệt: {user.email})`.
+  3. Tự động liên kết `exit_handled_by` với bản ghi `Employee` của Quản lý phê duyệt check-out.
+  4. Ghi nhận sự kiện kiểm toán bất biến vào bảng `ActivityLog` với `action="SESSION_CHECK_OUT_WAIVED"`, `entity_type="vehicle_entry_exit_log"`, `entity_id=session.id`, và `message` chi tiết bao gồm mã phiên, biển số, lý do miễn cước và email người phê duyệt.
+
+- **TL-60 — Backend Tariff as Single Source of Truth & 15-Minute Rule Refutation** (`[PROPOSAL]` | `apps/parking/services/tariff.py`, `docs/requirements/01-decision-log.md`, Round 85 Milestone 1):
+  1. Xác nhận Backend là Single Source of Truth duy nhất cho mọi quy tắc tính cước phí đỗ xe. Frontend tuyệt đối không tự ý tính cước cục bộ ở client.
+  2. Bác bỏ quy tắc "Miễn phí dưới 15 phút": Quy tắc này hoàn toàn không tồn tại trong tài liệu SRS v4.1 (SRS 4.5.1) và không tồn tại trong backend `tariff.py`. Chuỗi giao diện "0đ (Miễn phí dưới 15 phút)" trên mockup frontend chỉ là text tĩnh mô phỏng.
+  3. Duy trì biểu phí chuẩn theo OQ-85 và TL-50: Tối thiểu 1 giờ (`PARKING_HOURLY_RATE_VND = 10.000 VNĐ`), làm tròn lên theo giờ (`ceil`), cước phí = 0 VNĐ chỉ khi xe được bảo đảm bởi vé tháng/định kỳ `ACTIVE` còn hiệu lực tại thời điểm ra.
+
+- **TL-61 — Barrier UI State Model & Resilient Cloud Storage Fallback** (`[PROPOSAL]` | `apps/parking/serializers/sessions.py`, `apps/parking/services/upload.py`, Round 85 Milestone 1):
+  1. Khẳng định hệ thống không tích hợp API phần cứng barrier vật lý. Trạng thái đóng/mở barrier là UI State máy trạng thái phía Frontend (`closed` -> `opening` -> `opened` -> tự động đóng sau độ trễ 3000ms).
+  2. Xử lý sự cố Cloudinary HTTP 502 (`PROP-4.5.1-P17`): Backend cho phép `entry_image_url` và `exit_image_url` là `null`. Khi upload Cloudinary thất bại trong môi trường dev/throwaway hoặc gián đoạn mạng, frontend fallback gửi `null`, hiển thị cảnh báo màu vàng cho nhân viên trực, và hoàn tất check-in / check-out bình thường mà không làm gián đoạn vận hành bãi xe.
+
+## 9. Round 86 Technical Decisions (`TL-62` – `TL-65`)
+
+- **TL-62 — Error Code Catalog Registration for Fee Waiver Security Guards** (`[PROPOSAL]` | `apps/core/messages.py`, `apps/parking/services/check_out.py`, Round 86 Milestone 1, Finding 1):
+  1. Đăng ký chính thức 2 mã lỗi nghiệp vụ `PROP-4.5.1-P18` ("Chỉ Quản lý mới có quyền miễn cước phí đỗ xe.") và `PROP-4.5.1-P19` ("Vui lòng cung cấp lý do miễn cước đặc cách.") vào từ điển `PROPOSAL_MESSAGES` và `ALL_MESSAGES` trong `apps/core/messages.py`.
+  2. Chuẩn hóa `apps/parking/services/check_out.py` gọi thông điệp lỗi thông qua `ALL_MESSAGES.get(...)` thay vì chuỗi hardcode cục bộ, loại bỏ hoàn toàn sự lệch pha giữa tài liệu đặc tả và mã nguồn thực thi.
+  3. Đảm bảo bài kiểm thử tự động `tests/docs/test_frontend_guide_matches_schema.py::test_all_documented_codes_exist_in_all_messages` vượt qua 100%.
+
+- **TL-63 — Thin FeePreviewView Controller & Centralized Tariff Service Architecture** (`[PROPOSAL]` | `apps/parking/services/tariff.py`, `apps/parking/views/sessions.py`, `tests/parking/test_fee_preview.py`, Round 86 Milestone 1, Finding 2):
+  1. Tách biệt kiến trúc Thin Controller: Rút gọn `FeePreviewView.get` trong `apps/parking/views/sessions.py` xuống dưới 10 dòng lệnh, đạt chuẩn kiểm định AST thin-controller (`<= 30` dòng), hoàn toàn ủy nhiệm xử lý nghiệp vụ cho service layer.
+  2. Trích xuất hàm `get_session_active_ticket` và dịch vụ `get_fee_preview` vào `apps/parking/services/tariff.py` làm Single Source of Truth cho logic đối chiếu vé tháng `Ticket` có hiệu lực (`effective_from <= at_time < effective_to`, `status="ACTIVE"`).
+  3. Đảm bảo tính nhất quán tuyệt đối (100% parity, zero-drift) giữa cước phí xem trước (`fee_amount` tại `FeePreviewView`) và cước phí thu thực tế khi kết thúc phiên đỗ (`fee_amount` tại `check_out_vehicle`).
+
+- **TL-64 — Fee Preview API Response Schema Contract Synchronization** (`[PROPOSAL]` | `docs/guides/frontend-api/05-parking-endpoints.md`, `apps/parking/serializers/sessions.py`, Round 86 Milestone 1, Finding 3):
+  1. Chuẩn hóa mẫu phản hồi của endpoint `GET /api/v1/parking/sessions/fee-preview/` trong toàn bộ tài liệu dự án hiển thị chính xác 11 trường dữ liệu thực tế từ `FeePreviewResponseSerializer`.
+  2. Khẳng định tên trường cước phí chuẩn là `fee_amount` (kiểu số thập phân), sửa đổi hoàn toàn lỗi nhầm lẫn `total_amount` và thiếu 6 trường trong báo cáo cũ.
+  3. Danh mục 11 trường chuẩn xác: `session_id`, `session_code`, `license_plate`, `entry_time`, `duration_minutes`, `duration_text`, `fee_amount`, `has_active_ticket`, `ticket_code`, `is_exempt`, `hourly_rate`.
+
+- **TL-65 — License Plate Format Preservation, Vehicle-Type Aware Disambiguation, and Display Normalization at Check-In** (`[PROPOSAL]` | `apps/parking/services/plate_format.py`, `apps/parking/services/check_in.py`, `tests/parking/test_plate_format.py`, Round 86 Milestone 1, Finding 4; Round 87 Finding 2):
+  1. Xác lập vị trí định dạng biển số bị mất và lỗi suy diễn hình thái: Xảy ra tại tầng ghi dữ liệu của `check_in_vehicle` khi lưu chuỗi thô, và tại hàm `format_display_license_plate` / `formatLicensePlateForDisplay` khi tự động đoán mò các chuỗi compact không dấu thành biển ô tô 5 số.
+  2. Ma trận các hình thái xung đột (Ambiguous Compact Shapes):
+     - Dạng 8 ký tự `^[0-9]{2}[A-Z][0-9]{5}$`: Xung đột giữa Ô tô 5 số (vd: `29H-112.34`, `51A-897.14`, `30A-612.35`) và Xe máy 4 số (vd: `29-H1 1234`, `51-A8 9714`, `30-A6 1235`).
+     - Dạng 9 ký tự `^[0-9]{2}[A-Z]{2}[0-9]{5}$`: Xung đột giữa Ô tô 2 chữ cái (vd: `29MD-123.45`, `29LD-123.45`) và Xe máy điện 5 số (vd: `29-MD 123.45`, `59-AA 123.45`).
+     - Dạng 8 ký tự `^[0-9]{2}[A-Z]{2}[0-9]{4}$`: Xung đột giữa Ô tô 4 số 2 chữ cái (vd: `29LD-1234`) và Xe máy điện 4 số (vd: `29-AA 1234`).
+  3. Quy tắc chuẩn hóa trung thực (Honest Normalization Rules):
+     - Khi biết `vehicle_type` (từ tham số caller, từ xe đăng ký `registered_vehicle.vehicle_type`, hoặc từ cấu hình ô đỗ `slot_allowed_vehicle_type`): Định dạng chuẩn xác theo loại xe tương ứng (`CAR`/`EV` vs `MOTORCYCLE`).
+     - Khi KHÔNG biết `vehicle_type` và dạng biển thuộc nhóm ambiguous: GIỮ NGUYÊN chuỗi compact đã làm sạch (không tự ý chèn dấu gạch hay dấu chấm đoán mò).
+     - Đối với các hình thái đơn nghĩa (unambiguous): Xe máy 5 số `^[0-9]{2}[A-Z][0-9][0-9]{5}$` (như `81-B3 343.03`, `59-T2 496.09`) hoặc Ô tô 4 số `^[0-9]{2}[A-Z][0-9]{4}$` (như `29A-1234`) tự động định dạng chuẩn ngay cả khi chưa rõ `vehicle_type`.
+     - Bảo toàn tuyệt đối các chuỗi biển số đã có dấu phân cách rõ ràng (`29-H1 1234`, `30A-612.35`, `81-B3 343.03`, `59-T2 496.09`, `51A-897.14`).
+  4. Đảm bảo tính nhất quán tuyệt đối (100% Parity, Zero Drift) giữa Backend (`plate_format.py`) và Frontend (`plateFormatter.js`).
+  5. Tính độc lập của cơ chế tra cứu (Lookups): Cột `license_plate_norm` tự động sinh từ hàm chuẩn hóa trong CSDL PostgreSQL, đảm bảo các API tìm kiếm phiên đỗ và phương tiện hoạt động hoàn hảo cả khi người dùng nhập chuỗi có dấu phân cách hoặc chuỗi không dấu.
+
+## 10. Round 88 Technical Decisions (`TL-66` – `TL-71`)
+
+- **TL-66 — Process-Role Split Architecture & Gate Worker Process (`ADR-0011`)** (`[PROPOSAL]` | `apps/parking/management/commands/run_gate_worker.py`, `docker-compose.yml`, `docs/adr/0011-gate-worker-process.md`, Round 88 Milestone 1, Team Lead Decision 1):
+  1. Phân tách kiến trúc backend theo vai trò tiến trình (Process Role), không chia tách repository và không tạo microservice độc lập. Bổ sung tiến trình nền dài hạn `gate-worker` thông qua Django management command `python manage.py run_gate_worker`.
+  2. Tái sử dụng toàn bộ codebase, thư viện và Docker image hiện tại; chia sẻ cùng CSDL PostgreSQL 18.6 với tiến trình Web API. Không phát sinh network hop nội bộ và không cần mã hóa/truyền tải lại khung hình qua HTTP; logic nghiệp vụ giao dịch check-in/check-out được tập trung tại một nơi duy nhất.
+  3. Đóng gói dưới dạng một Docker Compose service riêng biệt có tên `gate-worker` gắn compose profile `profiles: ["gate-worker"]`. Lệnh khởi chạy mặc định `docker compose up` giữ nguyên tính bất biến chỉ chạy `db` và `web`.
+  4. Cô lập hoàn toàn tải suy luận CPU-heavy của ONNX Runtime khỏi các Gunicorn API workers, đảm bảo camera tải nặng không làm nghẽn Web API và ngược lại. Cho phép mở rộng quy mô (scale-out) bằng việc tăng số bản sao worker replica khi cần.
+  5. Bác bỏ đề xuất tách dịch vụ microservice mạng OCR riêng tại thời điểm này do không biện minh được chi phí trễ mạng và độ phức tạp vận hành ở quy mô hiện tại. Tài liệu hóa đầy đủ trong `docs/adr/0011-gate-worker-process.md`.
+
+- **TL-67 — Environment-Driven Camera Stream Ingestion & Zero-Credential Persistence** (`[PROPOSAL]` | `config/settings/base.py`, `.env.example`, `apps/parking/gate_worker/reader.py`, Round 88 Milestone 1, Team Lead Decision 2):
+  1. Tiến trình worker trực tiếp kéo luồng hình ảnh từ camera bãi xe (hỗ trợ MJPEG qua HTTP như DroidCam `http://HOST:PORT/video` hoặc luồng RTSP) sử dụng `cv2.VideoCapture` từ gói `opencv-python-headless` (v5.0.0.93) đã tích hợp sẵn trong `fast-alpr[onnx]==0.4.0`. Xác thực bằng `pip show` và import test; tuyệt đối không bổ sung dependency mới.
+  2. Cơ chế ánh xạ mã cổng (`gate.code`) với URL camera stream được cấu hình độc quyền qua biến môi trường định dạng JSON (`GATE_WORKER_STREAMS`, ví dụ `{"IN_01": "http://192.168.1.100:4747/video", "OUT_01": "rtsp://..."}`).
+  3. An toàn bảo mật: Do URL camera stream có thể chứa thông tin nhạy cảm (thông tin xác thực basic auth, IP nội bộ), URL stream tuyệt đối không bao giờ được lưu vào CSDL, không ghi vào file log, và không trả về qua bất kỳ API endpoint nào. File `.env.example` chỉ ghi tên biến mẫu, tuyệt đối không chứa giá trị thực. Không thay đổi schema CSDL.
+
+- **TL-68 — High-Throughput & Low-Latency Stream Processing Principles** (`[PROPOSAL]` | `apps/parking/gate_worker/`, `apps/parking/services/ocr.py`, `apps/parking/services/upload.py`, Round 88 Milestone 1, Team Lead Decision 3):
+  1. *Newest-frame-wins*: Mỗi camera stream được quản lý bởi một reader thread độc lập liên tục đọc và chỉ giữ lại một khung hình duy nhất mới nhất trong bộ đệm (bỏ qua mọi khung hình cũ để chặn triệt để backlog trễ).
+  2. *Cheap Pre-filter*: Tính toán độ lệch điểm ảnh trung bình (Mean Absolute Difference - MAD) trên ảnh thu nhỏ độ xám 64x64. Nếu độ lệch nhỏ hơn ngưỡng thay đổi (`threshold = 5.0`) thì bỏ qua bước suy luận OCR, kết hợp điều tiết tốc độ OCR tối đa trên mỗi camera stream (mặc định 2–3 fps).
+  3. *Tối ưu hóa phiên ONNX*: Chia sẻ một `PlateRecognizer` duy nhất trên mỗi tiến trình worker, kiểm soát truy cập qua Semaphore giới hạn đồng thời (`PARKING_OCR_CONCURRENCY_LIMIT = 4`), cấu hình `ONNX_INTRA_OP_THREADS = 1`, `ONNX_INTER_OP_THREADS = 1`, và `ONNX_ALLOW_SPINNING = 0` loại bỏ hiện tượng tranh chấp luồng CPU.
+  4. *Bỏ phiếu ổn định cục bộ*: Thuật toán bỏ phiếu 3-trong-4 biển số chuẩn hóa giống quy tắc client, ra quyết định ngay khi kết quả ổn định.
+  5. *Tách snapshot upload khỏi critical path*: Thao tác ghi nhận check-in/check-out chỉ thực hiện giao dịch ghi CSDL. Việc upload ảnh snapshot lên Cloudinary được thực hiện theo cơ chế best-effort sau khi giao dịch commit (theo tiền lệ TL-61), sự cố mạng Cloudinary không bao giờ được phép chặn barrier.
+  6. *Tối ưu Browser Mode*: Khung hình tải từ trình duyệt được giảm kích thước (chiều dài tối đa 640px, JPEG quality ~0.8) và dùng khoảng thời gian thích ứng (adaptive interval).
+
+- **TL-69 — Pure Auto-Apply Gate Decision Policy, Audit Logging, and Advisory Lock Concurrency** (`[PROPOSAL]` | `apps/parking/services/gate_decision.py`, `apps/audit/models.py`, `apps/parking/models.py`, Round 88 Milestone 1, Team Lead Decision 4):
+  1. Xây dựng hàm quyết định thuần túy không side-effect `decide_gate_action(...)` dùng chung cho cả backend và frontend, được kiểm thử đầy đủ bằng bảng unit test table-driven bao phủ mọi nhánh (hướng IN/OUT, xe đăng ký/vãng lai, blacklist, duplicate, hết chỗ, tự động check-in, cước phí 0đ, cước phí > 0đ).
+  2. Cổng vào (`IN`): Chỉ tự động check-in khi thỏa mãn toàn bộ: Cổng active, hướng `IN`, `is_auto_scan=True`, review_status là `AUTO`, độ tin cậy $\ge 90.0\%$ (`PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD`), biển số ổn định (bỏ phiếu 3/4), biển số khớp xe đã đăng ký, xe/khách hàng không bị blacklist, không có phiên đỗ mở, và tìm được ô đỗ hợp lệ (ưu tiên ô cố định của vé, sau đó là ô trống đầu tiên tương thích; nếu hết chỗ $\rightarrow$ cần nhân viên). Khách vãng lai chuyển trạng thái `NEEDS_STAFF` để nhân viên xếp chỗ và xác nhận thủ công.
+  3. Cổng ra (`OUT`): Chỉ tự động check-out khi tìm thấy phiên mở và cước phí xem trước bằng đúng `0.00` VND (có vé tháng/định kỳ `ACTIVE` còn hiệu lực bao trả). Khi cước phí $> 0$ VND, chuyển trạng thái `PAYMENT_REQUIRED` để thu ngân thu tiền; tuyệt đối không tự động miễn giảm cước.
+  4. Trường hợp khác (NEEDS_REVIEW, blacklist, trùng phiên, hết chỗ, biển chưa đăng ký, cổng ra không có phiên): Không thay đổi trạng thái bãi đỗ, ghi nhận sự kiện `GATE_AUTO_NEEDS_STAFF` kèm lý do tương ứng vào `activity_log` để hiển thị trên telemetry `last_auto_event`. Các trạng thái tạm thời (chờ ổn định 3/4, độ tin cậy thấp) không ghi nhật ký kiểm toán để tránh spam.
+  5. Định danh & Kiểm toán: Không có nhân viên thao tác trực tiếp nên `entry_handled_by = NULL`, `exit_handled_by = NULL`, `recognition_source = 'AI'`, ghi nhật ký kiểm toán vào `activity_log` với các action `GATE_AUTO_CHECK_IN`, `GATE_AUTO_CHECK_OUT`, `GATE_AUTO_NEEDS_STAFF`, `GATE_AUTO_PAYMENT_REQUIRED` (biển số được che mờ theo cấu hình bảo mật). Tuyệt đối không log ảnh khung hình vào DB.
+  6. Xử lý đồng thời & Phân tán (Idempotency & Replicas): Sử dụng PostgreSQL session advisory lock `pg_try_advisory_lock(1195463749, gate_id)` để đảm bảo chính xác 1 worker replica sở hữu một cổng tại một thời điểm. Áp dụng khoảng thời gian làm nguội (cooldown, mặc định 30s) trên từng cặp `(gate, plate)` để chống spam sự kiện liên tục.
+  7. Trạng thái & Heartbeat: Worker định kỳ cập nhật heartbeat và `parking_gate.camera_status` (`ONLINE` / `DEGRADED` / `OFFLINE`). Định nghĩa `OFFLINE` rõ ràng (không nhận được khung hình sau N giây), cơ chế kết nối lại với exponential backoff.
+
+- **TL-70 — Read-Only Gate Worker Status & Telemetry API Contract** (`[PROPOSAL]` | `apps/parking/views/gates.py`, `apps/parking/serializers/gates.py`, `docs/guides/frontend-api/05-parking-endpoints.md`, Round 88 Milestone 1, Team Lead Decision 5):
+  1. Mở rộng endpoint read-only `GET /api/v1/parking/gates/` trả về thông tin trạng thái hoạt động của worker cho từng cổng:
+     - `worker_online`: boolean (`true` nếu worker đang duy trì heartbeat hợp lệ trong ngưỡng thời gian cấu hình, ngược lại `false`).
+     - `last_auto_event`: đối tượng (hoặc `null`) chứa sự kiện tự động gần nhất từ `activity_log` (`action`, `license_plate_masked`, `reason`, `occurred_at`).
+  2. Phân quyền truy cập nghiêm ngặt: Chỉ dành cho nhân viên và quản lý `[IsAuthenticated, IsEmployeeOrManager]`.
+  3. Tuân thủ đầy đủ chuẩn tài liệu hóa OpenAPI (`drf-spectacular`), bảo đảm lệnh kiểm định `python manage.py spectacular --validate --fail-on-warn` không phát sinh cảnh báo, đồng thời cập nhật đầy đủ tài liệu API tại `docs/guides/frontend-api/05-parking-endpoints.md`.
+
+- **TL-71 — Frontend Dual-Mode Gate Camera Operation (Browser Mode vs Viewer Mode)** (`[PROPOSAL]` | `src/components/VehicleManagement/GateCameraControlModal.jsx`, `src/hooks/usePlateAutoDetect.js`, `src/utils/gateAutoApplyPolicy.js`, Round 88 Milestone 1, Team Lead Decision 6):
+  1. *Chế độ Browser Mode* (Khi không có worker online cho cổng đó, `worker_online === false`): Sau khi nhận diện ổn định 3/4 khung hình, frontend áp dụng cùng chính sách quyết định thuần như server. Nếu xe hợp lệ, tự động gọi API check-in/check-out mà không cần nhấn nút; hiển thị banner thông báo xanh không chặn: `"Đã tự động ghi nhận..."`. Bổ sung toggle `"Tự động áp dụng"` (mặc định BẬT, ghi nhớ trong `localStorage`). Nếu cước phí $> 0$, xe vãng lai, blacklist hoặc NEEDS_REVIEW thì giữ nguyên luồng xác nhận thủ công. Phản hồi lỗi HTTP 409 (đã ghi nhận trước đó) được xử lý êm thuận dưới dạng thông tin, không báo lỗi đỏ crash UI.
+  2. *Chế độ Viewer Mode* (Khi worker đang online cho cổng đó, `worker_online === true`): Giao diện camera chuyển sang chế độ theo dõi trực quan; hiển thị video trực tiếp cùng danh sách các sự kiện tự động gần nhất từ server; KHÔNG tự động gửi yêu cầu check-in/check-out (máy chủ worker đảm nhiệm); vô hiệu hóa thao tác thủ công trùng lặp để ngăn chặn triệt để double check-in.
+  3. *Tối ưu hóa khung hình phát hiện*: Giảm kích thước ảnh trích xuất xuống tối đa 640px, chất lượng JPEG 0.8, và sử dụng adaptive interval trong `usePlateAutoDetect.js` mà vẫn bảo toàn hoàn toàn contract và test suite hiện có. Duy trì thiết kế giao diện hai nút trên header ("Camera vào" / "Camera ra").
+
+## 11. Round 89 Technical Decisions (TL-72 – TL-77)
+
+- **TL-72 — PostgreSQL Advisory Lock Liveness & Cacheless Worker Telemetry (F1)** (`[PROPOSAL]` | `apps/parking/gate_worker/locks.py`, `apps/parking/serializers/gates.py`, Round 89 Milestone 1, Finding F1, Team Lead Decision 1):
+  1. Xác định liveness qua PostgreSQL session advisory lock: Loại bỏ hoàn toàn sự phụ thuộc vào cache trong bộ nhớ (vốn không chia sẻ giữa các container/process). Trạng thái `worker_online` được suy diễn trực tiếp từ sự tồn tại của advisory lock đang được giữ trong bảng hệ thống `pg_locks` (`locktype='advisory'`, `classid=1195463749`).
+  2. Tự động giải phóng khi tiến trình chết: Khi worker bị dừng đột ngột (`kill -9`, container dừng), kết nối TCP đóng lại, PostgreSQL tự động giải phóng advisory lock ngay lập tức mà không để lại trạng thái stale.
+  3. Loại bỏ cache path: Trường `last_auto_event` được đọc duy nhất từ bảng `activity_log` thông qua truy vấn `DISTINCT ON (entity_id)` tối ưu $O(1)$. Loại bỏ hoàn toàn việc ghi/đọc sự kiện qua cache.
+
+- **TL-73 — Decisive Frame Snapshot Upload Off Barrier Critical Path (F3)** (`[PROPOSAL]` | `apps/parking/gate_worker/snapshot.py`, `apps/parking/services/upload.py`, `apps/parking/serializers/gates.py`, Finding F3, Team Lead Decision 2):
+  1. Nén JPEG và upload ngầm: Sau khi giao dịch check-in/check-out được commit thành công, khung hình quyết định (decisive frame) được sao chép, nén JPEG giới hạn cạnh dài tối đa `1280`px (chất lượng `85`), và đưa vào `SnapshotUploader` (`ThreadPoolExecutor`, timeout `5.0`s).
+  2. Độc lập với quyết định barrier: Quá trình upload hình ảnh lên dịch vụ đám mây tuyệt đối không chặn hoặc làm chậm thời gian nâng hạ barrier.
+  3. Cập nhật URL hoặc ghi nhận sự kiện thất bại mềm: Khi upload thành công, URL hình ảnh được cập nhật vào `entry_image_url` / `exit_image_url` của phiên đỗ xe. Khi upload thất bại hoặc quá thời gian chờ, giữ trống URL hình ảnh và ghi thêm một bản ghi bất biến (`INSERT` append-only tuân thủ `fn_prevent_activity_log_mutation()`) vào `activity_log` chứa trường `snapshot_error` đã làm sạch thông tin nhạy cảm, hiển thị trực tiếp trên `last_auto_event.snapshot_error`.
+
+- **TL-74 — Failure Events as Observable Activity Logs & Anti-Storm Cooldown (F4)** (`[PROPOSAL]` | `apps/parking/gate_worker/coordinator.py`, `apps/parking/services/gate_decision.py`, `apps/parking/serializers/gates.py`, Round 89 Milestone 3, Finding F4, Team Lead Decision 3):
+  1. Nguyên tắc "Thất bại là Sự kiện" (Failures are Events): Khi tiến trình worker gặp ngoại lệ bất ngờ trong quá trình thực thi tự động (`check_in_vehicle` hoặc `check_out_vehicle`), worker không chỉ ghi log cảnh báo mà bắt buộc phải ghi nhận chính thức một sự kiện kiểm toán vào bảng `ActivityLog`.
+  2. Cấu trúc bản ghi sự kiện:
+     - `action = "GATE_AUTO_NEEDS_STAFF"`
+     - `entity_type = "parking_gate"`, `entity_id = gate.id`
+     - `actor_account = None` (hành động của hệ thống)
+     - `message`: JSON chứa `action`, `license_plate_masked` (che mờ theo Nghị định 13/2023/NĐ-CP), `reason = "EXECUTION_FAILED"`, `gate_code`, `gate_name`, `description` (thông điệp lỗi đã che mờ PII), và `occurred_at`.
+  3. Cơ chế chống bão thử lại (Anti-Storm Cooldown): Ngay khi xảy ra ngoại lệ, worker kích hoạt thời gian làm nguội tối thiểu 60 giây (`self._voter.set_cooldown(gate.id, voted_plate, seconds=60)`). Toàn bộ các khung hình tiếp theo nhận diện cùng biển số tại cổng này trong vòng 60 giây đều bị bỏ qua, ngăn chặn triệt để hiện tượng thử lại liên tục làm tê liệt hệ thống.
+  4. Đăng ký mã lý do: Khai báo hằng số `REASON_EXECUTION_FAILED = "EXECUTION_FAILED"` trong `apps/parking/services/gate_decision.py`, đăng ký vào danh mục `known_reasons` của serializer `apps/parking/serializers/gates.py`, và cập nhật tài liệu API.
+  5. Bảo toàn bảng quyết định: Giữ nguyên bảng quyết định thuần túy 12 dòng `decide_gate_action`; không nới lỏng hay thay đổi các quy tắc tự động áp dụng hiện hữu.
+
+- **TL-75 — Dynamic Gate Configuration Refresh Without Restart (F5)** (`[PROPOSAL]` | `apps/parking/gate_worker/coordinator.py`, `apps/parking/models.py`, `config/settings/base.py`, Round 89 Milestone 3, Finding F5, Team Lead Decision 4):
+  1. Làm mới cấu hình định kỳ: Trong vòng lặp chính của `GateWorkerCoordinator`, thiết lập chu kỳ làm mới 10 giây (`GATE_WORKER_CONFIG_REFRESH_INTERVAL = 10.0`).
+  2. Truy vấn gom cụm tối ưu (Single Batch Query): Thực hiện đúng 1 truy vấn SELECT duy nhất `ParkingGate.objects.filter(id__in=self._managed_gates.keys()).only("id", "code", "is_active", "is_auto_scan", "direction")` để cập nhật trạng thái của toàn bộ các cổng được quản lý mà không làm tăng `row_version` hay kích hoạt trigger.
+  3. Xử lý trạng thái `is_active = False`:
+     - Worker giữ nguyên `GateAdvisoryLock` để duy trì quyền sở hữu cổng và báo hiệu liveness cho hệ thống.
+     - Vòng lặp `_process_gate_tick` lập tức bỏ qua việc phân tích khung hình và suy luận OCR khi cổng ở trạng thái inactive, tiết kiệm tài nguyên CPU.
+     - Khi `is_active` được bật lại thành `True`, worker tự động tiếp tục xử lý tức thì mà không cần khởi động lại.
+  4. Xử lý trạng thái `is_auto_scan = False`:
+     - Duy trì kết nối camera stream liên tục, không ngắt quãng.
+     - Chuyển cổng sang chế độ duyệt thủ công (manual review): Hàm quyết định trả về `ACTION_HOLD` với `REASON_AUTO_SCAN_DISABLED`, không tự động mở barrier và không spam nhật ký kiểm toán.
+     - Khi `is_auto_scan` được bật lại thành `True`, chế độ tự động áp dụng được kích hoạt trở lại ngay lập tức.
+  5. Xử lý thay đổi hướng `direction`: Cập nhật `direction` trong bộ nhớ, tự động chuyển đổi logic đánh giá giữa cổng vào và cổng ra mà không cần can thiệp vận hành.
+
+- **TL-76 — Frontend First-Poll Unknown Guard & Lossless OCR Resolution (F5, F8)** (`[PROPOSAL]` | `src/components/VehicleManagement/GateCameraControlModal.jsx`, `src/hooks/usePlateAutoDetect.js`, Finding F5, F8, Team Lead Decision 5):
+  1. Khóa an toàn trong cửa sổ poll đầu tiên: Khi modal camera vừa mở và kết quả thăm dò trạng thái cổng đầu tiên chưa hoàn tất (`workerOnline === null`), frontend giữ trạng thái `UNKNOWN`, tuyệt đối không tự động check-in/out để tránh race condition giữa browser mode và worker; khi chuyển từ `Viewer Mode` sang `Browser Mode`, tự động làm mới tra cứu phiên đỗ trước khi xét tự động áp dụng.
+  2. Đo đạc độ phân giải khung hình tối ưu: Đo thực nghiệm bằng `FastAlprPlateRecognizer` trên cả 4 clip thực tế (`6` phương tiện, `88` khung hình đọc được biển chuẩn, `86` khung `AUTO` $\ge 90\%$): `1280`px giữ `88/88` khung (`86/86` `AUTO`), trong khi `960`px mất 4 khung (`84/88`, `84/86` `AUTO`) và `640`px mất 8 khung (`80/88`, `80/86` `AUTO`, chỉ nhanh hơn `3.99` ms). Đặt `MAX_LONG_SIDE = 1280` là kích thước nhỏ nhất trong tập đo không làm mất biển số nào.
+
+- **TL-77 — Honest Capacity Statement (R-A PARTIAL), 16-Camera Knee Point & Multi-Replica Gate Filtering (F7)** (`[PROPOSAL]` | `apps/parking/management/commands/run_gate_worker.py`, `apps/parking/gate_worker/coordinator.py`, `docs/adr/0011-gate-worker-process.md`, `docker-compose.yml`, Round 89 Milestone 4, Finding F7, Team Lead Decision 1):
+  1. Điều chỉnh trung thực trạng thái mục tiêu R-A: Đổi trạng thái từ DONE thành PARTIAL. Ghi nhận minh bạch điểm gãy (knee point) của một tiến trình worker đơn lẻ tại 16 camera đồng thời ($p95 = 1714.25$ms so với mục tiêu $1500$ms). Khi nâng lên 32 camera, tiến trình đơn lẻ sập hoàn toàn ($p95 \approx 95.3$s, bỏ sót 130/160 xe).
+  2. Mở rộng xử lý tham số `--gate`: Nâng cấp lệnh `run_gate_worker` và lớp `GateWorkerCoordinator` hỗ trợ truyền danh sách mã cổng phân tách bằng dấu phẩy (comma-separated, ví dụ: `--gate IN_01,IN_02` hoặc `--gate "IN_01, OUT_01"`), tự động cắt tỉa khoảng trắng, chuẩn hóa chữ hoa, và tra cứu tự động ID số sang mã cổng.
+  3. Kiến trúc mở rộng đa bản sao (Multi-Replica Scaling): Phân chia tải khi bãi đỗ có trên 16 camera bằng cách triển khai nhiều replica độc lập trong docker-compose, mỗi replica quản lý một tập con cổng riêng biệt. Đảm bảo tính loại trừ tương hỗ (mutual exclusion) thông qua khóa tư vấn PostgreSQL `pg_try_advisory_lock(1195463749, gate_id)`.
+  4. Cập nhật tài liệu: Bổ sung cấu hình mẫu và giải thích kỹ thuật trong `docs/adr/0011-gate-worker-process.md` và chú thích trong `docker-compose.yml`.
+
+## 12. Round 90 Technical Decisions (TL-78 – TL-89)
+
+- **TL-78 — Docker Hygiene & Dangling Anonymous Volume Elimination (G1)** (`[PROPOSAL]` | `docker-compose.yml`, `.agents/`, Round 90 Finding G1, Team Lead Decision 1):
+  1. Bảo vệ tài nguyên Docker trên máy chủ: Tuyệt đối không xóa bất kỳ volume nào không do vòng kiểm thử hiện tại tạo ra. 45 volume vô danh bị rò rỉ từ Vòng 89 được liệt kê chi tiết trong báo cáo để chủ sở hữu (Owner) quyết định.
+  2. Vệ sinh môi trường kiểm thử: Mọi container PostgreSQL dùng một lần (throwaway) bắt buộc chạy với `--tmpfs /var/lib/postgresql/data` hoặc bị hủy kèm cờ `docker rm -f -v`. Dự án compose throwaway được hủy bằng `docker compose -p r90test down -v --remove-orphans`.
+  3. Bất biến tổng số volume: Số lượng volume đo trước và sau vòng kiểm thử phải trùng khớp chính xác.
+
+- **TL-79 — Gate Worker Healthcheck Non-Self-Matching Process Inspection (G2 / B1)** (`[PROPOSAL]` | `docker-compose.yml`, Round 90 Finding G2, Team Lead Decision 2):
+  1. Loại bỏ lỗi tự khớp PID của healthcheck: Lệnh kiểm tra trong `docker-compose.yml` duyệt `/proc/[0-9]*/cmdline` nhưng loại trừ PID của chính tiến trình healthcheck (`me = str(os.getpid()); p.parent.name != me`).
+  2. Kiểm tra tiến trình thực: Chỉ trả về mã thoát 0 khi tồn tại một tiến trình khác đang thực thi `run_gate_worker`. Khi không có worker hoặc worker bị dừng/kill, lệnh trả về mã thoát 1 (`unhealthy`).
+  3. Ghi nhận giới hạn: Healthcheck chứng minh tiến trình worker đang tồn tại; tính sẵn sàng thực sự của luồng xử lý do `worker_online` (PostgreSQL advisory lock) phản ánh.
+
+- **TL-80 — Dynamic Gate Reconciliation & Cross-Database Advisory Lock Isolation (G5, G9d / B2)** (`[PROPOSAL]` | `apps/parking/gate_worker/coordinator.py`, `apps/parking/gate_worker/locks.py`, Round 90 Finding G5, G9d, Team Lead Decision 5, 9d):
+  1. Hòa giải cấu hình cổng động (Dynamic Reconciliation): Tại mỗi chu kỳ refresh (10s), worker truy vấn toàn bộ cổng trong cấu hình stream bằng 1 câu SELECT duy nhất.
+     - Cổng bị hủy kích hoạt (`is_active=False`) hoặc xóa mềm: Dừng `StreamReader`, giải phóng `GateAdvisoryLock`, cập nhật `camera_status="OFFLINE"`, loại khỏi danh sách quản lý để giao diện frontend chuyển sang viewer/browser mode tương ứng.
+     - Cổng mới kích hoạt (`is_active=True`): Chiếm advisory lock, khởi tạo reader & motion filter, cập nhật `camera_status="ONLINE"` mà không cần restart worker.
+     - Cổng bị worker khác chiếm giữ: Bỏ qua và thử lại ở chu kỳ tiếp theo.
+  2. Cô lập cơ sở dữ liệu cho khóa tư vấn (pg_locks DB Filter): Thêm bộ lọc `d.datname = current_database()` thông qua `JOIN pg_database d ON l.database = d.oid` trong `get_active_gate_worker_lock_ids` để ngăn chặn nhận nhầm lock từ các database khác trên cùng cụm PostgreSQL.
+
+- **TL-81 — Personal Data Elimination in Failure Logs & Standardized Failure Text Helper (G6, G9c / B3)** (`[PROPOSAL]` | `apps/parking/gate_worker/coordinator.py`, `apps/core/messages.py`, `docs/requirements/05-proposed-messages.md`, Round 90 Finding G6, G9c, Team Lead Decision 6, 9c):
+  1. Chuẩn hóa thông điệp lỗi không chứa PII: Tạo helper duy nhất `format_failure_text(exc, operation) -> f"{exc.__class__.__name__}: {operation} failed"`. Tuyệt đối không đưa `str(exc)` hay thông tin biển số thô vào thông điệp lỗi, nhật ký ghi log hoặc `ActivityLog`.
+  2. Che mờ toàn diện: Mọi vị trí ghi log lỗi và cảnh báo (check-in, check-out, fee preview) bắt buộc dùng `mask_plate(voted_plate)`.
+  3. Loại bỏ mã lặp và query thừa: Xóa bỏ hai khối mã ~50 dòng đoán định dạng biển số và truy vấn bảng `Vehicle` trong luồng xử lý ngoại lệ.
+  4. Thu hồi thông điệp rác: Loại bỏ hoàn toàn `PROP-4.5.1-P25` khỏi `apps/core/messages.py` và `05-proposed-messages.md`.
+
+- **TL-82 — Discrete Snapshot Failure Logging & Single Decision Row Invariant (G7 / B4)** (`[PROPOSAL]` | `apps/parking/gate_worker/snapshot.py`, `apps/parking/serializers/gates.py`, Round 90 Finding G7, Team Lead Decision 7):
+  1. Một quyết định = Một dòng quyết định: Khi upload ảnh snapshot thất bại, ghi nhận bản ghi `ActivityLog` mới mang action riêng biệt `GATE_AUTO_SNAPSHOT_FAILED`, không dùng lại action của quyết định rào chắn.
+  2. Bất biến sự kiện tự động gần nhất: Serializer lọc `last_auto_event` chỉ lấy từ 4 action quyết định (`GATE_AUTO_CHECK_IN`, `GATE_AUTO_CHECK_OUT`, `GATE_AUTO_NEEDS_STAFF`, `GATE_AUTO_PAYMENT_REQUIRED`).
+  3. Gắn kèm lỗi snapshot: Nếu có sự kiện `GATE_AUTO_SNAPSHOT_FAILED` xảy ra sau sự kiện quyết định của cổng đó, serializer tự động gắn `snapshot_error` vào dữ liệu sự kiện quyết định để frontend hiển thị mà không làm sai lệch số liệu kiểm toán.
+
+- **TL-83 — Date-Independent Vehicle Ticket Test Suite & Seed Baseline Ground Truth (G11, G9b / B5)** (`[PROPOSAL]` | `tests/vehicles/test_vehicle_list_api.py`, `tests/vehicles/test_vehicle_property_tickets.py`, `tests/vehicles/test_vehicle_summary_api.py`, Round 90 Finding G11, G9b, Team Lead Decision 11):
+  1. Độc lập tuyệt đối với ngày tháng mà không sửa seed:
+     - Với các ca kiểm thử phương tiện cụ thể (`XE0001`, `XE0007`, `XE0011`): Cập nhật ngày hiệu lực của các vé tương ứng theo mốc tương đối so với `timezone.now()` ngay trong transaction của test.
+     - Với các ca kiểm thử KPI tổng hợp và bộ lọc danh sách: Tính toán ground truth trực tiếp tại thời điểm chạy test bằng truy vấn CTE SQL độc lập và so sánh chính xác tuyệt đối (`==`, không dùng khoảng `in (...)` hay dải nới lỏng).
+  2. Khôi phục assert chặt chẽ: Hủy bỏ các assertion nới lỏng `in (0, 2)` của Vòng 89, đảm bảo phát hiện chính xác mọi lỗi suy thoái (regression).
+
+- **TL-84 — Honest Load Multi-Run Benchmarking & Capacity Target Realignment (G4 / B6)** (`[PROPOSAL]` | `docs/adr/0011-gate-worker-process.md`, `docker-compose.yml`, `docs/requirements/01-decision-log.md`, Round 90 Finding G4, Team Lead Decision 4):
+  1. Đo tải trung thực 3 lần độc lập: Thực hiện kiểm thử tải 16 camera 3 lần độc lập với mã nguồn hoàn thiện cuối cùng, mỗi lần ngâm tải >= 3 phút trên cùng cấu hình và kịch bản:
+     - Run 1 (188s): $p50 = 1120.05$ ms, $p95 = 1217.23$ ms, 0 missed.
+     - Run 2 (188s): $p50 = 1112.47$ ms, $p95 = 1226.98$ ms, 0 missed.
+     - Run 3 (188s): $p50 = 1144.49$ ms, $p95 = 1304.13$ ms, 0 missed.
+     - Dải trễ tổng hợp: $p50 = 1112.47\text{–}1144.49$ ms, $p95 = 1217.23\text{–}1304.13$ ms, trung vị (median) $p95 = 1226.98$ ms so với mục tiêu $\le 1500$ ms. Phân rã đầy đủ quyết định theo action/reason code giải thích rõ số lượng quyết định so với số xe kỳ vọng.
+  2. Đồng bộ trạng thái R-A là PARTIAL: Giữ nguyên trạng thái R-A là PARTIAL trong ADR-0011, chú thích `docker-compose.yml` và nhật ký quyết định dựa trên mức cơ sở 1714ms của Vòng 88 và hiện tượng sập tải tại 32 camera ($p95 \approx 95.3$s). Không vội vàng tuyên bố đạt mục tiêu R-A chỉ từ 1 lần chạy ngẫu nhiên.
+
+- **TL-85 — Honest OCR Measurement & Ground Truth Validation (G3 / F2)** (`[PROPOSAL]` | `src/hooks/usePlateAutoDetect.js`, `.agents/90-tools/`, Round 90 Finding G3, Team Lead Decision 3):
+  1. Xây dựng tập ground truth độc lập: Loại bỏ hoàn toàn phương pháp đo vòng tròn (circular measurement) của Vòng 89 (vốn lấy kết quả OCR tại 1280px làm chuẩn). Xây dựng bộ dữ liệu 99 khung hình được gán nhãn thủ công từ 4 video clip thực tế (`.agents/90-tools/ground_truth_90.json`) trước khi chạy OCR.
+  2. Đo đạc đa kích thước và chất lượng nén: Đo thực nghiệm độc lập độ chính xác tuyệt đối, độ tin cậy, tỷ lệ AUTO vs NEEDS_REVIEW, kích thước byte JPEG và độ trễ tại 1280px, 960px, 640px và chất lượng JPEG 0.85 vs 0.80.
+  3. Lựa chọn cấu hình tối ưu: Cấu hình `MAX_LONG_SIDE = 960` và `JPEG_QUALITY = 0.85` đạt độ chính xác 94/99 khung hình ground truth (ngang bằng 1280px), giúp giảm 20% dung lượng payload truyền tải và tăng 21.7% tốc độ trễ (latency speedup) so với 1280px của Vòng 89. Áp dụng chuẩn này vào `usePlateAutoDetect.js`.
+
+- **TL-86 — Frontend Safe Defaults & Polling Fault Tolerance (G8 / F1)** (`[PROPOSAL]` | `src/components/VehicleManagement/GateCameraControlModal.jsx`, `src/services/gateService.js`, Round 90 Finding G8, Team Lead Decision 8):
+  1. Fallback độ tin cậy an toàn: Khi thiếu hoặc không trích xuất được giá trị `confidence`, mặc định fallback về `0.0` (HOLD/giữ lại để nhân viên kiểm tra), tuyệt đối không gán `95.0` làm lọt các nhận diện không hợp lệ.
+  2. Cơ chế chịu lỗi thăm dò trạng thái cổng (Polling Resilience): Hàm `getGateWorkerStatus` phân biệt rõ ràng giữa lỗi mạng/HTTP với trạng thái cổng offline thực sự. Khi xảy ra lỗi thăm dò (network blip, 401, 500), modal giữ nguyên giá trị `workerOnline` trước đó, ngăn chặn hiện tượng lật trạng thái tức thì từ Viewer Mode sang Browser Mode và chặn bão lỗi HTTP 409. Chỉ sau 3 lần thăm dò thất bại liên tiếp mới hiển thị ghi chú "Trạng thái không khả dụng" và vẫn cấm tự động áp dụng nếu trạng thái trước đó là Viewer hoặc Unknown.
+  3. Ràng buộc thẩm định xe vào trong Browser Mode: Luồng tự động áp dụng tại client bắt buộc gọi hàm kiểm tra nghiệp vụ `validateVehicleEntry({ vehicle, lookupResult })` tương tự nút bấm thủ công (kết hợp biểu thức mở rộng `isBlacklisted` từ commit cadd831); chặn tuyệt đối việc tự động check-in xe thuộc danh sách đen hoặc xe đã có phiên đỗ mở.
+
+- **TL-87 — PlateScannerModal Navigation Fix & Allowed File Registration (G9a / F3)** (`[PROPOSAL]` | `src/components/PlateScannerModal.jsx`, Round 90 Finding G9a, Team Lead Decision 9a):
+  1. Xác thực lỗi thiếu import lịch sử: Kiểm tra lịch sử `git show HEAD:src/components/PlateScannerModal.jsx` xác nhận `PlateScannerModal.jsx` đã gọi `navigate(ROUTES.REGISTER)` mà thiếu khai báo import `useNavigate` từ `react-router-dom`, gây lỗi crash runtime khi người dùng bấm chuyển trang đăng ký.
+  2. Đăng ký ngoại lệ danh mục tệp cho phép: Giữ nguyên bản vá 2 dòng (`import { useNavigate } from 'react-router-dom'` và `const navigate = useNavigate()`), bổ sung kiểm thử bọc trong BrowserRouter, và đăng ký `src/components/PlateScannerModal.jsx` vào danh sách tệp được phép sửa đổi ngoại lệ của Vòng 90.
+
+- **TL-88 — Merged Frontend Coexistence & Cadd831 Upstream Verification (G10 / F4)** (`[PROPOSAL]` | `src/components/VehicleManagement/GateCameraControlModal.jsx`, `src/components/VehicleManagement/scanPlate/ExitLanePanel.jsx`, Round 90 Finding G10, Team Lead Decision 10):
+  1. Thẩm định tích hợp commit cadd831: Rà soát toàn diện tương tác giữa cơ chế tự động áp dụng (Round 88/89) và các tính năng mới từ commit cadd831 (gọi `validateVehicleEntry({ vehicle, lookupResult })`, huy hiệu danh sách đen mở rộng, cảnh báo "Ghost Exit" tại làn ra, và xử lý HTTP 409).
+  2. Bảo toàn hành vi giao diện người dùng: Đảm bảo xe trong danh sách đen hiển thị huy hiệu Blacklist và bị chặn tự động check-in; làn ra không có phiên đỗ hiển thị cảnh báo Ghost Exit và không tự động check-out; phản hồi 409 được xử lý thông báo êm thuận; kiểm chứng thành công bằng kịch bản kiểm thử E2E Playwright trên stack thực tế.
+
+- **TL-89 — Frontend Clean Build Synchronization & Offline Test Isolation (G12 / F5)** (`[PROPOSAL]` | `package-lock.json`, `src/services/parkingSessionService.js`, `tests/`, Round 90 Finding G12, Team Lead Decision 12):
+  1. Đồng bộ package-lock.json: Khắc phục lỗi `npm ci` ("Missing: typescript@6.0.3 from lock file") phát sinh do commit cadd831 bổ sung `@playwright/test` nhưng chưa sync lockfile. Đồng bộ sạch `package-lock.json` khớp với `package.json` hiện hữu, đảm bảo `npm ci` thành công trong container `node:22-alpine` sạch mà không thêm bớt dependency ngoài ý muốn.
+  2. Phân lập đường dẫn Mock/REST cho kiểm thử offline: Khắc phục lỗi 3 bài test offline (`ST-CORE-02`, `SLOT-02`, `SLOT-06`) thất bại do `getAvailableSlotsForCheckIn` gọi REST API thật khi `USE_MOCK` tắt. Cấu hình kiểm thử kích hoạt cờ mock tường minh trong môi trường unit test offline, bảo toàn 100% logic production của nhánh đồng đội và giữ nguyên mọi assertion nghiệp vụ.
+
+## 13. Round 91 Technical Decisions (TL-90 – TL-97)
+
+- **TL-90 — Bounded Database Query for Latest Gate Activity Events (`DISTINCT ON`) (H1 / B1)** (`[PROPOSAL]` | `apps/parking/serializers/gates.py`, `tests/parking/test_gate_status_api.py`, Round 91 Finding H1, Team Lead Decision 1):
+  1. Thay thế vòng lặp Python không giới hạn: Xóa bỏ hoàn toàn vòng lặp duyệt toàn bộ lịch sử `ActivityLog` trong `get_latest_gate_activity_logs_map(gate_ids)` (`apps/parking/serializers/gates.py`).
+  2. Tối ưu hóa bằng `DISTINCT ON (entity_id)`: Sử dụng tối đa 2 truy vấn PostgreSQL `DISTINCT ON (entity_id)` kết hợp `.order_by("entity_id", "-occurred_at", "-id").distinct("entity_id").only("id", "entity_id", "action", "message", "occurred_at")`: một truy vấn lấy sự kiện quyết định gần nhất thuộc 4 mã (`GATE_AUTO_CHECK_IN`, `GATE_AUTO_CHECK_OUT`, `GATE_AUTO_NEEDS_STAFF`, `GATE_AUTO_PAYMENT_REQUIRED`) và một truy vấn lấy sự kiện `GATE_AUTO_SNAPSHOT_FAILED` gần nhất cho mỗi cổng.
+  3. Độ phức tạp bộ nhớ và số dòng có chặn: Số lượng bản ghi đọc từ PostgreSQL sang Python luôn bị chặn trên bởi $\le 2 \times G$ ($G$ là số cổng được truy vấn), độc lập hoàn toàn với kích thước bảng `activity_log`.
+  4. Đề xuất chỉ mục tương lai (không thay đổi schema trong vòng hiện tại): Đề xuất composite partial index `idx_activity_log_gate_latest_events ON activity_log (entity_id, occurred_at DESC, id DESC) WHERE action IN ('GATE_AUTO_CHECK_IN', 'GATE_AUTO_CHECK_OUT', 'GATE_AUTO_NEEDS_STAFF', 'GATE_AUTO_PAYMENT_REQUIRED', 'GATE_AUTO_SNAPSHOT_FAILED')` để chuyển `Seq Scan + Sort` sang `Index Skip Scan` khi bảng vượt hàng trăm nghìn dòng.
+
+- **TL-91 — Statistical Wilson Score OCR Evaluation & Preservation of Committed `1280`px / `0.85` (H2 / F-1)** (`[PROPOSAL]` | `src/hooks/usePlateAutoDetect.js`, `tests/gateAutoApplyPolicy.test.mjs`, `.agents/91-tools/`, Round 91 Finding H2, Team Lead Decision 2):
+  1. Khoảng tin cậy Wilson 95%: Trên tập `119` khung hình ground truth thực tế (bao gồm thêm 20 khung biển số ban đêm và kích thước nhỏ), cấu hình `1280`px (`q=85`) đạt `113/119` (`94.96%`, khoảng tin cậy Wilson 95% `[89.44%, 97.67%]`, độ rộng `8.23%`), và `960`px (`q=85`) đạt `114/119` (`95.80%`, khoảng tin cậy `[90.54%, 98.19%]`, độ rộng `7.65%`). Chênh lệch 1 khung hình nằm hoàn toàn trong nhiễu thống kê mẫu hữu hạn.
+  2. Thử nghiệm tiền lấy mẫu luồng webcam thực tế (`1280x720` và `1920x1080`): Khi nguồn camera trình duyệt phát ở độ phân giải chuẩn `1280x720`, cấu hình `MAX_LONG_SIDE = 1280` giữ nguyên khung hình gốc (`113/119`, `94.96%`), trong khi thu nhỏ xuống `960`px gây suy giảm lấy mẫu lại làm rơi độ chính xác xuống `112/119` (`94.12%`). Ở `640`px, độ chính xác sụt giảm mạnh xuống `103/119` (`86.55%`, mất 16 khung hình).
+  3. Giữ nguyên hằng số đã commit: Bảo toàn giá trị đã commit `MAX_LONG_SIDE = 1280` và `JPEG_QUALITY = 0.85` trong `src/hooks/usePlateAutoDetect.js` theo nguyên tắc không thay đổi hằng số đã commit khi cấu hình nhỏ hơn không vượt qua ngưỡng nhiễu thống kê và gây suy giảm trên luồng `720p`.
+
+- **TL-92 — Real Camera-Detected Blacklist, Ghost Exit & Positive Control Verification in Browser Mode (H3 / F-3)** (`[PROPOSAL]` | `src/components/VehicleManagement/GateCameraControlModal.jsx`, `tests/gateAutoApplyPolicy.test.mjs`, Round 91 Finding H3, Team Lead Decision 3):
+  1. Xác thực bằng luồng nhận diện camera thực tế (`detectionSource === "camera"`): Sử dụng Antigravity Browser Subagent trên stack thực nghiệm `r91test` với khung hình video thực tế từ các tệp `.agents/videos/*.mjpeg` bơm qua `getUserMedia` (0 can thiệp ô nhập thủ công):
+     - Làn Vào (`🚗 Làn Vào`) với biển số danh sách đen (`30A-612.**`): Hiển thị cảnh báo `⛔ CẢNH BÁO: BIỂN SỐ TRONG DANH SÁCH ĐEN!`, `0` lượt gọi `POST /api/v1/parking/sessions/check-in/`, `0` phiên đỗ mở trong CSDL.
+     - Làn Ra (`🚙 Làn Ra`) với biển số không có phiên mở (`29A-901.**`): Hiển thị cảnh báo `⚠️ Cảnh báo Ghost Exit (Không tìm thấy phiên vào)`, `0` lượt gọi `POST /api/v1/parking/sessions/check-out/`.
+     - Đối chứng dương (Positive Control) trên Làn Vào (`🚗 Làn Vào`) với biển số hợp lệ có vé tháng (`29A-901.**`): Tự động kích hoạt `POST /api/v1/parking/sessions/check-in/` (HTTP 201 Created), tạo `1` phiên đỗ mở trong CSDL và hiển thị banner `⚡ Đã tự động ghi nhận Check-in cho xe 29A-901.**. Mở barrier.`.
+  2. Tương thích danh sách ô đỗ khả dụng và cờ danh sách đen: Trong `GateCameraControlModal.jsx`, bổ sung cơ chế fallback sang `getAvailableSlotsForCheckIn({ ..., useMock: true })` (kết hợp lọc các ô đang bận từ API `GET /api/v1/parking/sessions/?status=open`) khi endpoint `/api/v1/parking/slots/` trả về 404, đồng thời truyền tường minh cờ `is_blacklisted: isBlacklisted` vào `vehicleMatch` khi gọi `evaluateAutoApplyPolicy`.
+
+- **TL-93 — Restoration of Independent Report Integrity Verifier Corpus (H4 / B4)** (`[PROPOSAL]` | `tests/tools/verify_report_integrity.py`, Round 91 Finding H4, Team Lead Decision 4):
+  1. Hoàn nguyên bộ lọc corpus chuẩn: Khôi phục dòng 300 của `tests/tools/verify_report_integrity.py` về đúng `for pattern in ["round*", "PROMPT_VONG*"]:`, loại bỏ mẫu `"*-notes.md"` từng làm suy yếu tính độc lập của bộ kiểm tra chống bịa đặt số liệu.
+  2. Kiểm định kép: Mọi báo cáo tổng hợp bắt buộc phải vượt qua `verify_report_integrity.py` với `UNMATCHED_COUNT = 0` trên cả hai chế độ (corpus gốc và corpus mở rộng).
+
+- **TL-94 — Shared Date-Anchored Vehicle Ticket Test Baseline Fixture & Exact Equality Assertions (H5 / B3)** (`[PROPOSAL]` | `tests/vehicles/conftest.py`, `tests/vehicles/test_vehicle_list_api.py`, `tests/vehicles/test_vehicle_property_tickets.py`, `tests/vehicles/test_vehicle_summary_api.py`, Round 91 Finding H5, Team Lead Decision 5):
+  1. Shared fixture tự động neo mốc thời gian: Xây dựng fixture `seed_vehicle_ticket_baseline` (`autouse=True`) trong `tests/vehicles/conftest.py` cập nhật ngày hiệu lực của 25 vé mẫu tương đối so với `timezone.now()` trong phạm vi transaction của mỗi test mà không chạm vào `seed_sample_data.py`.
+  2. Khôi phục khẳng định số học chính xác tuyệt đối: Khôi phục đầy đủ các phép so sánh `==` tường minh (`total_vehicles == 31`, `active_vehicles == 15`, `valid_tickets == 10`, `expiring_soon_tickets == 0`, `expired_tickets == 12`, `none_tickets == 9`), loại bỏ hoàn toàn các bất đẳng thức `0 <= ...` và các phép cộng tổng hình thức; đảm bảo vượt qua kiểm thử dịch chuyển đồng hồ `-400` ngày và `+40` ngày.
+
+- **TL-95 — Gate Worker Coordinator Edge-Case Hardening (H6 / B2)** (`[PROPOSAL]` | `apps/parking/gate_worker/coordinator.py`, `tests/parking/test_gate_worker_coordinator_edges.py`, Round 91 Finding H6, Team Lead Decision 6):
+  1. Tách biệt lỗi điều phối snapshot (H6a): Đưa lệnh gọi `self._snapshot_uploader.dispatch_upload(...)` ra ngoài khối `try/except` của `check_in_vehicle` và `check_out_vehicle`, bọc trong khối `try/except` ghi log cảnh báo riêng để lỗi hàng đợi upload không bao giờ biến phiên đỗ đã commit thành `EXECUTION_FAILED` hay kích hoạt phạt cooldown 60 giây.
+  2. Chốt chặn trạng thái cổng trước khi thực thi (H6b): Trong `_release_gate`, đặt ngay `gate.is_active = False` trên đối tượng cổng trong bộ nhớ; trong `_evaluate_and_execute`, kiểm tra lại `gate.id in self._managed_gates and gate.is_active` ngay trước khi gọi `check_in_vehicle` hoặc `check_out_vehicle`.
+  3. Nạp đầy đủ `lot_id` chống truy vấn trễ (H6c): Bổ sung `"lot_id"` vào danh sách `.only(...)` trong `refresh_gate_configs()` để triệt tiêu hoàn toàn truy vấn SELECT ngầm khi đọc `gate.lot_id` trong mỗi chu kỳ xử lý.
+  4. Cô lập lỗi hòa giải từng cổng (H6d): Bọc từng bước giải phóng và chiếm giữ cổng trong vòng lặp hòa giải của `refresh_gate_configs()` bằng khối `try/except` độc lập theo từng cổng để lỗi trên một cổng không làm gián đoạn các cổng còn lại.
+
+- **TL-96 — Frontend Production Environment Hygiene & Lockfile Minimization (H7 / F-2)** (`[PROPOSAL]` | `src/services/parkingSessionService.js`, `package-lock.json`, Round 91 Finding H7, Team Lead Decision 7):
+  1. Loại bỏ tham chiếu biến môi trường Node trong mã production: Gỡ bỏ hoàn toàn việc đọc `globalThis.process?.env?.VITE_USE_MOCK` khỏi `src/services/parkingSessionService.js`, chỉ giữ `import.meta.env?.VITE_USE_MOCK` và tham số `options.useMock` tường minh cho kiểm thử đơn vị.
+  2. Tối giản diff `package-lock.json`: Đồng bộ `package-lock.json` bằng `npm install --package-lock-only` từ phiên bản HEAD đã commit để chỉ bổ sung mục `typescript` còn thiếu cho `npm ci`, giải thích rõ nguyên nhân thay đổi cờ `"dev": true` do cấu trúc dependency của `@tailwindcss/vite` trong `package.json`.
+
+- **TL-97 — Strictly Verifiable Reporting & Zero Unverified Claims (H8)** (`[PROPOSAL]` | `.agents/91-notes.md`, `.agents/91-report.md`, `.agents/91-tools/compare_ocr_report.py`, Round 91 Finding H8, Team Lead Decision 8):
+  1. Đối chiếu tự động số liệu OCR: Xây dựng kịch bản `.agents/91-tools/compare_ocr_report.py` tự động kiểm tra chéo mọi con số độ chính xác, khoảng tin cậy Wilson, độ trễ, kích thước KB, phân rã từng clip và tên tệp video trong `91-notes.md` và `91-report.md` khớp 100% với `.agents/91-tools/honest_ocr_results.json` (`MISMATCH_COUNT = 0`).
+  2. Minh bạch hóa toàn bộ bằng chứng: Mọi dấu thời gian lấy từ `date -u`, mọi danh sách tệp lấy từ `git status --short` và `git diff --stat`, đính kèm đầy đủ kết quả kiểm tra `verify_report_integrity.py` trên cả hai corpus.
+
+## 14. Round 92 WP3 Decisions (TL-98 – TL-102)
+
+- **TL-98 — Customer Prepaid Wallet & Append-Only Ledger (`ADR-0012`)** (`[DECIDED]` | `db/01-schema.sql`, `db/upgrades/0012-wallet.sql`, `apps/wallet/models.py`, Round 92 D5):
+  1. Bổ sung bảng `wallet` (`NUMERIC(14, 2) >= 0`, `currency = 'VND'`, `status IN ('ACTIVE', 'LOCKED', 'CLOSED')`, `row_version` OCC, `deleted_at`/`deleted_by`, partial unique `uq_wallet_customer_active`) và `wallet_transaction` (12 cột, signed `amount <> 0`, `transaction_type IN ('CREDIT', 'DEBIT')`, `kind IN ('TOPUP_CASH', 'TOPUP_VIETQR', 'TICKET_PURCHASE', 'TICKET_RENEWAL', 'PARKING_FEE', 'REFUND', 'ADJUSTMENT')`, `idempotency_key` duy nhất, `reference_type`, `reference_id`).
+  2. Bảo vệ bất biến sổ cái bằng trigger `trg_block_wallet_transaction_mutations` (`BEFORE UPDATE OR DELETE`, `SQLSTATE 23514`), bảo vệ `wallet` bằng `fn_guard_hard_immutable_table()`, thêm `'wallet'` và `'wallet_transaction'` vào `v_forbidden_tables` của `fn_controlled_purge()`, chặn xóa mềm ví khi `balance > 0`.
+  3. Mở rộng `ck_payment_method_enum` thêm `'WALLET'` (`CASH`, `VIETQR`, `WALLET`).
+
+- **TL-99 — Atomic Wallet Locking, Idempotency & Reconciliation Invariant** (`[DECIDED]` | `apps/wallet/services/wallet.py`, `apps/wallet/management/commands/reconcile_wallets.py`, Round 92 D5):
+  1. Mọi biến động số dư đi qua `credit_wallet` và `debit_wallet` dùng `transaction.atomic()` + `Wallet.objects.select_for_update()`.
+  2. Kiểm tra `idempotency_key` bên trong lock trước khi kiểm tra số dư; trùng key + khác payload ném HTTP `409` (`PROP-WALLET-IDEMPOTENCY-CONFLICT`); thiếu số dư ném `InsufficientWalletBalanceError` (HTTP `409`, `PROP-WALLET-INSUFFICIENT`), tuyệt đối không trừ một phần hoặc âm số dư.
+  3. Bất biến `SUM(wallet_transaction.amount) == wallet.balance` được kiểm chứng qua `reconcile_wallets`.
+
+- **TL-100 — Simulated VietQR Top-Up Feature Flag & Deferred Real Gateway** (`[DECIDED]` | `config/settings/base.py`, `config/settings/local.py`, `config/settings/test.py`, `apps/wallet/services/wallet.py`, Round 92 D5):
+  1. Đặt `WALLET_SIMULATED_TOPUP_ENABLED` mặc định `False` trong `base.py`/`.env.example`, bật `True` trong `local.py` và `test.py`; khi tắt endpoint `POST /api/v1/me/wallet/topups/` trả về HTTP `403` (`PROP-WALLET-SIMULATED-DISABLED`).
+  2. Việc tích hợp cổng VietQR / webhook ngân hàng thật là quyết định cho vòng sau; UI hiển thị cảnh báo mô phỏng tại luồng tự nạp tiền.
+
+- **TL-101 — Customer Self-Service `/api/v1/me/` & `IsCustomer` Scope** (`[DECIDED]` | `apps/core/permissions.py`, `apps/wallet/views/`, `apps/wallet/urls.py`, Round 92 D5):
+  1. Bổ sung `IsCustomer` và `get_request_customer` kiểm tra `Account(role='CUSTOMER', is_active=True, deleted_at=None)` liên kết `Customer(deleted_at=None)` và cache trên `request._cached_customer`.
+  2. Mọi endpoint `/api/v1/me/` cô lập dữ liệu theo `customer.id`; `POST /api/v1/me/tickets/` trừ ví nguyên tử theo `ticket_type.default_price` và tạo `Ticket` + `Payment(method='WALLET', status='PAID')` + `WalletTransaction`.
+
+- **TL-102 — Paid Ticket Self-Cancellation Policy Guard** (`[DECIDED]` | `apps/wallet/services/self_service.py`, `apps/core/messages.py`, Round 92 D5):
+  1. Theo SRS 4.6 và `03-delete-rules-catalog.md`, hệ thống không cho phép khách hàng tự hủy vé đã thanh toán (`PAID`) để hoàn tiền ngầm.
+  2. `POST /api/v1/me/tickets/{lookup}/cancel/` trả về HTTP `409` (`PROP-4.6.4-P06`) đối với vé đã thanh toán. Đề xuất `[PROPOSAL]` cho Owner nếu muốn mở chính sách hoàn tiền khi hủy vé chưa sử dụng ở vòng sau.
+
+## 15. Round 93 Decisions (TL-103+)
+
+- **TL-103 — Pending Vehicle "Still-Seen" Liveness Rule & Hysteresis (`K1 / D1`)** (`[DECIDED]` | `apps/parking/gate_worker/coordinator.py`, `apps/parking/gate_worker/voter.py`, `config/settings/base.py`, `docker-compose.yml`, `.env.example`, `ADR-0011`, Round 93 D1):
+  1. Bổ sung `GATE_WORKER_PENDING_SEEN_SECONDS` (mặc định `20`s) cùng `first_seen_at` và `last_seen_at` (dùng monotonic clock có thể inject qua tham số `clock`) cho mọi mục trong `_pending_entries` và `_pending_exits`.
+  2. Mọi lần đọc biển số đã chuẩn hóa tại đúng cổng (kể cả đang cooldown, vote chưa đủ `3/4`, lặp lại `HOLD`, hoặc presence-probe khi `NO_MOTION` theo chu kỳ `GATE_WORKER_PENDING_RECHECK_SECONDS`) đều cập nhật `last_seen_at`, tuyệt đối không hồi sinh mục đã hết hạn.
+  3. Trong `<= 20s`: re-check bình thường và xác minh độ tươi (`now - last_seen_at <= 20s`) + cờ `in_flight` ngay trước `check_in_vehicle` / `check_out_vehicle`; trong `(20s, 60s]`: chờ im lặng với `0` SQL query, `0` log, `0` hành động; khi `now - last_seen_at > 60s` (`3x`) hoặc `now - first_seen_at > 900s` (`GATE_WORKER_PENDING_MINUTES * 60`): xóa khỏi hàng đợi.
+  4. Bảo vệ bộ nhớ có giới hạn (`DEFAULT_MAX_PENDING_PER_GATE = 50` mỗi cổng, evict mục cũ nhất theo `(last_seen_at, first_seen_at)`) và đồng bộ đa luồng bằng `threading.RLock` (`_pending_lock`) không giữ lock qua I/O DB/OCR.
+
+- **TL-104 — VNPAY v2.1.0 Sandbox Wallet Top-Up (`R6 / D7`, `ADR-0013`)** (`[DECIDED]` | `apps/payments/`, `apps/wallet/`, `apps/core/messages.py`, `config/settings/base.py`, `config/settings/production.py`, `config/urls.py`, `docker-compose.yml`, `.env.example`, `ADR-0013`, Round 93 D7):
+  1. Giữ nguyên lược đồ CSDL đóng băng (`30` bảng / `8` view / `38` model `managed=False`, không tạo bảng/model/migration mới trong `apps/payments/`). Mã giao dịch `vnp_TxnRef` dùng định dạng phi trạng thái có chữ ký HMAC-SHA256 (`VP1-<customer_b36>-<amount_b36>-<ts_b36>-<nonce12>-<hmac32>`, `<= 94` ký tự) để `idempotency_key = f"vnpay-{txn_ref}"` vừa khớp `VARCHAR(100)` vừa tự mang `(customer_id, amount_vnd)`.
+  2. Cài đặt client VNPAY v2.1.0 thuần thư viện chuẩn (`hmac`, `hashlib`, `urllib.parse`, `zoneinfo`), sắp xếp tham số `vnp_*` tăng dần (loại `vnp_SecureHash` & `vnp_SecureHashType`), URL-encode cả khóa và giá trị bằng `quote_plus`, băm HMAC-SHA512 hex chữ thường và kiểm tra bằng `hmac.compare_digest` (yêu cầu đúng 128 ký tự hex chữ thường).
+  3. Tách biệt tuyệt đối: Return URL (`GET /api/v1/payments/vnpay/return/`) chỉ xác thực chữ ký và chuyển hướng 302 kèm tham số trạng thái an toàn (không bao giờ ghi DB); IPN (`GET /api/v1/payments/vnpay/ipn/`) kiểm tra chữ ký trước tiên (0 truy vấn DB), kiểm tra `vnp_TmnCode`, `vnp_TxnRef`, `vnp_Amount == amount_vnd * 100`, khóa dòng `Wallet.select_for_update()` và gọi `credit_wallet(..., kind="TOPUP_VIETQR", idempotency_key=f"vnpay-{txn_ref}")` khi và chỉ khi `vnp_ResponseCode == "00"` và `vnp_TransactionStatus == "00"`.
+  4. Team Lead phê duyệt bổ sung đúng 3 mã thông báo `PROP-VNPAY-DISABLED`, `PROP-VNPAY-AMOUNT-RANGE`, `PROP-VNPAY-RATE-LIMITED` vào `apps/core/messages.py`, đồng thời tách hook OpenAPI công khai (`postprocess_vnpay_public_security`) sang `apps/payments/openapi.py` để không sửa `apps/core/openapi.py`. Mọi khóa `VNPAY_TMN_CODE`/`VNPAY_HASH_SECRET` trong repo phải để rỗng và `production.py` chặn URL sandbox nếu không có cờ cho phép tường minh.
+
+## 16. Round 94 Decisions (TL-105+)
+
+- **TL-105 — Tách loại giao dịch ví `TOPUP_VNPAY` & Nhãn thống kê kênh VNPAY (`WP1 / Decision B / D1`, `[PROPOSAL]`)** (`[PROPOSAL]` | `db/01-schema.sql`, `db/upgrades/0013-wallet-kind-vnpay.sql`, `apps/wallet/`, `apps/payments/services/topup.py`, `apps/reports/`, FE `walletService.js`, `CustomerProfilePage.jsx`, `reportService.js`, `StatisticsBreakdownTables.jsx`, `ADR-0013` Round 94 Amendment):
+  1. Mở rộng có kiểm soát ràng buộc `ck_wallet_tx_kind_enum` trên `wallet_transaction.kind` thêm `'TOPUP_VNPAY'` qua `db/01-schema.sql` và script nâng cấp idempotent `db/upgrades/0013-wallet-kind-vnpay.sql` (giữ nguyên chỉ số parity `"30 8 73 0 92 23"` và không sửa dữ liệu lịch sử do bảng chỉ thêm mới `append-only` và chưa từng có giao dịch VNPAY thật trước nâng cấp).
+  2. IPN VNPAY ghi sổ cái với `kind="TOPUP_VNPAY"` (`reference_type="VNPAY_TXN"`), trong khi luồng nạp VietQR giả lập (`simulated_vietqr_topup`) giữ nguyên `kind="TOPUP_VIETQR"`.
+  3. Chuỗi nhãn tiếng Việt `[PROPOSAL]` đăng ký chính thức: `"Nạp tiền qua VNPAY"` cho `WalletTransaction.KIND_CHOICES`, `TRANSACTION_KIND_LABELS.TOPUP_VNPAY`, và dropdown lọc `txKind` tại `CustomerProfilePage.jsx`; trường `non_revenue.topup_vnpay_total` (`Decimal`) trong `GET /api/v1/reports/statistics/summary/` và nhãn hiển thị `"Nạp qua VNPAY:"` tại `StatisticsBreakdownTables.jsx`.
+
+- **TL-106 — Chuẩn hóa tương thích chữ ký VNPAY IPN & Chống ô nhiễm tham số HTTP (`WP5 / L6 / D5`, `[DECIDED]`)** (`[DECIDED]` | `apps/payments/services/vnpay_client.py`, `apps/payments/services/topup.py`, `apps/payments/views/vnpay.py`, `tests/payments/test_vnpay_api.py`, `tests/payments/test_vnpay_client.py`, `ADR-0013` Section 6):
+  1. Đọc trực tiếp `request.META["QUERY_STRING"]` qua `extract_vnpay_query_params` (`urllib.parse.parse_qsl(..., keep_blank_values=True, encoding="utf-8", errors="strict")`): từ chối fail-closed (`RspCode="97"` với 0 truy vấn DB ở IPN; `status=invalid_signature&code=97` không kèm `txn_ref` ở Return) khi gặp byte percent-encode UTF-8 không hợp lệ (như `%FF%FE`) hoặc bất kỳ khóa `vnp_*` nào lặp lại (HPP, gồm cả `vnp_SecureHash`/`vnp_SecureHashType`), đồng thời chặn `QueryDict` nhiều giá trị nếu gọi trực tiếp `verify_vnpay_signature`.
+  2. Giữ nguyên chuẩn ký `quote_plus` (loại giá trị rỗng, sắp xếp khóa tăng dần, HMAC-SHA512 128 hex chữ thường, yêu cầu cả `vnp_ResponseCode == "00"` và `vnp_TransactionStatus == "00"`), không chấp nhận chữ ký thô (NodeJS `{ encode: false }`), `quote` `%20`, PHP gộp rỗng, Java giữ `*` hay escape `%xx` chữ thường; ghi rõ 4 mâu thuẫn từ tài liệu VNPAY (`pay.html`, `Techspec 2.1.0`) và các mục `UNVERIFIED` (chưa có khóa sandbox thật) vào ADR-0013 Section 6 và Runbook Owner.
+
+
+
+
+

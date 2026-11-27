@@ -20,6 +20,21 @@ SECRET_KEY = env("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = env("DEBUG", default=False)
 
+# Strictly forbid SMS OTP test double in production environments.
+SMS_OTP_TEST_DOUBLE_ENABLED = False
+
+# Refuse sandbox VNPAY payment URL in production when credentials are active unless explicitly allowed.
+if (
+    VNPAY_TMN_CODE
+    and VNPAY_HASH_SECRET
+    and "sandbox.vnpayment.vn" in VNPAY_PAYMENT_URL.lower()
+    and not VNPAY_ALLOW_SANDBOX_IN_PRODUCTION
+):
+    raise ImproperlyConfigured(
+        "VNPAY_PAYMENT_URL points to sandbox.vnpayment.vn in production; "
+        "configure a production gateway URL or set VNPAY_ALLOW_SANDBOX_IN_PRODUCTION=True."
+    )
+
 ALLOWED_HOSTS = env("ALLOWED_HOSTS", default=[])
 
 # Security settings for production

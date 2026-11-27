@@ -71,6 +71,8 @@ INSTALLED_APPS = [
     "apps.content",
     "apps.audit",
     "apps.reports",
+    "apps.wallet",
+    "apps.payments",
 ]
 
 MIDDLEWARE = [
@@ -448,12 +450,17 @@ SPECTACULAR_SETTINGS = {
     "POSTPROCESSING_HOOKS": [
         "drf_spectacular.hooks.postprocess_schema_enums",
         "apps.core.openapi.postprocess_schema_descriptions",
+        "apps.payments.openapi.postprocess_vnpay_public_security",
     ],
     "ENUM_NAME_OVERRIDES": {
         "RecognitionSourceEnum": "apps.parking.models.VehicleEntryExitLog.RECOGNITION_SOURCE_CHOICES",
         "VehicleEntryExitReviewStatusEnum": "apps.parking.models.VehicleEntryExitLog.REVIEW_STATUS_CHOICES",
         "PlateScanReviewStatusEnum": "apps.parking.enums.ReviewStatus.CHOICES",
         "ReviewReasonEnum": "apps.parking.enums.ReviewReasonCode.CHOICES",
+        "ParkingSlotStatusEnum": "apps.parking.models.ParkingSlot.STATUS_CHOICES",
+        "ParkingSlotKindEnum": "apps.parking.models.ParkingSlot.KIND_CHOICES",
+        "WalletStatusEnum": "apps.wallet.models.Wallet.STATUS_CHOICES",
+        "VnpayTopupStatusEnum": "apps.payments.serializers.vnpay.VNPAY_TOPUP_STATUS_CHOICES",
     },
 }
 
@@ -517,5 +524,129 @@ AUTH_THROTTLE_IDENTIFIER_LIMIT = env.int("AUTH_THROTTLE_IDENTIFIER_LIMIT", defau
 AUTH_THROTTLE_IP_LIMIT = env.int("AUTH_THROTTLE_IP_LIMIT", default=30)
 AUTH_THROTTLE_WINDOW_SECONDS = env.int("AUTH_THROTTLE_WINDOW_SECONDS", default=900)
 
+# ==============================================================================
+# Password Reset Token & Throttling Settings (OQ-84, TL-36, REQ-4.1-F04)
+# ==============================================================================
+PASSWORD_RESET_TOKEN_LIFETIME_MINUTES = env.int(
+    "PASSWORD_RESET_TOKEN_LIFETIME_MINUTES", default=15
+)
+PASSWORD_RESET_EMAIL_THROTTLE_LIMIT = env.int(
+    "PASSWORD_RESET_EMAIL_THROTTLE_LIMIT", default=3
+)
+PASSWORD_RESET_IP_THROTTLE_LIMIT = env.int(
+    "PASSWORD_RESET_IP_THROTTLE_LIMIT", default=10
+)
+PASSWORD_RESET_THROTTLE_WINDOW_SECONDS = env.int(
+    "PASSWORD_RESET_THROTTLE_WINDOW_SECONDS", default=3600
+)
+DEFAULT_FROM_EMAIL = env("DEFAULT_FROM_EMAIL", default="no-reply@parking.com")
+
+# ==============================================================================
+# SMS & OTP Settings (TL-01, OQ-03)
+# ==============================================================================
+SMS_BACKEND = env("SMS_BACKEND", default="apps.accounts.services.sms.ConsoleSMSBackend")
+SMS_OTP_LIFETIME_SECONDS = env.int("SMS_OTP_LIFETIME_SECONDS", default=300)
+SMS_OTP_COOLDOWN_SECONDS = env.int("SMS_OTP_COOLDOWN_SECONDS", default=60)
+SMS_OTP_PHONE_THROTTLE_LIMIT = env.int("SMS_OTP_PHONE_THROTTLE_LIMIT", default=3)
+SMS_OTP_IP_THROTTLE_LIMIT = env.int("SMS_OTP_IP_THROTTLE_LIMIT", default=10)
+SMS_OTP_THROTTLE_WINDOW_SECONDS = env.int(
+    "SMS_OTP_THROTTLE_WINDOW_SECONDS", default=3600
+)
+SMS_OTP_MAX_ATTEMPTS = env.int("SMS_OTP_MAX_ATTEMPTS", default=5)
+# SMS_OTP_TEST_DOUBLE_ENABLED: Explicit switch allowing fixed "123456" OTP when DEBUG=True
+# and Firebase is unconfigured. Never enable in production.
+SMS_OTP_TEST_DOUBLE_ENABLED: bool = env.bool(
+    "SMS_OTP_TEST_DOUBLE_ENABLED", default=False
+)
+
+# Vonage SMS Configuration
+VONAGE_API_KEY = env("VONAGE_API_KEY", default="")
+VONAGE_API_SECRET = env("VONAGE_API_SECRET", default="")
+VONAGE_FROM = env("VONAGE_FROM", default="Vonage APIs")
+
+# Firebase Phone Authentication Configuration
+FIREBASE_API_KEY = env("FIREBASE_API_KEY", default="")
+FIREBASE_PROJECT_ID = env("FIREBASE_PROJECT_ID", default="")
+
 # DRF Proxy Configuration
 NUM_PROXIES = env.int("NUM_PROXIES", default=0)
+
+# ==============================================================================
+# Gate Worker Process Settings (ADR-0011, TL-66 to TL-77)
+# ==============================================================================
+# GATE_WORKER_STREAMS: JSON dictionary mapping gate code to camera stream URL
+# (HTTP MJPEG or RTSP). Stream URLs are NEVER stored in DB or logged.
+GATE_WORKER_STREAMS: str = env.str("GATE_WORKER_STREAMS", default="{}")
+
+# GATE_WORKER_COOLDOWN_SECONDS: Cooldown interval per (gate_id, normalized_plate)
+# to prevent duplicate automated event spam while vehicle is stationary. (Default: 30s).
+GATE_WORKER_COOLDOWN_SECONDS: int = env.int("GATE_WORKER_COOLDOWN_SECONDS", default=30)
+
+# GATE_WORKER_MAX_OCR_RATE_FPS: Maximum OCR inferences per second per camera stream.
+# (Default: 2.0 fps).
+GATE_WORKER_MAX_OCR_RATE_FPS: float = env.float(
+    "GATE_WORKER_MAX_OCR_RATE_FPS", default=2.0
+)
+
+# GATE_WORKER_MOTION_MAD_THRESHOLD: Mean Absolute Difference (MAD) pixel threshold
+# on 64x64 downscaled thumbnail to trigger OCR inference. (Default: 5.0).
+GATE_WORKER_MOTION_MAD_THRESHOLD: float = env.float(
+    "GATE_WORKER_MOTION_MAD_THRESHOLD", default=5.0
+)
+
+# GATE_WORKER_CONCURRENCY_LIMIT: Maximum concurrent OCR inferences across all streams
+# per worker process. (Default: 4).
+GATE_WORKER_CONCURRENCY_LIMIT: int = env.int("GATE_WORKER_CONCURRENCY_LIMIT", default=4)
+
+# GATE_WORKER_CONFIG_REFRESH_INTERVAL: Periodic interval (seconds) to refresh
+# dynamic gate configurations (is_active, is_auto_scan, direction) from DB.
+GATE_WORKER_CONFIG_REFRESH_INTERVAL: float = env.float(
+    "GATE_WORKER_CONFIG_REFRESH_INTERVAL", default=10.0
+)
+
+# GATE_LAST_EVENT_WINDOW_HOURS: Cửa sổ thời gian (giờ) giới hạn truy vấn DISTINCT ON
+# trong get_latest_gate_activity_logs_map để duy trì O(1) < 2ms latency. (Default: 24h).
+GATE_LAST_EVENT_WINDOW_HOURS: int = env.int("GATE_LAST_EVENT_WINDOW_HOURS", default=24)
+
+# GATE_WORKER_PENDING_MINUTES: Maximum duration (minutes) a gate worker keeps an
+# insufficient-wallet vehicle in pending exit re-evaluation state (D8). (Default: 15m).
+GATE_WORKER_PENDING_MINUTES: int = env.int("GATE_WORKER_PENDING_MINUTES", default=15)
+
+# GATE_WORKER_PENDING_RECHECK_SECONDS: Interval (seconds) between wallet balance
+# re-evaluations for pending exit sessions (D8). (Default: 5.0s).
+GATE_WORKER_PENDING_RECHECK_SECONDS: float = env.float(
+    "GATE_WORKER_PENDING_RECHECK_SECONDS", default=5.0
+)
+
+# GATE_WORKER_PENDING_SEEN_SECONDS: Maximum age (seconds) since last plate sighting
+# during which a pending vehicle is considered "still seen" for re-check/action (D1). (Default: 20s).
+GATE_WORKER_PENDING_SEEN_SECONDS: int = env.int(
+    "GATE_WORKER_PENDING_SEEN_SECONDS", default=20
+)
+
+# ==============================================================================
+# Customer Prepaid Wallet Settings (ADR-0012, TL-100)
+# ==============================================================================
+# WALLET_SIMULATED_TOPUP_ENABLED: Controls whether simulated VietQR top-ups are accepted.
+# Must remain False in production; enabled explicitly in local and test settings.
+WALLET_SIMULATED_TOPUP_ENABLED: bool = env.bool(
+    "WALLET_SIMULATED_TOPUP_ENABLED", default=False
+)
+
+# ==============================================================================
+# VNPAY Sandbox Wallet Top-Up Settings (ADR-0013, TL-104)
+# ==============================================================================
+VNPAY_TMN_CODE: str = env.str("VNPAY_TMN_CODE", default="")
+VNPAY_HASH_SECRET: str = env.str("VNPAY_HASH_SECRET", default="")
+VNPAY_PAYMENT_URL: str = env.str(
+    "VNPAY_PAYMENT_URL",
+    default="https://sandbox.vnpayment.vn/paymentv2/vpcpay.html",
+)
+VNPAY_RETURN_URL: str = env.str("VNPAY_RETURN_URL", default="")
+VNPAY_FRONTEND_RESULT_URL: str = env.str("VNPAY_FRONTEND_RESULT_URL", default="")
+VNPAY_TOPUP_MIN: int = env.int("VNPAY_TOPUP_MIN", default=10000)
+VNPAY_TOPUP_MAX: int = env.int("VNPAY_TOPUP_MAX", default=50000000)
+VNPAY_TIMEOUT_MINUTES: int = env.int("VNPAY_TIMEOUT_MINUTES", default=15)
+VNPAY_ALLOW_SANDBOX_IN_PRODUCTION: bool = env.bool(
+    "VNPAY_ALLOW_SANDBOX_IN_PRODUCTION", default=False
+)

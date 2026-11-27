@@ -23,19 +23,26 @@ from apps.core.messages import ALL_MESSAGES
 from apps.core.pagination import StandardResultsSetPagination
 from apps.core.permissions import IsEmployeeOrManager
 from apps.core.serializers import ErrorEnvelopeSerializer
-from apps.parking.selectors.sessions import get_session_by_id, list_sessions
+from apps.parking.models import ParkingSlot, VehicleEntryExitLog
+from apps.parking.selectors.sessions import (
+    get_session_by_id,
+    list_sessions,
+)
 from apps.parking.serializers.sessions import (
     CheckInRequestSerializer,
     CheckInResponseSerializer,
     CheckOutRequestSerializer,
     CheckOutResponseSerializer,
+    FeePreviewResponseSerializer,
     ParkingSessionFilterSerializer,
     PaymentSummarySerializer,
     SessionDetailSerializer,
     SessionListItemSerializer,
+    SessionUpdateSerializer,
 )
 from apps.parking.services.check_in import check_in_vehicle
 from apps.parking.services.check_out import check_out_vehicle
+from apps.parking.services.tariff import get_fee_preview
 from apps.parking.views.scans import (
     finalize_observability_response,
     init_observability_context,
@@ -305,9 +312,10 @@ class CheckOutView(APIView):
         description=(
             "Kết thúc phiên đỗ xe tại cổng ra: nhận diện phiên qua mã phiên đỗ xe HOẶC biển số xe, "
             "khóa dòng bản ghi bằng select_for_update trong transaction atomic, xác thực cổng ra "
-            "(bắt buộc direction='OUT'), tính cước phí theo quy tắc (0 VND nếu có vé ACTIVE; "
-            "ngược lại ceil(giờ) * 10.000 VND), yêu cầu phương thức thanh toán CASH/VIETQR và tự động "
-            "tạo bản ghi Payment trạng thái PAID nếu có phí phát sinh. Hỗ trợ xe bị xóa mềm trong khi đỗ (OQ-67)."
+            "(bắt buộc direction='OUT'), tính cước phí theo quy tắc (0 VND cho thời gian trong hạn vé; "
+            "vượt hạn hoặc vãng lai tính block ceil(giờ) * 10.000 VND), yêu cầu phương thức thanh toán CASH/VIETQR/WALLET "
+            "và tự động tạo bản ghi Payment trạng thái PAID nếu có phí phát sinh (trừ ví nguyên tử nếu chọn WALLET). "
+            "Hỗ trợ xe bị xóa mềm trong khi đỗ (OQ-67)."
         ),
         request=CheckOutRequestSerializer,
         examples=[
@@ -432,7 +440,7 @@ class CheckOutView(APIView):
             ),
             404: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
-                description="Không tìm thấy phiên đỗ xe đang mở (MSG-4.5.1-M01)",
+                description="Không tìm thấy phiên đỗ xe đang mở (MSG-4.5.1-M01) hoặc ví khách hàng (PROP-WALLET-NOT-FOUND)",
                 examples=[
                     OpenApiExample(
                         "Không tìm thấy phiên",
@@ -441,12 +449,20 @@ class CheckOutView(APIView):
                             "message": "Không tìm thấy dữ liệu trùng khớp",
                             "details": {},
                         },
-                    )
+                    ),
+                    OpenApiExample(
+                        "Không tìm thấy ví khách hàng",
+                        value={
+                            "code": "PROP-WALLET-NOT-FOUND",
+                            "message": "Không tìm thấy ví của khách hàng.",
+                            "details": {},
+                        },
+                    ),
                 ],
             ),
             409: OpenApiResponse(
                 response=ErrorEnvelopeSerializer,
-                description="Phiên đỗ xe đã được kết thúc trước đó",
+                description="Xung đột nghiệp vụ (phiên đã đóng, ví bị khóa hoặc ví không đủ số dư)",
                 examples=[
                     OpenApiExample(
                         "Phiên đỗ xe đã đóng",
@@ -455,7 +471,27 @@ class CheckOutView(APIView):
                             "message": "Phiên đỗ xe này đã được kết thúc trước đó.",
                             "details": {},
                         },
-                    )
+                    ),
+                    OpenApiExample(
+                        "Số dư ví không đủ",
+                        value={
+                            "code": "PROP-WALLET-INSUFFICIENT",
+                            "message": "Số dư ví không đủ để thực hiện giao dịch.",
+                            "details": {
+                                "required_amount": "20000.00",
+                                "current_balance": "10000.00",
+                                "missing_amount": "10000.00",
+                            },
+                        },
+                    ),
+                    OpenApiExample(
+                        "Ví bị khóa",
+                        value={
+                            "code": "PROP-WALLET-LOCKED",
+                            "message": "Ví khách hàng hiện đang bị khóa hoặc đã đóng, không thể giao dịch.",
+                            "details": {},
+                        },
+                    ),
                 ],
             ),
         },
@@ -475,6 +511,8 @@ class CheckOutView(APIView):
             exit_image_url=data.get("exit_image_url"),
             user=request.user,
             notes=data.get("notes"),
+            waive_fee=data.get("waive_fee", False),
+            waiver_reason=data.get("waiver_reason"),
         )
         stages["db"] = (time.perf_counter() - t_db0) * 1000.0
         set_observability_metadata(
@@ -494,6 +532,76 @@ class CheckOutView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class FeePreviewView(APIView):
+    """
+    API Xem trước cước phí đỗ xe cho phiên đang mở (Fee Preview per TL-57).
+    Cho phép nhân viên và quản lý xem thời gian đỗ thực tế và cước phí tạm tính
+    trước khi thực hiện check-out phương tiện.
+    """
+
+    permission_classes = [IsAuthenticated, IsEmployeeOrManager]
+
+    def initial(self, request: Request, *args: Any, **kwargs: Any) -> None:
+        init_observability_context(request)
+        super().initial(request, *args, **kwargs)
+
+    def finalize_response(
+        self, request: Request, response: Response, *args: Any, **kwargs: Any
+    ) -> Response:
+        resp = super().finalize_response(request, response, *args, **kwargs)
+        return finalize_observability_response(
+            request, resp, "/api/v1/parking/sessions/fee-preview/"
+        )
+
+    @extend_schema(
+        operation_id="parking_sessions_fee_preview",
+        tags=["Parking - Vehicle entry/exit"],
+        summary="Xem trước cước phí phiên đỗ xe đang mở",
+        description=(
+            "Truy vấn phiên đỗ xe đang mở qua license_plate HOẶC session_code, "
+            "tính toán thời gian thực cước phí dự kiến phải thu, kiểm tra trạng thái vé tháng hợp lệ, "
+            "và trả về thông tin chi tiết phục vụ màn hình Làn Ra (ExitLanePanel)."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="license_plate",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Biển số xe cần xem trước phí (vd: 51A-897.14)",
+            ),
+            OpenApiParameter(
+                name="session_code",
+                type=str,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Mã phiên đỗ xe cần xem trước phí (vd: #PK-20261018-001)",
+            ),
+        ],
+        responses={
+            200: OpenApiResponse(
+                response=FeePreviewResponseSerializer,
+                description="Xem trước cước phí thành công",
+            ),
+            400: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Thiếu tham số nhận diện phiên (license_plate hoặc session_code)",
+            ),
+            404: OpenApiResponse(
+                response=ErrorEnvelopeSerializer,
+                description="Không tìm thấy phiên đỗ xe đang mở (PROP-4.5.1-P06)",
+            ),
+        },
+    )
+    def get(self, request: Request) -> Response:
+        preview_data = get_fee_preview(
+            license_plate=request.query_params.get("license_plate"),
+            session_code=request.query_params.get("session_code"),
+        )
+        serializer = FeePreviewResponseSerializer(preview_data)
+        return Response(serializer.data, status=status.HTTP_200_OK)
 
 
 class SessionListView(APIView):
@@ -796,3 +904,72 @@ class SessionDetailView(APIView):
 
         serializer = SessionDetailSerializer(session)
         return Response(serializer.data, status=status.HTTP_200_OK)
+
+    @extend_schema(
+        operation_id="parking_session_patch",
+        tags=["Parking"],
+        summary="Cập nhật phiên đỗ xe (gán vị trí ô đỗ, ghi chú)",
+        description="Cập nhật ô đỗ xe (slot_id) hoặc ghi chú cho một phiên đỗ xe.",
+        request=SessionUpdateSerializer,
+        responses={200: SessionDetailSerializer},
+    )
+    def patch(self, request: Request, pk: int) -> Response:
+        session = VehicleEntryExitLog.objects.filter(id=pk).first()
+        if not session:
+            raise BusinessAPIException(
+                code="MSG-4.4.1-M01",
+                message=ALL_MESSAGES.get("MSG-4.4.1-M01", "Không tìm thấy dữ liệu"),
+                status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        serializer = SessionUpdateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        validated_data = serializer.validated_data
+
+        old_slot = session.slot
+
+        if "slot_id" in validated_data:
+            slot_id = validated_data["slot_id"]
+            if slot_id is not None:
+                new_slot = ParkingSlot.objects.filter(id=slot_id, deleted_at__isnull=True).first()
+                if not new_slot:
+                    raise BusinessAPIException(
+                        code="MSG-4.4.1-M01",
+                        message="Vị trí ô đỗ xe không tồn tại hoặc đã bị xóa.",
+                        status_code=status.HTTP_400_BAD_REQUEST,
+                    )
+                session.slot = new_slot
+            else:
+                session.slot = None
+
+        if "notes" in validated_data:
+            session.notes = validated_data["notes"]
+
+        update_fields = []
+        if "slot_id" in validated_data:
+            update_fields.append("slot")
+        if "notes" in validated_data:
+            update_fields.append("notes")
+
+        if update_fields:
+            session.save(update_fields=update_fields)
+
+        # Sau khi session đã liên kết slot và lưu vào DB, trigger DB hoặc logic cập nhật slot status
+        if "slot_id" in validated_data:
+            if session.slot and session.exit_time is None:
+                if session.slot.status != "OCCUPIED":
+                    session.slot.status = "OCCUPIED"
+                    session.slot.save(update_fields=["status"])
+
+            # Nếu đổi từ ô cũ sang ô mới, giải phóng ô cũ nếu không còn phiên nào khác
+            if old_slot and (slot_id is None or old_slot.id != slot_id):
+                other_active = VehicleEntryExitLog.objects.filter(
+                    slot=old_slot, exit_time__isnull=True
+                ).exclude(id=session.id).exists()
+                if not other_active and old_slot.status == "OCCUPIED":
+                    old_slot.status = "AVAILABLE"
+                    old_slot.save(update_fields=["status"])
+
+        updated_session = get_session_by_id(pk)
+        return Response(SessionDetailSerializer(updated_session).data, status=status.HTTP_200_OK)
+

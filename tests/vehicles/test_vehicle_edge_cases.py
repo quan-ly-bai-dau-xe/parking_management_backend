@@ -77,7 +77,7 @@ def test_selector_invalid_status_and_ticket_state_ignored():
     qs = get_vehicles_queryset(
         status_filter="UNKNOWN_STATUS", ticket_state="UNKNOWN_STATE"
     )
-    assert qs.count() == 30
+    assert qs.count() == 31
 
 
 def test_selector_invalid_ordering_fallback():
@@ -395,8 +395,9 @@ def test_service_delete_vehicle_db_trigger_catch_blocks(auth_manager):
     now = timezone.now()
     rsv = SlotReservation.objects.get(code="RSV-2026-0001")
     rsv.status = "ACTIVE"
+    rsv.reserved_from = now - timedelta(hours=1)
     rsv.reserved_until = now + timedelta(hours=2)
-    rsv.save(update_fields=["status", "reserved_until"])
+    rsv.save(update_fields=["status", "reserved_from", "reserved_until"])
     with pytest.raises(BusinessAPIException) as exc3:
         delete_vehicle(v_rsv, actor_id=auth_manager.id)
     assert exc3.value.code == "PROP-DEL-03-ACTIVE-RSV"
@@ -422,7 +423,7 @@ def test_view_list_unpaginated_fallback(auth_employee):
     response = view(request)
     assert response.status_code == status.HTTP_200_OK
     assert isinstance(response.data, list)
-    assert len(response.data) == 30
+    assert len(response.data) == 31
 
 
 # ---------------------------------------------------------------------------

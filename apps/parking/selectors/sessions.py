@@ -7,11 +7,25 @@ import contextlib
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
-from django.db.models import QuerySet
+from django.db.models import OuterRef, QuerySet, Subquery
 from django.utils import timezone
 
 from apps.parking.models import VehicleEntryExitLog
 from apps.parking.services.ocr import PlateRecognizer
+from apps.tickets.models import Payment
+
+
+def _paid_payment_method_subquery() -> Subquery:
+    """Scalar subquery returning the latest PAID payment method for a session (zero N+1)."""
+    return Subquery(
+        Payment.objects.filter(
+            session_id=OuterRef("pk"),
+            status="PAID",
+            deleted_at__isnull=True,
+        )
+        .order_by("-paid_at", "-id")
+        .values("method")[:1]
+    )
 
 
 def format_duration_text(duration_seconds: int) -> str:
@@ -66,13 +80,17 @@ def list_sessions(
     """
     # Optimized for SessionListItemSerializer (H5): Only join relations actually consumed
     # by the list serializer, eliminating 7 heavy unused LEFT JOINs.
-    qs = VehicleEntryExitLog.objects.select_related(
-        "vehicle",
-        "vehicle__customer",
-        "slot",
-        "entry_gate",
-        "exit_gate",
-    ).order_by("-entry_time")
+    qs = (
+        VehicleEntryExitLog.objects.select_related(
+            "vehicle",
+            "vehicle__customer",
+            "slot",
+            "entry_gate",
+            "exit_gate",
+        )
+        .annotate(paid_payment_method=_paid_payment_method_subquery())
+        .order_by("-entry_time")
+    )
 
     if not filters:
         return qs
@@ -152,7 +170,9 @@ def get_session_by_id(session_id: int) -> VehicleEntryExitLog | None:
             "exit_gate",
             "entry_handled_by",
             "exit_handled_by",
+            "exit_handled_by__position",
         )
+        .annotate(paid_payment_method=_paid_payment_method_subquery())
         .filter(id=session_id)
         .first()
     )

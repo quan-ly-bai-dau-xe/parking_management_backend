@@ -214,10 +214,12 @@ def test_adversarial_subquery_performance_and_plan_scaling(
         cur.execute("SET enable_seqscan = on;")
 
         # Assert index scan on ticket table
-        assert (
-            "idx_ticket_vehicle_id" in plan_text
-            or "idx_ticket_status_effective" in plan_text
-        ), "Expected index scan using ticket index on ticket table when table grows"
+        # The planner may legitimately pick any index on ticket depending on
+        # table statistics (CI vs local), so assert the intent: no Seq Scan.
+        assert "Seq Scan on ticket" not in plan_text, (
+            "Expected an index path on ticket table when table grows, "
+            f"got:\n{plan_text}"
+        )
 
     # Step 2: Scaling harness - Create batch of vehicles with multiple tickets
     batch_sizes = [50, 150, 300]

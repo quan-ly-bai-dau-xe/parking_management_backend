@@ -72,3 +72,71 @@ class Customer(SoftDeleteModel):
 
     def __str__(self):
         return f"{self.full_name} ({self.code})"
+
+
+class CustomerWallet(models.Model):
+    """
+    Ví điện tử nội bộ cho khách hàng.
+    Quản lý số dư thanh toán không tiền mặt và kiểm soát giao dịch an toàn.
+    """
+
+    id = models.BigAutoField(primary_key=True)
+    customer = models.OneToOneField(
+        Customer,
+        on_delete=models.CASCADE,
+        related_name="wallet",
+        db_column="customer_id",
+    )
+    balance = models.DecimalField(max_digits=12, decimal_places=2, default=0.00)
+    status = models.CharField(max_length=20, default="ACTIVE")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = "customer_wallet"
+
+    def __str__(self):
+        return f"Wallet of {self.customer.full_name}: {self.balance}đ"
+
+
+class CustomerWalletTransaction(models.Model):
+    """
+    Lịch sử biến động số dư ví (Nạp tiền, Trừ cước đỗ xe, Hoàn tiền).
+    """
+
+    TRANSACTION_TYPES = [
+        ("DEPOSIT", "Nạp tiền"),
+        ("DEDUCT", "Trừ cước đỗ xe"),
+        ("REFUND", "Hoàn tiền"),
+    ]
+
+    id = models.BigAutoField(primary_key=True)
+    wallet = models.ForeignKey(
+        CustomerWallet,
+        on_delete=models.CASCADE,
+        related_name="transactions",
+        db_column="wallet_id",
+    )
+    transaction_type = models.CharField(max_length=20, choices=TRANSACTION_TYPES)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_before = models.DecimalField(max_digits=12, decimal_places=2)
+    balance_after = models.DecimalField(max_digits=12, decimal_places=2)
+    session = models.ForeignKey(
+        "parking.VehicleEntryExitLog",
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column="session_id",
+    )
+    reference_code = models.CharField(max_length=50, null=True, blank=True)
+    description = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = "customer_wallet_transaction"
+
+    def __str__(self):
+        return f"Tx {self.id} ({self.transaction_type}): {self.amount}đ"
+

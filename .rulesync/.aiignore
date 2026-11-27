@@ -1,0 +1,44 @@
+*.env*
+!.env.example*
+**/*.pem
+**/*.key
+**/*.crt
+**/*.pfx
+**/*.p12
+**/*sonar*.txt
+Bash(rm -rf *)
+Bash(rm -fr *)
+Bash(rm -r *)
+Bash(rm --recursive *)
+Bash(git reset --hard*)
+Bash(git clean *-f*)
+Bash(git push -f*)
+Bash(git push *--force*)
+Bash(git push * -f*)
+Bash(git branch -D*)
+Bash(*--no-verify*)
+Bash(*manage.py flush*)
+Bash(*manage.py sqlflush*)
+Bash(*manage.py dbshell*)
+Bash(psql *DROP*)
+Bash(psql *drop*)
+Bash(psql *TRUNCATE*)
+Bash(psql *truncate*)
+Bash(docker *prune*)
+PowerShell(git reset --hard*)
+PowerShell(git push --force*)
+PowerShell(git push -f*)
+PowerShell(git push *--force*)
+PowerShell(git push * -f*)
+PowerShell(git branch -D*)
+PowerShell(git clean *-f*)
+PowerShell(Remove-Item *-Recurse*)
+PowerShell(rm -rf *)
+PowerShell(rm -fr *)
+PowerShell(docker *prune*)
+PowerShell(*manage.py flush*)
+PowerShell(*manage.py sqlflush*)
+PowerShell(*manage.py dbshell*)
+PowerShell(psql *DROP*)
+PowerShell(psql *TRUNCATE*)
+PowerShell(*--no-verify*)

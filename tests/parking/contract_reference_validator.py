@@ -122,7 +122,7 @@ class ReferenceContractValidator:
             "plate_raw": (str,),
             "plate_final": (str,),
             "candidates": (list,),
-            "image_url": (str,),
+            "image_url": (str, type(None)),
             "is_blacklisted": (bool,),
             "engine_name": (str,),
             "latency_ms": (int, float),
@@ -314,7 +314,9 @@ class ReferenceContractValidator:
                 )
 
     @classmethod
-    def _validate_image_url(cls, image_url: str) -> None:
+    def _validate_image_url(cls, image_url: str | None) -> None:
+        if image_url is None:
+            return
         if not image_url or not isinstance(image_url, str):
             raise ContractSchemaError(
                 f"image_url must be a non-empty string, got '{image_url}'"

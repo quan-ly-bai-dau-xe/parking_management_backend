@@ -86,6 +86,14 @@ SQLSTATE_MAP: dict[str, dict[str, Any]] = {
         "default_code": "PROP-GEN-P01",
         "default_message": "Tham số dữ liệu truyền vào không hợp lệ.",
     },
+    "23P01": {
+        "status": status.HTTP_409_CONFLICT,
+        "default_code": "PROP-4.5.2-P05",
+        "default_message": ALL_MESSAGES.get(
+            "PROP-4.5.2-P05",
+            "Vị trí này đã được đặt trước cho phương tiện khác.",
+        ),
+    },
 }
 
 
@@ -112,7 +120,7 @@ def _extract_sqlstate_and_message(exc: Exception) -> tuple[str | None, str | Non
 
     # Tìm kiếm fallback sqlstate bằng regex nếu chưa nhận diện được
     if not sqlstate:
-        match = re.search(r"\b(23514|55000|23503|23505|22023)\b", cause_str)
+        match = re.search(r"\b(23514|55000|23503|23505|22023|23P01)\b", cause_str)
         if match:
             sqlstate = match.group(1)
 
@@ -188,7 +196,11 @@ def map_database_exception_to_business_error(
             details={"sqlstate": sqlstate or "23514"},
         )
 
-    if "Vị trí này đã được đặt trước cho phương tiện khác." in search_text:
+    if (
+        sqlstate == "23P01"
+        or "excl_reservation_slot_time_overlap" in search_text
+        or "Vị trí này đã được đặt trước cho phương tiện khác." in search_text
+    ):
         return BusinessAPIException(
             code="PROP-4.5.2-P05",
             message=ALL_MESSAGES.get(
@@ -196,7 +208,7 @@ def map_database_exception_to_business_error(
                 "Vị trí này đã được đặt trước cho phương tiện khác.",
             ),
             status_code=status.HTTP_409_CONFLICT,
-            details={"sqlstate": sqlstate or "23514"},
+            details={"sqlstate": sqlstate or "23P01"},
         )
 
     if (

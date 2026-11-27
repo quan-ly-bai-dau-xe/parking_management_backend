@@ -235,7 +235,7 @@ For enterprise production deployments, static and media file serving should not 
 
 ### 2.10. Frontend URL Resolution Contract
 
-To decouple frontend components from backend storage backend choices and resolve the origin mismatch defect, the frontend client application must implement a standard URL resolution helper in `docs/guides/01-frontend-api-guide.md`:
+To decouple frontend components from backend storage backend choices and resolve the origin mismatch defect, the frontend client application must implement a standard URL resolution helper in `docs/guides/frontend-api/10-troubleshooting-and-cloudinary.md#15-cloudinary-parking-scan-image-urls`:
 
 ```typescript
 /**

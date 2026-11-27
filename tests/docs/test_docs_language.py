@@ -92,14 +92,22 @@ def read_file_text(path: Path) -> str:
     return path.read_text(encoding="utf-8")
 
 
+def get_all_guide_paths(repo_root: Path = REPO_ROOT) -> list[Path]:
+    """Returns the main index guide and all split topic guides under docs/guides/frontend-api/."""
+    index_file = repo_root / "docs" / "guides" / "01-frontend-api-guide.md"
+    split_dir = repo_root / "docs" / "guides" / "frontend-api"
+    split_files = sorted(split_dir.glob("*.md")) if split_dir.exists() else []
+    return [index_file, *split_files]
+
+
 def get_startup_span_text(readme_text: str) -> str:
     """
     Extracts the start-up portion of README.md Section 3:
-    From '### Choose how to run the backend' (or '### Chọn cách chạy' in Round 52)
+    From '### Choose how to run the backend' (or '<summary>Choose how to run the backend' in collapsible README)
     up to but excluding '### Step 5.1: Purge Orphan Scan Images' (or '### Step 8:').
     """
     start_match = re.search(
-        r"^###\s+(?:Choose how to run the backend|Chọn cách chạy|Step 1:\s+Environment Configuration)",
+        r"^(?:###\s+|<summary>)(?:Choose how to run the backend|Chọn cách chạy|Step 1:\s+Environment Configuration)",
         readme_text,
         flags=re.MULTILINE,
     )
@@ -109,7 +117,7 @@ def get_startup_span_text(readme_text: str) -> str:
     start_idx = start_match.start()
 
     end_match = re.search(
-        r"^###\s+(?:Step 5\.1:\s+Purge Orphan Scan Images|Step 8:\s+Interactive API Documentation)",
+        r"^(?:###\s+|<summary>)(?:Step 5\.1:\s+Purge Orphan Scan Images|Step 8:\s+Interactive API Documentation)",
         readme_text[start_idx:],
         flags=re.MULTILINE,
     )
@@ -122,13 +130,13 @@ def get_startup_span_text(readme_text: str) -> str:
 
 def get_option_block(readme_text: str, option_num: int) -> str | None:
     """
-    Extracts the block of Option 1 or Option 2 from its level-3 heading
-    to the next level-3 heading.
+    Extracts the block of Option 1 or Option 2 from its level-3 heading or summary
+    to the next level-3 heading or details block.
     """
     if option_num == 1:
-        pattern = r"^###\s+(?:Option\s+1|Cách\s+1)\b.*$"
+        pattern = r"^(?:###\s+|<summary>)(?:Option\s+1|Cách\s+1)\b.*$"
     elif option_num == 2:
-        pattern = r"^###\s+(?:Option\s+2|Cách\s+2)\b.*$"
+        pattern = r"^(?:###\s+|<summary>)(?:Option\s+2|Cách\s+2)\b.*$"
     else:
         raise ValueError(f"Invalid option number: {option_num}")
 
@@ -137,7 +145,11 @@ def get_option_block(readme_text: str, option_num: int) -> str | None:
         return None
 
     start_idx = match.start()
-    next_heading = re.search(r"^###\s+", readme_text[match.end() :], flags=re.MULTILINE)
+    next_heading = re.search(
+        r"^(?:###\s+|<details\b|</details>)",
+        readme_text[match.end() :],
+        flags=re.MULTILINE,
+    )
     if next_heading:
         end_idx = match.end() + next_heading.start()
         return readme_text[start_idx:end_idx]
@@ -146,16 +158,20 @@ def get_option_block(readme_text: str, option_num: int) -> str | None:
 
 def get_verification_block(readme_text: str) -> str | None:
     """
-    Extracts the shared verification section block from its level-3 heading
-    to the next level-3 heading.
+    Extracts the shared verification section block from its level-3 heading or summary
+    to the next level-3 heading or details block.
     """
-    pattern = r"^###\s+(?:Verify the backend and try a login \(both options\)|Kiểm tra backend và đăng nhập thử \(dùng chung\)).*$"
+    pattern = r"^(?:###\s+|<summary>)(?:Verify the backend and try a login \(both options\)|Kiểm tra backend và đăng nhập thử \(dùng chung\)).*$"
     match = re.search(pattern, readme_text, flags=re.MULTILINE | re.IGNORECASE)
     if not match:
         return None
 
     start_idx = match.start()
-    next_heading = re.search(r"^###\s+", readme_text[match.end() :], flags=re.MULTILINE)
+    next_heading = re.search(
+        r"^(?:###\s+|<details\b|</details>)",
+        readme_text[match.end() :],
+        flags=re.MULTILINE,
+    )
     if next_heading:
         end_idx = match.end() + next_heading.start()
         return readme_text[start_idx:end_idx]
@@ -608,11 +624,13 @@ def validate_req_g_fenced_code_blocks_messages(
 def test_req_a_repo_clone_url_authoritative_and_no_codegym() -> None:
     """
     Invariant (a): README.md contains authoritative clone URL and neither
-    README.md nor 01-frontend-api-guide.md contains 'github.com/codegym/'.
+    README.md nor 01-frontend-api-guide.md (including split topic guides) contains 'github.com/codegym/'.
     """
     readme_text = read_file_text(README_PATH)
-    guide_text = read_file_text(GUIDE_PATH)
-    violations = validate_req_a_clone_urls(readme_text, guide_text)
+    all_guide_text = "\n\n".join(
+        read_file_text(p) for p in get_all_guide_paths(REPO_ROOT)
+    )
+    violations = validate_req_a_clone_urls(readme_text, all_guide_text)
     assert not violations, "Invariant (a) failed:\n" + "\n".join(violations)
 
 
@@ -659,13 +677,15 @@ def test_req_e_sample_accounts_table_exact_three_columns_and_seed_match() -> Non
 def test_req_f_no_vietnamese_diacritics_outside_code_blocks() -> None:
     """
     Invariant (f): Neither the rewritten README.md span nor 01-frontend-api-guide.md
-    contains any Vietnamese diacritic characters outside fenced code blocks and inline code spans.
+    (including split topic guides) contains any Vietnamese diacritic characters outside fenced code blocks and inline code spans.
     """
     readme_text = read_file_text(README_PATH)
-    guide_text = read_file_text(GUIDE_PATH)
+    all_guide_text = "\n\n".join(
+        read_file_text(p) for p in get_all_guide_paths(REPO_ROOT)
+    )
     startup_span = get_startup_span_text(readme_text)
     violations = validate_req_f_vietnamese_diacritics_outside_code(
-        startup_span, guide_text
+        startup_span, all_guide_text
     )
     assert not violations, "Invariant (f) failed:\n" + "\n".join(violations)
 
@@ -673,10 +693,9 @@ def test_req_f_no_vietnamese_diacritics_outside_code_blocks() -> None:
 def test_req_g_fenced_code_blocks_vietnamese_strings_in_authorized_catalogs() -> None:
     """
     Invariant (g): Every line of every fenced code block in
-    docs/guides/01-frontend-api-guide.md and README.md start-up span containing
+    docs/guides/01-frontend-api-guide.md (and split topic guides) and README.md start-up span containing
     Vietnamese text must only contain authorized quoted strings and zero Vietnamese comments/free text.
     """
-    guide_text = read_file_text(GUIDE_PATH)
     readme_text = read_file_text(README_PATH)
     startup_span = get_startup_span_text(readme_text)
 
@@ -684,13 +703,18 @@ def test_req_g_fenced_code_blocks_vietnamese_strings_in_authorized_catalogs() ->
     authorized_seed_strings = get_authorized_seed_strings(SEED_PATH)
     authorized_apps_strings = get_authorized_apps_strings(REPO_ROOT)
 
-    violations_guide = validate_req_g_fenced_code_blocks_messages(
-        guide_text,
-        authorized_messages,
-        authorized_seed_strings,
-        authorized_apps_strings,
-        target_name="docs/guides/01-frontend-api-guide.md",
-    )
+    violations_guide: list[str] = []
+    for guide_path in get_all_guide_paths(REPO_ROOT):
+        guide_text = read_file_text(guide_path)
+        violations = validate_req_g_fenced_code_blocks_messages(
+            guide_text,
+            authorized_messages,
+            authorized_seed_strings,
+            authorized_apps_strings,
+            target_name=str(guide_path.relative_to(REPO_ROOT)).replace("\\", "/"),
+        )
+        violations_guide.extend(violations)
+
     violations_readme = validate_req_g_fenced_code_blocks_messages(
         startup_span,
         authorized_messages,

@@ -105,15 +105,24 @@ def read_readme_text(path: Path = README_PATH) -> str:
 
 def get_section_3_text(readme_text: str) -> str:
     """
-    Extracts Section 3 of README.md (from '## 3. Quick Start' to the next '## 4.').
+    Extracts Section 3 of README.md (from '3. Quick Start' to the next Section 4).
+    Supports both collapsible <details>/<summary> structure and legacy '## 3.' headings.
     """
-    start_match = re.search(r"^## 3\. Quick Start.*$", readme_text, flags=re.MULTILINE)
+    start_match = re.search(
+        r"^(?:<details\s+id=[\"']3-quick-start-development--operations[\"']>|<summary>3\. Quick Start|## 3\. Quick Start).*$",
+        readme_text,
+        flags=re.MULTILINE,
+    )
     if not start_match:
-        raise ValueError("Could not find '## 3. Quick Start' in README.md")
+        raise ValueError(
+            "Could not find '## 3. Quick Start' or Section 3 details/summary in README.md"
+        )
 
     start_pos = start_match.start()
     end_match = re.search(
-        r"^## 4\..*$", readme_text[start_match.end() :], flags=re.MULTILINE
+        r"^(?:<details\s+id=[\"']4-cicd|<summary>4\. CI/CD|## 4\.).*$",
+        readme_text[start_match.end() :],
+        flags=re.MULTILINE,
     )
     if end_match:
         end_pos = start_match.end() + end_match.start()
@@ -124,13 +133,16 @@ def get_section_3_text(readme_text: str) -> str:
 def get_startup_span_text(readme_text: str) -> str:
     """
     Extracts the start-up portion of Section 3:
-    From '### Choose how to run the backend' (or legacy headings)
-    up to but excluding '### Step 8: Interactive API Documentation'.
+    From 'Choose how to run the backend' (or legacy headings)
+    up to but excluding 'Step 8: Interactive API Documentation'.
+    Supports both collapsible <details>/<summary> structure and legacy '### ' headings.
     """
     section_3 = get_section_3_text(readme_text)
 
     new_start_match = re.search(
-        r"^###\s+Choose how to run the backend", section_3, flags=re.MULTILINE
+        r"^(?:<details\s+id=[\"']choose-how-to-run-the-backend[\"']>|<summary>Choose how to run the backend</summary>|###\s+Choose how to run the backend)",
+        section_3,
+        flags=re.MULTILINE,
     )
     if new_start_match:
         start_idx = new_start_match.start()
@@ -145,13 +157,13 @@ def get_startup_span_text(readme_text: str) -> str:
         start_idx = old_start_match.start()
 
     end_match = re.search(
-        r"^###\s+Step 8:\s+Interactive API Documentation",
+        r"^(?:<details\s+id=[\"']step-8-interactive-api-documentation|<summary>Step 8:\s+Interactive API Documentation|###\s+Step 8:\s+Interactive API Documentation)",
         section_3[start_idx:],
         flags=re.MULTILINE,
     )
     if not end_match:
         raise ValueError(
-            "Could not find '### Step 8: Interactive API Documentation' in Section 3"
+            "Could not find '### Step 8: Interactive API Documentation' or summary in Section 3"
         )
 
     end_idx = start_idx + end_match.start()
@@ -160,22 +172,32 @@ def get_startup_span_text(readme_text: str) -> str:
 
 def get_cach_2_block(readme_text: str) -> str | None:
     """
-    Extracts the block of Option 2 from its level-3 heading to the next level-3 heading.
-    Returns None if the heading is not present.
+    Extracts the block of Option 2 from its heading/summary/details to the next section.
+    Returns None if Option 2 is not present.
     """
-    heading = (
-        "### Option 2: run with Python and a locally installed PostgreSQL (no Docker)"
+    pattern = (
+        r"^(?:<details\s+id=[\"']option-2-run-with-python-and-a-locally-installed-postgresql-no-docker[\"']>"
+        r"|<summary>Option 2: run with Python and a locally installed PostgreSQL \(no Docker\)</summary>"
+        r"|###\s+Option 2: run with Python and a locally installed PostgreSQL \(no Docker\))"
     )
-    pos = readme_text.find(heading)
-    if pos == -1:
+    match = re.search(pattern, readme_text, flags=re.MULTILINE)
+    if not match:
         return None
 
-    after_heading = pos + len(heading)
-    next_heading_match = re.search(
-        r"^###\s+", readme_text[after_heading:], flags=re.MULTILINE
+    pos = match.start()
+    after_heading = match.end()
+
+    next_section_pattern = (
+        r"^(?:<details\s+id=[\"']verify-the-backend-and-try-a-login-both-options[\"']>"
+        r"|<summary>Verify the backend and try a login \(both options\)</summary>"
+        r"|###\s+Verify the backend and try a login \(both options\)"
+        r"|###\s+)"
     )
-    if next_heading_match:
-        end_pos = after_heading + next_heading_match.start()
+    next_match = re.search(
+        next_section_pattern, readme_text[after_heading:], flags=re.MULTILINE
+    )
+    if next_match:
+        end_pos = after_heading + next_match.start()
         return readme_text[pos:end_pos]
     return readme_text[pos:]
 
@@ -218,9 +240,17 @@ def validate_cach_2_content(cach_2_text: str) -> list[str]:
     if not lines:
         return ["Block 'Option 2' is empty"]
 
-    # Exclude the heading itself and any trailing horizontal rule ('---')
-    body_lines = lines[1:] if lines[0].startswith("### Option 2") else lines
-    while body_lines and body_lines[-1] == "---":
+    # Exclude the heading/summary/details opening tags and any trailing horizontal rule ('---') or closing tag ('</details>')
+    start_idx = 0
+    while start_idx < len(lines) and (
+        lines[start_idx].startswith("### Option 2")
+        or lines[start_idx].startswith("<details")
+        or lines[start_idx].startswith("<summary")
+        or lines[start_idx] == "</summary>"
+    ):
+        start_idx += 1
+    body_lines = lines[start_idx:]
+    while body_lines and body_lines[-1] in ("---", "</details>"):
         body_lines = body_lines[:-1]
 
     forbidden_pattern = re.compile(r"\b(docker|compose)\b", flags=re.IGNORECASE)
@@ -400,18 +430,22 @@ def test_readme_req_a_new_headings_order_and_no_option_a_b() -> None:
         f"Old Option A/B headings must not exist in Section 3, but found: {forbidden_old_options}"
     )
 
-    # 2. Assert the 6 new level-3 headings exist in Section 3 in exact order
+    # 2. Assert the 6 new level-3 headings / summaries exist in Section 3 in exact order
     positions: list[tuple[str, int]] = []
     missing_headings: list[str] = []
     for heading in EXPECTED_NEW_HEADINGS:
-        pos = section_3.find(heading)
+        raw_title = heading.lstrip("#").strip()
+        summary_pattern = f"<summary>{raw_title}</summary>"
+        pos = section_3.find(summary_pattern)
+        if pos == -1:
+            pos = section_3.find(heading)
         if pos == -1:
             missing_headings.append(heading)
         else:
             positions.append((heading, pos))
 
     assert not missing_headings, (
-        f"Missing required level-3 headings in Section 3: {missing_headings}"
+        f"Missing required level-3 headings / summaries in Section 3: {missing_headings}"
     )
 
     for i in range(len(positions) - 1):
@@ -527,25 +561,30 @@ def test_readme_req_g_step_headings_and_anchor_preserved() -> None:
     readme_text = read_readme_text()
 
     step_patterns = {
-        "Step 8": r"^###\s+Step 8:\s+Interactive API Documentation",
-        "Step 9": r"^###\s+Step 9:\s+Run Automated Test Suite",
-        "Step 10": r"^###\s+Step 10:\s+Performance Testing",
-        "Step 11": r"^###\s+Step 11:\s+Production Operations Runbook",
+        "Step 8": r"^(?:###\s+|<summary>)Step 8:\s+Interactive API Documentation",
+        "Step 9": r"^(?:###\s+|<summary>)Step 9:\s+Run Automated Test Suite",
+        "Step 10": r"^(?:###\s+|<summary>)Step 10:\s+Performance Testing",
+        "Step 11": r"^(?:###\s+|<summary>)Step 11:\s+Production Operations Runbook",
     }
     for step_name, pattern in step_patterns.items():
         assert re.search(pattern, readme_text, flags=re.MULTILINE), (
-            f"Required heading for '{step_name}' matching '{pattern}' not found in README.md"
+            f"Required heading or summary for '{step_name}' matching '{pattern}' not found in README.md"
         )
 
     step_11_match = re.search(
-        r"^###\s+(Step 11:[^\n]+)", readme_text, flags=re.MULTILINE
+        r"^(?:###\s+|<summary>)(Step 11:[^<\n]+)", readme_text, flags=re.MULTILINE
     )
-    assert step_11_match, "Could not locate Step 11 heading in README.md"
+    assert step_11_match, "Could not locate Step 11 heading or summary in README.md"
     step_11_heading = step_11_match.group(1).strip()
 
     generated_slug = github_markdown_slug(step_11_heading)
     assert generated_slug == EXPECTED_STEP_11_ANCHOR, (
         f"Step 11 generated slug '{generated_slug}' != expected '{EXPECTED_STEP_11_ANCHOR}'"
+    )
+
+    # Verify anchor attribute is preserved on details block
+    assert f'id="{EXPECTED_STEP_11_ANCHOR}"' in readme_text, (
+        f"Step 11 anchor id '{EXPECTED_STEP_11_ANCHOR}' not found in README.md details tag"
     )
 
 

@@ -1,0 +1,80 @@
+name: 'Feature Request'
+description: 'Propose a feature or API enhancement for parking_management_backend'
+title: '[Feature]: '
+labels:
+  - 'enhancement'
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form to propose a new capability or API contract change for `parking_management_backend` (REST API scope only; client UI changes belong to the frontend repository).
+  - type: input
+    id: summary
+    attributes:
+      label: 'Summary'
+      description: 'Short, factual summary of the proposed feature'
+      placeholder: 'e.g., Add read-only filter for expired tickets on GET /api/v1/tickets/'
+    validations:
+      required: true
+  - type: dropdown
+    id: module
+    attributes:
+      label: 'Module'
+      description: 'Primary backend module affected'
+      options:
+        - auth
+        - employees
+        - customers
+        - vehicles
+        - tickets
+        - parking
+        - content
+        - audit
+        - reports
+        - docs
+        - infrastructure
+    validations:
+      required: true
+  - type: textarea
+    id: problem_statement
+    attributes:
+      label: 'Problem statement'
+      description: 'What concrete operational or integration problem does this address?'
+      placeholder: 'Describe the use case and current limitation'
+    validations:
+      required: true
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: 'Proposed solution'
+      description: 'Proposed endpoint behavior, request/response fields, or service rules'
+      placeholder: 'Describe the expected API contract and constraints'
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives_considered
+    attributes:
+      label: 'Alternatives considered'
+      description: 'Other approaches or existing endpoints evaluated'
+    validations:
+      required: false
+  - type: textarea
+    id: logs
+    attributes:
+      label: 'Sample payloads or context'
+      description: 'Optional sample JSON or diagnostics. Warning: remove secrets, tokens, personal data and real license plates before submitting.'
+      render: shell
+    validations:
+      required: false
+  - type: checkboxes
+    id: confirmations
+    attributes:
+      label: 'Pre-submission checks'
+      description: 'Confirm every item before submitting'
+      options:
+        - label: 'I have searched existing issues and pull requests to avoid duplicates.'
+          required: true
+        - label: 'I have verified that this request contains no secrets, tokens, personal data, or real license plates.'
+          required: true
+        - label: 'I confirm this is not a security vulnerability (vulnerabilities must be reported privately per SECURITY.md).'
+          required: true

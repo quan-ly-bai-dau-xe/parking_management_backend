@@ -80,8 +80,8 @@ services:
       OCR_MODELS_DIR: ${OCR_MODELS_DIR:-/app/models/ocr}
       PARKING_LOG_PRIVACY_MODE: ${PARKING_LOG_PRIVACY_MODE:-1}
       PARKING_LOG_MASK_PLATES: ${PARKING_LOG_MASK_PLATES:-1}
-      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
-      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:3000,http://127.0.0.1:3000}
+      CORS_ALLOWED_ORIGINS: ${CORS_ALLOWED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000}
+      CSRF_TRUSTED_ORIGINS: ${CSRF_TRUSTED_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173,http://localhost:3000,http://127.0.0.1:3000}
       SESSION_COOKIE_AGE: ${SESSION_COOKIE_AGE:-43200}
       REMEMBER_ROTATION_GRACE_SECONDS: ${REMEMBER_ROTATION_GRACE_SECONDS:-30}
       REMEMBER_TOKEN_LIFETIME_DAYS: ${REMEMBER_TOKEN_LIFETIME_DAYS:-30}
@@ -92,8 +92,149 @@ services:
       AUTH_THROTTLE_WINDOW_SECONDS: ${AUTH_THROTTLE_WINDOW_SECONDS:-900}
       NUM_PROXIES: ${NUM_PROXIES:-0}
       DB_SSLMODE: ${DB_SSLMODE:-prefer}
+      PASSWORD_RESET_TOKEN_LIFETIME_MINUTES: ${PASSWORD_RESET_TOKEN_LIFETIME_MINUTES:-15}
+      PASSWORD_RESET_EMAIL_THROTTLE_LIMIT: ${PASSWORD_RESET_EMAIL_THROTTLE_LIMIT:-3}
+      PASSWORD_RESET_IP_THROTTLE_LIMIT: ${PASSWORD_RESET_IP_THROTTLE_LIMIT:-10}
+      PASSWORD_RESET_THROTTLE_WINDOW_SECONDS: ${PASSWORD_RESET_THROTTLE_WINDOW_SECONDS:-3600}
+      DEFAULT_FROM_EMAIL: ${DEFAULT_FROM_EMAIL:-no-reply@parking.com}
+      SMS_BACKEND: ${SMS_BACKEND:-apps.accounts.services.sms.ConsoleSMSBackend}
+      SMS_OTP_LIFETIME_SECONDS: ${SMS_OTP_LIFETIME_SECONDS:-300}
+      SMS_OTP_COOLDOWN_SECONDS: ${SMS_OTP_COOLDOWN_SECONDS:-60}
+      SMS_OTP_PHONE_THROTTLE_LIMIT: ${SMS_OTP_PHONE_THROTTLE_LIMIT:-3}
+      SMS_OTP_IP_THROTTLE_LIMIT: ${SMS_OTP_IP_THROTTLE_LIMIT:-10}
+      SMS_OTP_THROTTLE_WINDOW_SECONDS: ${SMS_OTP_THROTTLE_WINDOW_SECONDS:-3600}
+      SMS_OTP_MAX_ATTEMPTS: ${SMS_OTP_MAX_ATTEMPTS:-5}
+      SMS_OTP_TEST_DOUBLE_ENABLED: ${SMS_OTP_TEST_DOUBLE_ENABLED:-False}
+      VONAGE_API_KEY: ${VONAGE_API_KEY:-}
+      VONAGE_API_SECRET: ${VONAGE_API_SECRET:-}
+      VONAGE_FROM: ${VONAGE_FROM:-Vonage APIs}
+      FIREBASE_API_KEY: ${FIREBASE_API_KEY:-}
+      FIREBASE_PROJECT_ID: ${FIREBASE_PROJECT_ID:-}
+      WALLET_SIMULATED_TOPUP_ENABLED: ${WALLET_SIMULATED_TOPUP_ENABLED:-False}
+      VNPAY_TMN_CODE: ${VNPAY_TMN_CODE:-}
+      VNPAY_HASH_SECRET: ${VNPAY_HASH_SECRET:-}
+      VNPAY_PAYMENT_URL: ${VNPAY_PAYMENT_URL:-https://sandbox.vnpayment.vn/paymentv2/vpcpay.html}
+      VNPAY_RETURN_URL: ${VNPAY_RETURN_URL:-}
+      VNPAY_FRONTEND_RESULT_URL: ${VNPAY_FRONTEND_RESULT_URL:-}
+      VNPAY_TOPUP_MIN: ${VNPAY_TOPUP_MIN:-10000}
+      VNPAY_TOPUP_MAX: ${VNPAY_TOPUP_MAX:-50000000}
+      VNPAY_TIMEOUT_MINUTES: ${VNPAY_TIMEOUT_MINUTES:-15}
+      VNPAY_ALLOW_SANDBOX_IN_PRODUCTION: ${VNPAY_ALLOW_SANDBOX_IN_PRODUCTION:-False}
+      GATE_LAST_EVENT_WINDOW_HOURS: ${GATE_LAST_EVENT_WINDOW_HOURS:-24}
     depends_on:
       db:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          # Network alias 'backend' allows frontend Nginx container to proxy to http://backend:8000
+          - backend
+
+  gate-worker:
+    profiles: ["gate-worker"]
+    # Note on Multi-Replica Scaling (F7, ADR-0011 Section 2.7, TL-77, Round 90 G4, TL-84):
+    # A single gate-worker process has an empirical saturation knee at 16 cameras (Round 88 baseline: p95 ~1714ms;
+    # Round 90 3-run range: p95 1217.23–1304.13 ms, median 1226.98 ms vs 1500 ms target; 32 cameras collapse at p95 ~95.3s; status kept strictly as R-A: PARTIAL).
+    # Single 16-cam load runs show jitter; to scale reliably beyond 16 cameras, split gates across multiple worker replicas using the --gate filter:
+    #   gate-worker-in:  command: ["python", "manage.py", "run_gate_worker", "--gate", "IN_01,IN_02"]
+    #   gate-worker-out: command: ["python", "manage.py", "run_gate_worker", "--gate", "OUT_01,OUT_02"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    restart: unless-stopped
+    command: ["python", "manage.py", "run_gate_worker"]
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.local}
+      SECRET_KEY: "${SECRET_KEY:?Error: SECRET_KEY is required}"
+      POSTGRES_DB: ${POSTGRES_DB:-parking_db}
+      POSTGRES_USER: ${POSTGRES_USER:-parking_user}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD is required}"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DEBUG: ${DEBUG:-False}
+      PARKING_HOURLY_RATE_VND: ${PARKING_HOURLY_RATE_VND:-10000.00}
+      CLOUDINARY_CLOUD_NAME: "${CLOUDINARY_CLOUD_NAME:?Error: CLOUDINARY_CLOUD_NAME is required}"
+      CLOUDINARY_API_KEY: "${CLOUDINARY_API_KEY:?Error: CLOUDINARY_API_KEY is required}"
+      CLOUDINARY_API_SECRET: "${CLOUDINARY_API_SECRET:?Error: CLOUDINARY_API_SECRET is required}"
+      PARKING_OCR_ENGINE: ${PARKING_OCR_ENGINE:-fast_alpr}
+      PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD: ${PARKING_OCR_AUTO_CONFIDENCE_THRESHOLD:-90.0}
+      PARKING_OCR_ADAPTIVE_ENSEMBLE: ${PARKING_OCR_ADAPTIVE_ENSEMBLE:-1}
+      PARKING_OCR_ADAPTIVE_THRESHOLD: ${PARKING_OCR_ADAPTIVE_THRESHOLD:-94.0}
+      PARKING_OCR_LEADING_CHAR_THRESHOLD: ${PARKING_OCR_LEADING_CHAR_THRESHOLD:-99.2}
+      PARKING_OCR_ADAPTIVE_AVG_THRESHOLD: ${PARKING_OCR_ADAPTIVE_AVG_THRESHOLD:-96.0}
+      PARKING_OCR_CROP_MARGIN: ${PARKING_OCR_CROP_MARGIN:-4}
+      PARKING_OCR_CONCURRENCY_LIMIT: ${PARKING_OCR_CONCURRENCY_LIMIT:-4}
+      ONNX_INTRA_OP_THREADS: ${ONNX_INTRA_OP_THREADS:-1}
+      ONNX_INTER_OP_THREADS: ${ONNX_INTER_OP_THREADS:-1}
+      ONNX_ALLOW_SPINNING: ${ONNX_ALLOW_SPINNING:-0}
+      PARKING_OCR_MODELS_DIR: ${PARKING_OCR_MODELS_DIR:-/app/models/ocr}
+      OCR_MODELS_DIR: ${OCR_MODELS_DIR:-/app/models/ocr}
+      GATE_WORKER_STREAMS: ${GATE_WORKER_STREAMS:-{}}
+      GATE_WORKER_COOLDOWN_SECONDS: ${GATE_WORKER_COOLDOWN_SECONDS:-30}
+      GATE_WORKER_MAX_OCR_RATE_FPS: ${GATE_WORKER_MAX_OCR_RATE_FPS:-2.0}
+      GATE_WORKER_MOTION_MAD_THRESHOLD: ${GATE_WORKER_MOTION_MAD_THRESHOLD:-5.0}
+      GATE_WORKER_CONCURRENCY_LIMIT: ${GATE_WORKER_CONCURRENCY_LIMIT:-4}
+      GATE_WORKER_CONFIG_REFRESH_INTERVAL: ${GATE_WORKER_CONFIG_REFRESH_INTERVAL:-10.0}
+      GATE_WORKER_PENDING_MINUTES: ${GATE_WORKER_PENDING_MINUTES:-15}
+      GATE_WORKER_PENDING_RECHECK_SECONDS: ${GATE_WORKER_PENDING_RECHECK_SECONDS:-5.0}
+      GATE_WORKER_PENDING_SEEN_SECONDS: ${GATE_WORKER_PENDING_SEEN_SECONDS:-20}
+    healthcheck:
+      test: ["CMD", "python", "-c", "import os, pathlib, sys; me = str(os.getpid()); sys.exit(0 if any(p.parent.name != me and 'run_gate_worker' in p.read_text(errors='ignore') for p in pathlib.Path('/proc').glob('[0-9]*/cmdline') if p.is_file()) else 1)"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler:
+    profiles: ["scheduler"]
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+    restart: unless-stopped
+    command:
+      - sh
+      - -c
+      - |
+        trap 'exit 0' TERM INT
+        while true; do
+          python manage.py process_ticket_auto_renewals || true
+          sleep 3600 &
+          wait $$!
+        done
+    environment:
+      DJANGO_SETTINGS_MODULE: ${DJANGO_SETTINGS_MODULE:-config.settings.local}
+      SECRET_KEY: "${SECRET_KEY:?Error: SECRET_KEY is required}"
+      POSTGRES_DB: ${POSTGRES_DB:-parking_db}
+      POSTGRES_USER: ${POSTGRES_USER:-parking_user}
+      POSTGRES_PASSWORD: "${POSTGRES_PASSWORD:?Error: POSTGRES_PASSWORD is required}"
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      DEBUG: ${DEBUG:-False}
+      PARKING_HOURLY_RATE_VND: ${PARKING_HOURLY_RATE_VND:-10000.00}
+      CLOUDINARY_CLOUD_NAME: "${CLOUDINARY_CLOUD_NAME:-dummy}"
+      CLOUDINARY_API_KEY: "${CLOUDINARY_API_KEY:-dummy}"
+      CLOUDINARY_API_SECRET: "${CLOUDINARY_API_SECRET:-dummy}"
+    depends_on:
+      db:
+        condition: service_healthy
+
+  frontend:
+    profiles: ["frontend"]
+    build:
+      context: ${FRONTEND_CONTEXT:-../parking_management_frontend}
+      dockerfile: Dockerfile
+      target: runtime
+    restart: unless-stopped
+    ports:
+      # Security boundary: bind exclusively to local loopback interface 127.0.0.1
+      - "127.0.0.1:${FRONTEND_PORT:-5173}:5173"
+    depends_on:
+      web:
         condition: service_healthy
 
 volumes:

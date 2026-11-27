@@ -9,7 +9,7 @@ exclude = [
 ]
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM"]
+select = ["E", "F", "W", "I", "B", "C4", "UP", "SIM", "ERA"]
 ignore = ["E501"]
 
 [tool.ruff.lint.per-file-ignores]
@@ -40,6 +40,7 @@ django_settings_module = "config.settings.test"
 
 [tool.pytest.ini_options]
 DJANGO_SETTINGS_MODULE = "config.settings.test"
+testpaths = ["tests"]
 python_files = ["tests.py", "test_*.py", "*_tests.py"]
 addopts = "--cov=apps --cov-report=term-missing --cov-fail-under=80 -m 'not network and not host'"
 markers = [

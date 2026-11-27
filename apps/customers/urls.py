@@ -15,6 +15,11 @@ from apps.customers.views.customers import (
     CustomerSummaryView,
     CustomerVehicleCreateAliasView,
 )
+from apps.customers.views.wallet import (
+    CustomerWalletDeductView,
+    CustomerWalletDepositView,
+    CustomerWalletDetailView,
+)
 
 app_name = "customers"
 
@@ -39,4 +44,20 @@ urlpatterns = [
         CustomerVehicleCreateAliasView.as_view(),
         name="customer-vehicle-create",
     ),
+    path(
+        "customers/<int:customer_id>/wallet/",
+        CustomerWalletDetailView.as_view(),
+        name="customer-wallet-detail",
+    ),
+    path(
+        "customers/<int:customer_id>/wallet/deposit/",
+        CustomerWalletDepositView.as_view(),
+        name="customer-wallet-deposit",
+    ),
+    path(
+        "customers/<int:customer_id>/wallet/deduct/",
+        CustomerWalletDeductView.as_view(),
+        name="customer-wallet-deduct",
+    ),
 ]
+
