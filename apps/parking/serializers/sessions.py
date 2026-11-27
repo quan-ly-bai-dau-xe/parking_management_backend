@@ -107,6 +107,12 @@ class SessionDetailSerializer(serializers.ModelSerializer):
     exit_handled_by_name = serializers.SerializerMethodField(
         help_text="Họ tên nhân viên phụ trách cổng ra"
     )
+    exit_handled_by_code = serializers.SerializerMethodField(
+        help_text="Mã nhân viên phụ trách cổng ra"
+    )
+    exit_handled_by_position = serializers.SerializerMethodField(
+        help_text="Chức vụ nhân viên phụ trách cổng ra"
+    )
     duration_seconds = serializers.SerializerMethodField(
         help_text="Tổng thời gian đỗ xe tính bằng giây"
     )
@@ -118,6 +124,15 @@ class SessionDetailSerializer(serializers.ModelSerializer):
     )
     payment_method = serializers.SerializerMethodField(
         help_text="Phương thức thanh toán cước phí (CASH, VIETQR, WALLET) nếu có"
+    )
+    exit_handled_by_name = serializers.SerializerMethodField(
+        help_text="Họ tên nhân viên phụ trách cổng ra"
+    )
+    exit_handled_by_code = serializers.SerializerMethodField(
+        help_text="Mã nhân viên phụ trách cổng ra"
+    )
+    exit_handled_by_position = serializers.SerializerMethodField(
+        help_text="Chức vụ nhân viên phụ trách cổng ra"
     )
 
     class Meta:
@@ -150,6 +165,8 @@ class SessionDetailSerializer(serializers.ModelSerializer):
             "entry_handled_by_name",
             "exit_handled_by",
             "exit_handled_by_name",
+            "exit_handled_by_code",
+            "exit_handled_by_position",
             "notes",
             "created_at",
         ]
@@ -176,11 +193,30 @@ class SessionDetailSerializer(serializers.ModelSerializer):
     def get_exit_gate_name(self, obj: VehicleEntryExitLog) -> str | None:
         return obj.exit_gate.name if obj.exit_gate else None
 
+    def get_exit_handled_by_name(self, obj: VehicleEntryExitLog) -> str | None:
+        return obj.exit_handled_by.full_name if obj.exit_handled_by else None
+
+    def get_exit_handled_by_code(self, obj: VehicleEntryExitLog) -> str | None:
+        return obj.exit_handled_by.code if obj.exit_handled_by else None
+
+    def get_exit_handled_by_position(self, obj: VehicleEntryExitLog) -> str | None:
+        if obj.exit_handled_by and obj.exit_handled_by.position:
+            return obj.exit_handled_by.position.name
+        return None
+
     def get_entry_handled_by_name(self, obj: VehicleEntryExitLog) -> str | None:
         return obj.entry_handled_by.full_name if obj.entry_handled_by else None
 
     def get_exit_handled_by_name(self, obj: VehicleEntryExitLog) -> str | None:
         return obj.exit_handled_by.full_name if obj.exit_handled_by else None
+
+    def get_exit_handled_by_code(self, obj: VehicleEntryExitLog) -> str | None:
+        return obj.exit_handled_by.code if obj.exit_handled_by else None
+
+    def get_exit_handled_by_position(self, obj: VehicleEntryExitLog) -> str | None:
+        if obj.exit_handled_by and obj.exit_handled_by.position:
+            return obj.exit_handled_by.position.name
+        return None
 
     def get_duration_seconds(self, obj: VehicleEntryExitLog) -> int:
         seconds, _ = calculate_session_duration(obj)
@@ -399,6 +435,15 @@ class SessionListItemSerializer(serializers.ModelSerializer):
     payment_method = serializers.SerializerMethodField(
         help_text="Phương thức thanh toán cước phí (CASH, VIETQR, WALLET) nếu có"
     )
+    exit_handled_by_name = serializers.SerializerMethodField(
+        help_text="Họ tên nhân viên phụ trách cổng ra"
+    )
+    exit_handled_by_code = serializers.SerializerMethodField(
+        help_text="Mã nhân viên phụ trách cổng ra"
+    )
+    exit_handled_by_position = serializers.SerializerMethodField(
+        help_text="Chức vụ nhân viên phụ trách cổng ra"
+    )
 
     class Meta:
         model = VehicleEntryExitLog
@@ -425,6 +470,9 @@ class SessionListItemSerializer(serializers.ModelSerializer):
             "customer_name",
             "customer_phone",
             "slot_code",
+            "exit_handled_by_name",
+            "exit_handled_by_code",
+            "exit_handled_by_position",
         ]
 
     def get_payment_method(self, obj: VehicleEntryExitLog) -> str | None:
@@ -448,6 +496,17 @@ class SessionListItemSerializer(serializers.ModelSerializer):
 
     def get_exit_gate_name(self, obj: VehicleEntryExitLog) -> str | None:
         return obj.exit_gate.name if obj.exit_gate else None
+
+    def get_exit_handled_by_name(self, obj: VehicleEntryExitLog) -> str | None:
+        return obj.exit_handled_by.full_name if obj.exit_handled_by else None
+
+    def get_exit_handled_by_code(self, obj: VehicleEntryExitLog) -> str | None:
+        return obj.exit_handled_by.code if obj.exit_handled_by else None
+
+    def get_exit_handled_by_position(self, obj: VehicleEntryExitLog) -> str | None:
+        if obj.exit_handled_by and obj.exit_handled_by.position:
+            return obj.exit_handled_by.position.name
+        return None
 
     def get_duration_seconds(self, obj: VehicleEntryExitLog) -> int:
         seconds, _ = calculate_session_duration(obj)

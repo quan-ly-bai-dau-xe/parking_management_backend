@@ -117,6 +117,9 @@ class SlotItemSerializer(serializers.Serializer):
     license_plate = serializers.SerializerMethodField(
         help_text="Biển số xe (alias cho plate)"
     )
+    reserved_phone = serializers.SerializerMethodField(
+        help_text="Số điện thoại người đặt trước"
+    )
     notes = serializers.CharField(
         allow_blank=True, allow_null=True, required=False, help_text="Ghi chú ô đỗ"
     )
@@ -223,8 +226,11 @@ class SlotItemSerializer(serializers.Serializer):
         if session:
             return session.license_plate
         rsv = self._get_active_reservation(obj)
-        if rsv and rsv.vehicle:
-            return rsv.vehicle.license_plate
+        if rsv:
+            if rsv.vehicle:
+                return rsv.vehicle.license_plate
+            if getattr(rsv, "license_plate", None):
+                return rsv.license_plate
         tkt = self._get_active_ticket(obj)
         if tkt and tkt.vehicle:
             return tkt.vehicle.license_plate
@@ -243,6 +249,15 @@ class SlotItemSerializer(serializers.Serializer):
         tkt = self._get_active_ticket(obj)
         if tkt and tkt.customer:
             return getattr(tkt.customer, "full_name", None)
+        return None
+
+    def get_reserved_phone(self, obj: ParkingSlot) -> str | None:
+        rsv = self._get_active_reservation(obj)
+        if rsv:
+            if getattr(rsv, "reserved_phone", None):
+                return rsv.reserved_phone
+            if rsv.customer:
+                return getattr(rsv.customer, "phone", None)
         return None
 
     def get_reserved_time(self, obj: ParkingSlot) -> str | None:

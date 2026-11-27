@@ -24,7 +24,7 @@ class Wallet(SoftDeleteModel):
         on_delete=models.DO_NOTHING,
         db_constraint=False,
         db_column="customer_id",
-        related_name="wallet",
+        related_name="wallet_account",
     )
     balance = models.DecimalField(
         max_digits=14,

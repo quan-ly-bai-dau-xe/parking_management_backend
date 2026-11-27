@@ -427,7 +427,7 @@ class GateWorkerCoordinator:
         try:
             signal.signal(signal.SIGINT, _handler)
             signal.signal(signal.SIGTERM, _handler)
-        except ValueError, AttributeError:
+        except (ValueError, AttributeError):
             # Not in main thread or signal not supported on platform
             pass
 

@@ -1492,6 +1492,35 @@ COMMENT ON COLUMN payment.deleted_at IS 'Soft deletion timestamp (ADR-0003).';
 COMMENT ON COLUMN payment.deleted_by IS 'Account that performed soft deletion.';
 
 -- -----------------------------------------------------------------------------
+-- 6.3b. Table: customer_wallet & customer_wallet_transaction (Django Wallet Model)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS customer_wallet (
+    id BIGSERIAL PRIMARY KEY,
+    customer_id BIGINT NOT NULL UNIQUE REFERENCES customer (id) ON DELETE CASCADE,
+    balance NUMERIC(14, 2) NOT NULL DEFAULT 0.00,
+    currency VARCHAR(3) NOT NULL DEFAULT 'VND',
+    status VARCHAR(20) NOT NULL DEFAULT 'ACTIVE',
+    row_version INTEGER NOT NULL DEFAULT 1,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    deleted_at TIMESTAMPTZ NULL,
+    deleted_by BIGINT NULL
+);
+
+CREATE TABLE IF NOT EXISTS customer_wallet_transaction (
+    id BIGSERIAL PRIMARY KEY,
+    wallet_id BIGINT NOT NULL REFERENCES customer_wallet (id) ON DELETE CASCADE,
+    transaction_type VARCHAR(20) NOT NULL,
+    amount NUMERIC(14, 2) NOT NULL,
+    balance_before NUMERIC(14, 2) NOT NULL,
+    balance_after NUMERIC(14, 2) NOT NULL,
+    session_id BIGINT NULL REFERENCES vehicle_entry_exit_log (id) ON DELETE SET NULL,
+    reference_code VARCHAR(50) NULL,
+    description TEXT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+-- -----------------------------------------------------------------------------
 -- 6.4. Table: wallet
 -- Source: ADR-0012 (Customer Prepaid Wallet), WP3, TL-98
 -- -----------------------------------------------------------------------------

@@ -31,8 +31,8 @@ from apps.parking.serializers.sessions import (
     SessionUpdateSerializer,
 )
 from apps.parking.serializers.slots import (
-    ParkingSlotSerializer,
     ParkingSlotUpdateSerializer,
+    SlotItemSerializer as ParkingSlotSerializer,
 )
 
 __all__ = [

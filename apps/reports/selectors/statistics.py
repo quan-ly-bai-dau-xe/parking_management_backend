@@ -14,6 +14,7 @@ from zoneinfo import ZoneInfo
 
 from django.db.models import DecimalField, Q, Sum, Value
 from django.db.models.functions import Coalesce
+from django.db.utils import ProgrammingError
 from django.utils import timezone
 
 from apps.parking.models import VehicleEntryExitLog
@@ -170,25 +171,33 @@ def get_statistics_summary(start_date: date, end_date: date) -> dict[str, Any]:
     }
 
     # 2. Non-Revenue: Tiền nạp ví (nợ phải trả / tiền trả trước, KHÔNG cộng vào total_revenue)
-    topup_agg = WalletTransaction.objects.filter(
-        kind__in=("TOPUP_CASH", "TOPUP_VIETQR", "TOPUP_VNPAY"),
-        transaction_type="CREDIT",
-        created_at__gte=range_start,
-        created_at__lt=range_end,
-        wallet__deleted_at__isnull=True,
-        wallet__customer__deleted_at__isnull=True,
-    ).aggregate(
-        wallet_topup_total=Coalesce(Sum("amount"), decimal_zero),
-        topup_cash_total=Coalesce(
-            Sum("amount", filter=Q(kind="TOPUP_CASH")), decimal_zero
-        ),
-        topup_vietqr_total=Coalesce(
-            Sum("amount", filter=Q(kind="TOPUP_VIETQR")), decimal_zero
-        ),
-        topup_vnpay_total=Coalesce(
-            Sum("amount", filter=Q(kind="TOPUP_VNPAY")), decimal_zero
-        ),
-    )
+    try:
+        topup_agg = WalletTransaction.objects.filter(
+            kind__in=("TOPUP_CASH", "TOPUP_VIETQR", "TOPUP_VNPAY"),
+            transaction_type="CREDIT",
+            created_at__gte=range_start,
+            created_at__lt=range_end,
+            wallet__deleted_at__isnull=True,
+            wallet__customer__deleted_at__isnull=True,
+        ).aggregate(
+            wallet_topup_total=Coalesce(Sum("amount"), decimal_zero),
+            topup_cash_total=Coalesce(
+                Sum("amount", filter=Q(kind="TOPUP_CASH")), decimal_zero
+            ),
+            topup_vietqr_total=Coalesce(
+                Sum("amount", filter=Q(kind="TOPUP_VIETQR")), decimal_zero
+            ),
+            topup_vnpay_total=Coalesce(
+                Sum("amount", filter=Q(kind="TOPUP_VNPAY")), decimal_zero
+            ),
+        )
+    except ProgrammingError:
+        topup_agg = {
+            "wallet_topup_total": Decimal("0.00"),
+            "topup_cash_total": Decimal("0.00"),
+            "topup_vietqr_total": Decimal("0.00"),
+            "topup_vnpay_total": Decimal("0.00"),
+        }
 
     non_revenue = {
         "wallet_topup_total": _to_money_decimal(topup_agg["wallet_topup_total"]),

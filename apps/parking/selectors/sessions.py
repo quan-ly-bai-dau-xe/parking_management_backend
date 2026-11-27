@@ -170,6 +170,7 @@ def get_session_by_id(session_id: int) -> VehicleEntryExitLog | None:
             "exit_gate",
             "entry_handled_by",
             "exit_handled_by",
+            "exit_handled_by__position",
         )
         .annotate(paid_payment_method=_paid_payment_method_subquery())
         .filter(id=session_id)

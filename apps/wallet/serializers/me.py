@@ -360,7 +360,7 @@ def _extract_missing_amount(content: str | None) -> str | None:
         return None
     try:
         val = Decimal(normalized).quantize(Decimal("0.01"))
-    except InvalidOperation, ValueError:
+    except (InvalidOperation, ValueError):
         return None
     if val <= Decimal("0.00"):
         return None

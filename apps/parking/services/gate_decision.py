@@ -155,7 +155,7 @@ def decide_gate_action(
         thresh = (
             float(confidence_threshold) if confidence_threshold is not None else 90.0
         )
-    except TypeError, ValueError:
+    except (TypeError, ValueError):
         conf, thresh = 0.0, 90.0
 
     if conf < thresh:
