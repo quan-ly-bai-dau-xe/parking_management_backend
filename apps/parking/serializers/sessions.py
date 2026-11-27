@@ -473,6 +473,7 @@ class SessionListItemSerializer(serializers.ModelSerializer):
             "exit_handled_by_name",
             "exit_handled_by_code",
             "exit_handled_by_position",
+            "notes",
         ]
 
     def get_payment_method(self, obj: VehicleEntryExitLog) -> str | None:
